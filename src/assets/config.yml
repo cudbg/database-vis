@@ -1,0 +1,251 @@
+backends:
+- type: duckdb
+  name: duckdb
+  sources:
+  - url: "/src/assets/admin_raw.csv?raw"
+    name: "admin_raw"
+  - url: "/src/assets/chirps_raw.csv?raw"
+    name: "chirps_raw"
+  - url: "/src/assets/evi_raw.csv?raw"
+    name: "evi_raw"
+  - url: "/src/assets/crop_cal_raw.csv?raw"
+    name: cropcal_raw
+  - url: "/src/assets/badyear_raw.csv?raw"
+    name: badyear_raw
+- type: array
+  name: array
+  data: 
+  - value: 'chirps_raw'
+    label: 'chirps'
+  - value: 'evi_raw'
+    label: 'evi'
+- type: query
+  name: dekads
+  query: "select min(dekad)::int as min, max(dekad)::int as max from chirps_raw"
+- type: query
+  name: climatology_
+  db: duckdb
+  query: "select dekad::int as dekad, avg(value) as average_value from var(source) where year >= var(year_start) and year <= var(year_end) group by dekad"
+  defaults:
+    year_start: 1980
+    year_end: 2020
+    source: "chirps_raw"
+- type: overlay
+  name: overlay
+- type: query
+  db: duckdb
+  name: bad_year
+  query: "SELECT * FROM badyear_raw WHERE gid='var(region)' AND is_bad_year = 1"
+  defaults:
+    region: 1128
+- type: query
+  db: duckdb
+  name: combined_payouts_
+  defaults:
+    region: 1128
+    dekcap: 24
+    freq: 0.23
+    year_start: 1981
+    year_end: 2020
+    back_fill_year: 2001
+    sum_early_weight: 0.4
+    sum_late_weight: 0.4 
+    vegetation_weight: 0.6
+    sum_early_first: 1
+    sum_early_last: 30
+    sum_late_first: 1
+    sum_late_last: 30
+    vegetation_first: 10
+    vegetation_last: 30
+    scalar_vegetation: 1
+    exit_multiplier: 0.8
+- type: DebounceBackend
+  name: combined_payouts
+  backend: combined_payouts_
+- type: DebounceBackend
+  name: climatology
+  backend: climatology_
+
+
+
+
+views:
+- type: DropDown
+  name: dd
+  selector: "#dropdown-1"
+  interactions:
+    - type: change
+      name: ddc
+      to:
+        - backend: climatology
+          source: $value
+  data: array
+- type: Slider 
+  name: Years
+  description: Years Slider
+  selector: "#slider-1"
+  interactions:
+  - type: change
+    name: yearslider
+    defaults:
+      left: 1981
+      right: 2023
+    to: 
+    - backend: combined_payouts 
+      year_start: $left
+      year_end: $right
+    - backend: climatology
+      year_start: $left
+      year_end: $right
+    - backend: line2.0   # line2 is name of view, .0 is its 0th backend
+      year_start: $left
+      year_end: $right
+  data: 
+  - min: 1981
+    max: 2023
+  - query: "select min(year)::int as min, max(year)::int as max from chirps_raw"
+- type: Debug
+  selector: "#debug-1"
+  name: "Debug"
+  data:
+  - query: "select column_name, ordinal_position, data_type from information_schema.columns where table_name = 'chirps_raw'"
+  - interaction: yearslider
+- type: Slider
+  name: PlantEarly
+  description: Plant Early
+  selector: "#slider-2"
+  data: dekads
+  interactions:
+  - type: change
+    defaults:
+      left: 1
+      right: 10
+    to: 
+    - backend: combined_payouts 
+      sum_early_first: $left
+      sum_early_last: $right
+    - backend: overlay
+      sum_early:
+        left: $left
+        right: $right
+- type: Slider
+  name: PlantLate
+  description: Plant Late
+  selector: "#slider-3"
+  data: dekads
+  interactions:
+  - type: change
+    defaults:
+      left: 20
+      right: 36
+    to: 
+    - backend: combined_payouts 
+      sum_late_first: $left
+      sum_late_last: $right
+    - backend: overlay
+      sum_late:
+        left: $left
+        right: $right
+- type: Line
+  name: "line2"
+  selector: "#chart-2"
+  xAttr: year
+  yAttr: max_value
+  interactions:
+    - type: brushX
+      to: 
+      - view: Debug
+      - backend: climatology
+        year_start: $left
+        year_end: $right
+      - backend: combined_payouts 
+        year_start: $left
+        year_end: $right
+      - view: Years
+        target: load
+
+  data: 
+  - backend: query
+    query: "select (year)::int as year, max(value) as max_value\n 
+            from chirps_raw where year >= var(year_start) and year <= var(year_end)\n
+            group by year"
+    db: duckdb
+    defaults:
+      year_start: 1981
+      year_end: 2023
+- type: Line
+  name: "line"
+  description: "Climatology"
+  selector: "#chart-1"
+  xAttr: "dekad"
+  yAttr: "average_value"
+  interactions:
+    - type: brushX
+      to: 
+      - view: Debug
+  data: 
+  - backend: dekads
+    target: init
+  - backend: climatology 
+  - backend: overlay
+    target: overlay
+- type: Plot
+  name: bar
+  selector: "#bar"
+  interactions:
+    - type: brushX
+      to: Debug
+  data:
+    - backend: combined_payouts
+      target: data
+    - backend: bad_year
+      target: badyears
+  options:
+    color: 
+      domain: ["sum_early", "sum_late", "vegetation", "combined_payout"]
+      scheme: "Tableau10"
+    x:
+      type: linear
+      domain: [1981, 2023]
+    height: 200
+    marginBottom: 50
+    marks:
+      - type: axisY
+        label: Payout
+
+
+- type: Plot
+  name: "plot"
+  description: "foo"
+  selector: "#plot"
+  interactions:
+    - type: brushX
+      to: Debug
+  data:
+    - backend: dekads
+      target: init
+    - backend: climatology
+      target: blah
+    - backend: overlay
+      target: overlay
+  options:    # static observable plot options
+    className: garbage
+    height: 150
+    marginBottom: 45
+    color: "Tableau10"
+    marks:
+      - type: axisX
+        fontSize: 12
+        ticks: 20
+      - type: axisY
+        fontSize: 12
+
+dependencies:
+- source: ddc
+  attr: "value"
+  target:
+    - line2
+
+
+
+

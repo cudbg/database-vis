@@ -1,0 +1,20 @@
+views:
+  - type: Slider
+    name: s1
+    selector: "#slider-1"
+    data:
+      min: 0
+      max: 100
+    interactions:
+      - type: change
+        name: s1change
+        to:
+          - view: s2
+            target: load
+  - type: Slider
+    name: s2
+    selector: "#slider-2"
+    data: 
+      min: 0
+      max: 100
+
