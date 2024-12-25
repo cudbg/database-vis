@@ -243,12 +243,15 @@ export class Database {
     for (const [cname, c] of Object.entries(this.constraints)) {
       if (!(c instanceof FKConstraint)) continue
       let {t1,t2,card} = c;
-      if (card == Cardinality.ONEONE || card == Cardinality.ONEMANY) {
+      if (card == Cardinality.ONEONE) {
         edges[t1.internalname] ??= [];
         edges[t2.internalname] ??= [];
         edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
-      } else {
+      } else if (card == Cardinality.ONEMANY) {
+        edges[t1.internalname] ??= [];
+        edges[t2.internalname] ??= [];
+        edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
     }
@@ -272,7 +275,6 @@ export class Database {
     let paths = [];
     let seen = {};
     let queue = [{ src: source, dst: destination, path: [] }];
-    console.log({ src: source, dst: destination, path: [] })
 
     while (queue.length > 0) {
       let { src, dst, path } = queue.shift();
@@ -285,6 +287,41 @@ export class Database {
     }
     paths = R.uniqBy((path) => R.pluck("id",path).join("--"), paths)
     return paths;
+  }
+
+
+  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    let edges = this.getFkDependencyGraph()
+
+      let seen = new Set()
+      let path = [searchConstraint]
+      let queue = []
+  
+      if (searchConstraint.card == Cardinality.ONEMANY)
+        queue.push(searchConstraint.t1.internalname)
+      else if (searchConstraint.t1.internalname != source.internalname)
+        queue.push(searchConstraint.t1.internalname)
+      else
+        queue.push(searchConstraint.t2.internalname)
+
+      while (queue.length > 0) {
+        let currTableName = queue.shift()
+
+        if (seen.has(currTableName))
+          continue
+        seen.add(currTableName)
+        if (currTableName == destination.internalname)
+          return path
+        for (let { dst:_dst, c } of (edges[currTableName]??[])) {
+          queue.push(_dst);
+          path.push(c)
+        }
+      }
+
+    /**
+     * If we end up here, no such path exists, throw error
+     */
+    throw new Error("No possible path!")
   }
 
   constraint(name) {
@@ -382,7 +419,7 @@ export class Database {
     newFact.name(factname)
     newFact.keys(IDNAME)
     //let c1 = new FKConstraint({t1: t, X: fkattr, t2: newDim, Y: IDNAME})
-    let c2 = new FKConstraint({t1: newFact, X: fkattr, t2: newDim, Y: IDNAME})
+    let c2 = new FKConstraint({t1: newFact, X: [fkattr], t2: newDim, Y: [IDNAME]})
     this.setTable(newDim)
     this.setTable(newFact)
     //this.addConstraint(c1)
@@ -400,11 +437,11 @@ export class Database {
     let interTable = await this.fromSql(q, intertablename)
     interTable.name(intertablename)
     interTable.keys(IDNAME)
-    let c3 = new FKConstraint({t1: t, X: IDNAME, t2: interTable, Y: IDNAME})
+    let c3 = new FKConstraint({t1: t, X: [IDNAME], t2: interTable, Y: [IDNAME]})
     this.addConstraint(c3)
-    let c4 = new FKConstraint({t1: interTable, X: "leftid", t2: newDim, Y: IDNAME})
+    let c4 = new FKConstraint({t1: interTable, X: ["leftid"], t2: newDim, Y: [IDNAME]})
     this.addConstraint(c4)
-    let c5 = new FKConstraint({t1: interTable, X: "rightid", t2: newFact, Y: IDNAME})
+    let c5 = new FKConstraint({t1: interTable, X: ["rightid"], t2: newFact, Y: [IDNAME]})
     this.addConstraint(c5)
     return [newDim, newFact, interTable]
   }
@@ -428,7 +465,7 @@ export class Database {
 
       this.setTable(new_table)
       new_table.keys(IDNAME)
-      constraints.push({t1: null, X: fkattr, t2: new_table, Y: IDNAME})
+      constraints.push({t1: null, X: [fkattr], t2: new_table, Y: [IDNAME]})
       q
       .from({[dimname as string]: new_table.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column(dimname,a)))))

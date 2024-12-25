@@ -161,7 +161,7 @@ export class Canvas implements IMark {
       }
     }
     if (fkConstraint == null) {
-      fkConstraint = new FKConstraint({t1: innerTable, X:predicate, t2:outerTable, Y:predicate})
+      fkConstraint = new FKConstraint({t1: innerTable, X:[predicate], t2:outerTable, Y:[predicate]})
     }
     this.nests.push(new MarkNest(this, fkConstraint, innerMark, outerMark))
   }

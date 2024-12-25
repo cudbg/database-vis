@@ -6,7 +6,7 @@ import * as OPlot from "@observablehq/plot";
 
 import { IDNAME, Table, createView } from "./table";
 import { idexpr } from "./id";
-import { FKConstraint } from "./constraint";
+import { Cardinality, FKConstraint } from "./constraint";
 import type {  Canvas } from "./canvas";
 import type {Schema} from "./schema";
 import { MarkNest, RootNest, type Nest } from "./nest";
@@ -27,16 +27,14 @@ interface ColumnObj {
   renameAs: string
 }
 
-/**
- * Used in QueryItem to build where clauses
- * WHERE leftTable.leftAttr = rightTable.rightAttr
- */
-interface ConditionObj {
-  leftTable: Table
-  leftAttr: string
-  rightTable: Table
-  rightAttr: string
+function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
+  if (columnObj1.dataAttr != columnObj2.dataAttr)
+    return false
+  if (columnObj1.renameAs != columnObj2.renameAs)
+    return false
+  return true
 }
+
 
 /**
  * An object in the this.channels array
@@ -44,7 +42,7 @@ interface ConditionObj {
 interface RawChannelItem {
   mark: Mark
   visualAttr: string
-  clauses: ConditionObj[] //will be null if there are no clauses ie. normal mapping like x: "a"
+  constraints: FKConstraint[] //will be null if there are no clauses ie. normal mapping like x: "a"
   /**
    * Underlying data attribute for visualAttribute
    * The type is an array because the user could do x: va.get(null, ["x", "width"], someCallback)
@@ -64,6 +62,7 @@ interface RawChannelItem {
  * One QueryItem per RawChannelItem. We need to keep track of the data source, the column
  */
 interface QueryItem {
+  srcmark: Mark
   source: Table
   /**
    * Each ColumnObj has dataAttr to represent the column in the table and renameAs for what to select that column as
@@ -74,7 +73,7 @@ interface QueryItem {
    * Each ConditionObj has leftTable, leftAttr, rightTable. rightAttr
    * Used to construct where clauses: WHERE leftTable.leftAttr = rightTable.rightAttr
    */
-  conditions: ConditionObj[]
+  constraints: FKConstraint[]
 }
 
 /**
@@ -122,8 +121,22 @@ function toQueryItem(item: RawChannelItem): QueryItem {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
     columns = [{dataAttr: item.dataAttr[0], renameAs: item.dataAttr[0]}]
   }
-  return {source: source, columns: columns, conditions: item.clauses}
-  
+  return {srcmark: item.mark, source: source, columns: columns, constraints: item.constraints}
+
+}
+
+function eqPath(constraintArr1: FKConstraint[], constraintArr2: FKConstraint[]){
+  if (constraintArr1.length != constraintArr2.length)
+    return false
+
+  /**
+   * We assume that ordering does not matter in this case
+   */
+  for (let i = 0; i < constraintArr1.length; i++) {
+    if (constraintArr1[i] != constraintArr2[i])
+      return false
+  }
+  return true
 }
 
 
@@ -203,12 +216,12 @@ export class Mark {
       for (const [va,dattr] of Object.entries(this.mappings)) {
           let mark = this
           let visualAttr = va
-          let clauses = null
+          let constraints = null
           let dataAttr = [dattr]
           let isGet = false
           let refLayout = null
           let callback = null
-          let rawChannelItem: RawChannelItem = {mark, visualAttr, clauses, dataAttr, isGet, refLayout, callback}
+          let rawChannelItem: RawChannelItem = {mark, visualAttr, constraints, dataAttr, isGet, refLayout, callback}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
@@ -222,9 +235,9 @@ export class Mark {
               rawChannelItem.refLayout = dattr
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
-              let {othermark, clauses, othervattr, callback} = this.processGet(dattr)
+              let {othermark, constraints, othervattr, callback} = this.processGet(dattr)
               rawChannelItem.mark = othermark
-              rawChannelItem.clauses = clauses
+              rawChannelItem.constraints = constraints
               rawChannelItem.dataAttr = othervattr
               rawChannelItem.callback = callback
               rawChannelItem.isGet = true
@@ -247,16 +260,23 @@ export class Mark {
     }
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
-     * @param usrDattr data attributes that have to be the same. Used when constructing where clause
-     * @param usrVattr the desired visual attribute to get from this mark
-     * @param callback a callback function that is run over usrVattr during render
-     * @returns object with format {mark: this, filter: ..., vattr: ...}
+     * @param usrDattr
+     *                Data attributes in the referring table.
+     *                ie. For example VB = c.dot(vb_src, {x: VA.get("aid", ["x"]) ...})
+     *                aid is an attribute in vb_src.
+     *                Checking if aid is a N-1 foreign key from vb_src to va_src occurs only in processGet 
+     * @param usrVattr 
+     *                The desired visual attribute to get from this mark
+     * @param callback 
+     *                A callback function that is run over usrVattr during render
+     * @returns 
+     *                object with format {mark: this, filter: ..., vattr: ...}
      */
-    get(usrDattr, usrVattr: String | String[], callback?): {othermark, otherdattrs, othervattr, callback} {
-      let otherdattrs = null
+    get(usrSearchkeys: String | String[], usrVattr: String | String[], callback?): {othermark, searchkeys, othervattr, callback} {
+      let searchkeys = null
 
-      if (usrDattr)
-        otherdattrs = Array.isArray(usrDattr) ? usrDattr : [usrDattr]
+      if (usrSearchkeys)
+        searchkeys = Array.isArray(usrSearchkeys) ? usrSearchkeys : [usrSearchkeys]
 
       let othervattr = Array.isArray(usrVattr) ? usrVattr : [usrVattr]
   
@@ -266,15 +286,7 @@ export class Mark {
         }
       }
 
-      if (otherdattrs) {
-        for (let dattr of otherdattrs) { //dattr must be a column in src table for this mark
-          if (dattr && !R.includes(dattr, this.src.schema.attrs)) {
-            throw new Error(`${dattr} is not present in ${this.src.displayname}`)
-          }
-        }
-      }
-
-      let obj = {othermark: this, otherdattrs: otherdattrs, othervattr: othervattr, callback: callback}
+      let obj = {othermark: this, searchkeys: searchkeys, othervattr: othervattr, callback: callback}
       return obj
     }
 
@@ -284,21 +296,36 @@ export class Mark {
      */
     processGet(getObj) {
       let othermark = getObj.othermark
-      let otherdattrs = getObj.otherdattrs
+      let searchkeys = getObj.searchkeys
       let othervattr = getObj.othervattr
-      let clauses = []
+      let constraints = []
       let callback = getObj.callback
 
-      if (otherdattrs) {
-        for (let i = 0; i < otherdattrs.length; i++) {
-          let leftAttr = otherdattrs[i]
-          let leftTable = this.src
-          let rightAttr = otherdattrs[i]
-          let rightTable = othermark.src
-          clauses.push({leftTable, leftAttr, rightTable, rightAttr})
+      if (searchkeys) {
+        for (let i = 0; i < searchkeys.length; i++) {
+          let constraint = null
+
+          for (const [constraintName, c] of Object.entries(this.c.db.constraints)) {
+            if (!(c instanceof FKConstraint))
+              continue
+            /**
+             * Check if there is a valid foreign key reference from this.src to othermark.src for the given searchkey
+             * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
+             * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
+             */
+            if (c.t1 == othermark.src && c.t2 == this.src && c.Y == searchkeys[i] && (c.card == Cardinality.ONEMANY || c.card == Cardinality.ONEONE)) {
+              constraint = c
+              break
+            }
+          }
+          if (!constraint)
+            throw new Error("No such foreign key reference!")
+
+          constraints.push(constraint)
         }
       }
-      return {othermark, clauses, othervattr, callback}
+
+      return {othermark, constraints, othervattr, callback}
     }
 
     /**
@@ -368,7 +395,7 @@ export class Mark {
      * @returns 
      */
     async doRootNest(root, crow) {
-      let query = this.constructQuery()
+      let query = this.newConstructQuery()
       let dummyroot = this.makeDummyRoot()
       let rows = await this.c.db.conn.exec(query)
 
@@ -424,7 +451,7 @@ export class Mark {
        */
       for (let i = 0; i < outermarkData[IDNAME].length; i++) {
         let crow = outermarkVizData[i]
-        let query = this.constructQuery(nest, crow)
+        let query = this.newConstructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
@@ -446,171 +473,201 @@ export class Mark {
       return 1
     }
 
-    /**
-     * 
-     * @param nest optional argument of type MarkNest. Defined only when this function is called from doMarkNest
-     * @param crow optional argument of type object. This is the  markdata ie. visual attributes of the outermark
-     * @returns 
-     */
-    constructQuery(nest?, crow?) {
-      let tableColsMap = new Map<string, Set<string>>()
+    newConstructQuery(nest?, crow?) {
+      let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
+      let currColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
+      let nestingPath = new Map<FKConstraint[], Boolean>()
+      let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
+
 
       /**
-       * An array of QueryItems.
-       * Each QueryItem has source: Table, columns: ColumnObj[], conditions: ConditionObj[]
-       * Each ColumnObj has dataAttr: string and renameAs: string
-       * Each ConditionObj has leftTable: Table, leftAttr: string, rightTable: Table, rightAttr: string
+       * If some table != this.src and it appears in different foreign key references, then we need to rename it
+       * 
+       * An example from the airport nodelink diagram:
+       * SELECT "am1"."x" as "x1", "am1"."y" as "y1", "am2"."x" as "x2", "am2"."y" as "y2"
+       * FROM "airport_marktable0" as "am1", "airport_marktable0" as "am2", "airport" as "a1", "airport" as "a2", routes
+       * WHERE "a1"."airport" = "routes"."ORIGIN"
+       *       AND "a1"."_rav_id" = "am1"."_rav_id" 
+       *       AND "a2"."airport" = "routes"."DEST"
+       *       AND "a2"."_rav_id" = "am2"."_rav_id"
+       * 
+       * Note how every table along the foreign key path also has to be renamed
        */
-      let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
-      let query = new Query()
 
-      query = query.distinct()
+      /**
+       * 1. Iterate over all query items and group their dattrs by path or source in a Map mp.
+       *    dattrs that are derived from a table that is not this.src will have a path as the key
+       *    dattrs that are derived from this.src have this.src as the key
+       * 
+       * 2. Iterate over key,value pairs of mp. 
+       *    All tables in the FKPath besides this.src will need to be renamed. 
+       *    Each dattr in the value is added to the select part of query
+       * 
+       * 3. Handle nesting if needed
+       * 
+       */
 
       for (let i = 0; i < queryItems.length; i++) {
-        let currItem = queryItems[i]
+        let {source, columns, constraints} = queryItems[i]
+
         /**
         * Check if column is a numeric value. the user could have entered x: 5 
         * and we wouldnt want to query for column 5
         */
-        if (!currItem.columns.some(column => currItem.source.schema.attrs.includes(column.dataAttr)))
+        if (!columns.some(column => source.schema.attrs.includes(column.dataAttr)))
           continue
+        /**
+         * This is a get method
+         */
+        if (constraints) {
+          for (let constraint of constraints) {
+            let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
+            let pathInMap = null
 
-        query = this.constructSelectStmt(query, currItem, tableColsMap)
+            if (!possibleNewPath)
+              throw new Error("No possible path")
 
-        query = this.constructWhereConditions(query, currItem, tableColsMap)
+            for (let path of pathQueryItemMap.keys()) {
+              if (eqPath(possibleNewPath, path)) {
+                pathInMap = path
+                break
+              }
+            }
+  
+            if (!pathInMap) {
+              pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
+              nestingPath.set(possibleNewPath, false)
+            } else {
+              let queryItemSet = pathQueryItemMap.get(pathInMap)
+  
+              queryItemSet.add(queryItems[i])
+            }
+            
+          }
+
+        } else {
+          for (let i = 0; i < columns.length; i++) {
+            let foundColumn = false
+            for (const columnObj of currColumnObjSet){
+              if (eqColumnObjs(columnObj, columns[i])) {
+                foundColumn = true
+              }
+            }
+            if (!foundColumn){
+              currColumnObjSet.add(columns[i])
+            }
+          }
+        }
       }
-      
-      /*
-      nest and crow are only valid when called from doMarkNest
-      */
+
       if (nest && crow) {
-        let outermarkSrc = nest.outerMark.src
+        console.log("nesting", nest)
 
-        if (!tableColsMap.has(outermarkSrc.internalname)) {
-          tableColsMap.set(outermarkSrc.internalname, new Set())
-          query = query.from(outermarkSrc.internalname)
+        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.marktable, nest.fk)
+
+        console.log("possibleNewPath", possibleNewPath)
+        let pathInMap = null
+
+        if (!possibleNewPath)
+          throw new Error("No possible path")
+
+        for (let path of pathQueryItemMap.keys()) {
+          if (eqPath(possibleNewPath, path)) {
+            pathInMap = path
+            break
+          }
         }
 
-        query = query.where(eq(column(outermarkSrc.internalname, nest.fk.X), column(this.src.internalname, nest.fk.Y)))
-        query = query.where(eq(column(outermarkSrc.internalname,IDNAME), literal(crow[IDNAME])))
-      }
-      return query;
-    }
+        possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
 
-    /**
-     * 
-     * @param query 
-     *                      Query object. see MosaicSQL
-     * @param queryItem 
-     *                     QueryItem object. This function uses the conditions attribute in queryItem to construct WHERE conditions
-     * @param tableColsMap 
-     *                      a Map from tablename to a set of selected cols for that tablename.
-     *                      This function can add new tablenames to tableColsMap
-     * @returns the modified query with WHERE conditions
-     */
-    constructWhereConditions(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      if (queryItem.source != this.src)
-        query = this.constructFkWhereConditions(query, queryItem, tableColsMap)
+        if (!pathInMap) {
+          pathQueryItemMap.set(possibleNewPath, new Set()) /* empty set because this is a nest, no attributes are being selected */
+          nestingPath.set(possibleNewPath, true)
+        } else {
+          let queryItemSet = pathQueryItemMap.get(pathInMap)
 
-      /**
-       * We don't return immediately after constructFkWhereConditions because
-       * the user might have specified more filters, which is stored in the conditions
-       * attribute of queryItem
-       */
+          pathQueryItemMap.delete(pathInMap)
+          nestingPath.delete(pathInMap)
 
-      let conditions = queryItem.conditions
-      conditions ??= []
-
-      for (let i = 0; i < conditions.length; i++) {
-        let currCondition = conditions[i]
-        let {leftTable, leftAttr, rightTable, rightAttr} = currCondition
-
-        query = query.where(eq(column(leftTable.internalname, leftAttr), column(rightTable.internalname, rightAttr)))
-
-        if (!tableColsMap.has(leftTable.internalname)) {
-          tableColsMap.set(leftTable.internalname, new Set())
-          query = query.from(leftTable.internalname)
-        }
-
-        if (!tableColsMap.has(rightTable.internalname)) {
-          tableColsMap.set(rightTable.internalname, new Set())
-          query = query.from(rightTable.internalname)
+          pathQueryItemMap.set(possibleNewPath, queryItemSet)
+          nestingPath.set(possibleNewPath, true)
         }
       }
-      return query
-    }
 
-    /**
-     * 
-     * @param query 
-     *                Query object. See MosaicSQL
-     * @param queryItem 
-     *                QueryItem object. This function uses the source attribute of queryItem to construct a FkPath 
-     *                from this source to the source stated in the queryItem
-     * @param tableColsMap
-     *                a map from tablename to set of selected cols from that tablename. 
-     *                This function can add new tablenames to tableColsMap
-     * @returns 
-     */
-    constructFkWhereConditions(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      let {source, columns, conditions} = queryItem
-      let othermarktable = source
-      let path = this.c.db.getFkPath(this.src, othermarktable)
+      let query = new Query()
 
-      if (!path)
-        throw new Error("No path found!")
+      query = query.distinct()
 
-      for (let i = 0; i < path.length; i++) {
-        let edge = path[i]
-        let leftCol = Array.isArray(edge.X) ? edge.X[0] : edge.X
-        let rightCol = Array.isArray(edge.Y) ? edge.Y[0] : edge.Y
+      for (let columnObj of currColumnObjSet.values()) {
+        let {dataAttr, renameAs} = columnObj
 
-        query = query.where(eq(column(edge.t1.internalname, leftCol), column(edge.t2.internalname, rightCol)))
-
-        if (!tableColsMap.has(edge.t1.internalname)) {
-          tableColsMap.set(edge.t1.internalname, new Set())
-          query = query.from(edge.t1.internalname)
-        }
-
-        if (!tableColsMap.has(edge.t2.internalname)) {
-          tableColsMap.set(edge.t2.internalname, new Set())
-          query = query.from(edge.t2.internalname)
-        }
-      }
-      return query
-    }
-
-    /**
-     * 
-     * @param query
-     *                  Query object. See MosaicSQL
-     * @param queryItem
-     *                  QueryItem object. This function uses the source attribute of queryItem to construct a FkPath 
-     *                  from this source to the source stated in the queryItem
-     * @param tableColsMap 
-     *                  a map from tablename to set of selected cols from that tablename. 
-     *                  This function can add new tablenames and also add new columns to existing tablenames
-     * @returns 
-     */
-    constructSelectStmt(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      let {source, columns} = queryItem
-      let sourcename = source.internalname
-
-      if (!tableColsMap.has(sourcename)) {
-        tableColsMap.set(sourcename, new Set())
-        query = query.from(sourcename)
+        query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
       }
 
-      for (let i = 0; i < columns.length; i++) {
-        let {dataAttr, renameAs} = columns[i]
-        if (!tableColsMap.get(sourcename).has(renameAs)) {
-          query = query.select({[renameAs]: column(sourcename, dataAttr)})
-          tableColsMap.get(sourcename).add(renameAs)
+      query = query.from(this.src.internalname)
+
+      let pathCounter = 1;
+
+      for (let [path, queryItemSet] of pathQueryItemMap.entries()){
+        console.log("path00", path)
+        let tableRenameMap = new Map<string, string>()
+
+        tableRenameMap.set(this.src.internalname, this.src.internalname) /* never rename the src table for this mark */
+        console.log("all constraints", this.c.db.constraints)
+
+        for (let i = 0; i < path.length; i++) {
+          let constraint = path[i]
+          let {t1, t2, X, Y} = constraint
+          let renameT1 = null
+          let renameT2 = null
+
+          if (t1 != this.src) {
+            if (!tableRenameMap.has(t1.internalname)) {
+              renameT1 = `${t1.internalname}_${pathCounter}`
+              query = query.from({[renameT1]: t1.internalname})
+              tableRenameMap.set(t1.internalname, renameT1)
+            } else {
+              renameT1 = tableRenameMap.get(t1.internalname)
+            }
+          } else {
+            renameT1 = this.src.internalname
+          }
+
+          if (t2 != this.src) {
+            if (!tableRenameMap.has(t2.internalname)) {
+              renameT2 = `${t2.internalname}_${pathCounter}`
+              query = query.from({[renameT2]: t2.internalname})
+              tableRenameMap.set(t2.internalname, renameT2)
+            } else {
+              renameT2 = tableRenameMap.get(t2.internalname)
+            }
+          } else {
+            renameT2 = this.src.internalname
+          }
+
+          if (nestingPath.get(path) && i == path.length - 1) {
+
+            query = query.where(eq(column(renameT1, X[0]), literal(Y[0])))
+          } else {
+            query = query.where(eq(column(renameT1, X[0]), column(renameT2, Y[0])))
+          }
+
         }
+
+        for (let queryItem of queryItemSet) {
+          let {source, columns} = queryItem
+
+          for (let columnObj of columns) {
+            let {dataAttr, renameAs} = columnObj
+            let tableName = tableRenameMap.get(source.internalname)
+            query = query.select({[renameAs]: column(tableName, dataAttr)})
+          }
+        }
+        pathCounter++
       }
       return query
     }
-
+ 
     /**
      * Create a dummy root so that layout works on dummy root
      * @returns 
@@ -1245,7 +1302,7 @@ export class Mark {
       let marktable = await this.c.db.createTable(q, tname)
 
       marktable.keys(IDNAME)
-      let fkConstraint = new FKConstraint({t1: marktable, X: IDNAME, t2: this.src, Y: IDNAME})
+      let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
       this.c.db.addConstraint(fkConstraint)
       this.marktable = marktable
     }

@@ -35,8 +35,12 @@
                 url:  "/small_housing.csv"
             },
             {
-                name: "flights",
-                url: "/clean_flights.csv"
+                name: "airports_csv",
+                url: "/airports.csv"
+            },
+            {
+                name: "routes_csv",
+                url: "/routes.csv"
             },
             {
                 name: "species",
@@ -50,6 +54,33 @@
         db_up = await (async function dbGoLive(duckdb) {
         await duckdb.init()
         duckdb.on("data", debug.render)
+
+        await duckdb.exec(
+            `CREATE TABLE airports (airport text PRIMARY KEY, latitude REAL, longitude REAL)`
+        )
+
+        await duckdb.exec(
+            `CREATE TABLE routes (
+                ORIGIN TEXT,
+                DEST TEXT,
+                FOREIGN KEY (ORIGIN) REFERENCES airports(airport),
+                FOREIGN KEY (DEST) REFERENCES airports(airport)
+            )`
+        )
+
+        await duckdb.exec(
+            `
+            INSERT INTO airports (airport, latitude, longitude)
+            SELECT airport, latitude, longitude FROM airports_csv;
+            `
+        )
+        
+        await duckdb.exec(
+            `
+            INSERT INTO routes (ORIGIN, DEST)
+            SELECT ORIGIN, DEST FROM routes_csv;
+            `
+        )
 
         /*
         //fig a
@@ -413,14 +444,10 @@
             let VB = c.text("housing_Bathroom", {x: sb("Bathroom"), y: 0, text: "Bathroom"}, {axis: null})
         }
 
-        if (0) { //node link WORKS
-            await db.normalize("airports",['ORIGIN', 'latitude', 'longitude', 'DEST', 'latitude_dest', 'longitude_dest'], "origin_dest", "tmp0")
-            await db.normalize("origin_dest",['ORIGIN', 'latitude', 'longitude'], "origin", "tmp1")
-            await db.normalize("origin_dest",['DEST', 'latitude_dest', 'longitude_dest'], "dest", "tmp2")
-            const o = { x: {domain: [0,15]}}
-            let VA = c.dot("origin", {x: "latitude", y: "longitude"})
-            let VB = c.dot("dest", {x: "latitude_dest", y: "longitude_dest"})
-            let VT = c.link("origin_dest", {start: VA.get("ORIGIN", ['x','y']), end: VB.get("DEST", ['x', 'y'])}, {axis:null})
+        if (1) { //node link WORKS
+            let VA = c.dot("airports", {x: "latitude", y: "longitude"})
+            let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})
+            //let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
         if (0) {
@@ -525,7 +552,7 @@
 
         }
 
-        if (1) {
+        if (0) {
             let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
             let vcolname= c.text("columns", {
                                             y: 'ordinal_position',

@@ -63,9 +63,9 @@ export const store_example_code = {
                                     `let beaklen = c.dot("penguins_beaklen", { x: 30, y: "beaklen"}, o)`,
                                     `let mass = c.dot("penguins_mass", { x: 40, y: "mass"}, o)`,
 
-                                    `let vlink1 = c.link("penguins_fact", {x1: sex.get(null, ['x']), y1: sex.get(null, ['y']), x2: beakdepth.get(null, ['x']), y2: beakdepth.get(null, ['y'])})`,
-                                    `let vlink2 = c.link("penguins_fact", {x1: beakdepth.get(null, ['x']), y1: beakdepth.get(null, ['y']),  x2: beaklen.get(null, ['x']), y2: beaklen.get(null, ['y'])})`,
-                                    `let vlink3 = c.link("penguins_fact", {x1: beaklen.get(null, ['x']), y1: beaklen.get(null, ['y']), x2: mass.get(null, ['x']), y2: mass.get(null, ['y'])})`
+                                    `let vlink1 = c.link("penguins_fact", {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: beakdepth.get("beakdepth", ['x']), y2: beakdepth.get("beakdepth", ['y'])})`,
+                                    `let vlink2 = c.link("penguins_fact", {x1: beakdepth.get("beakdepth", ['x']), y1: beakdepth.get("beakdepth", ['y']),  x2: beaklen.get("beaklen", ['x']), y2: beaklen.get("beaklen", ['y'])})`,
+                                    `let vlink3 = c.link("penguins_fact", {x1: beaklen.get("beaklen", ['x']), y1: beaklen.get("beaklen", ['y']), x2: mass.get("mass", ['x']), y2: mass.get("mass", ['y'])})`
                                     ],
 
     "housing_scatter":              [`let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})`],
@@ -104,14 +104,10 @@ export const store_example_code = {
     "airport_nodelink":             [`//TEXT mark shows up but is ridculously small.`,
                                     `//Setting fontsize will break it because we try to store font-size as a column when creating a mark table.`,
                                     `//duckdb doesn't allow columns to have - in them`,
-                                    `await db.normalize("flights",['ORIGIN', 'latitude', 'longitude', 'DEST', 'latitude_dest', 'longitude_dest'], "origin_dest", "tmp0")`,
-                                    `await db.normalize("origin_dest",['ORIGIN', 'latitude', 'longitude'], "origin", "tmp1")`,
-                                    `await db.normalize("origin_dest",['DEST', 'latitude_dest', 'longitude_dest'], "dest", "tmp2")`,
-                                    `const o = { x: {domain: [0,15]}}`,
-                                    `let VA = c.dot("origin", {x: "latitude", y: "longitude"})`,
-                                    `let VB = c.dot("dest", {x: "latitude_dest", y: "longitude_dest"})`,
-                                    `let VT = c.link("origin_dest", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VB.get("DEST", ['x']), y2: VB.get("DEST", ['y'])})`,
-                                    `let vtext_origin = c.text("origin_dest", {x: VA.get("ORIGIN", ["x"]), y: VA.get("ORIGIN", ["y"]), text: "ORIGIN", fill: "red"})`]
+
+                                    `let VA = c.dot("airports", {x: "latitude", y: "longitude"})`,
+                                    `let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})`,
+                                    `let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})`]
 }
 
 export const store_example_schema = {
