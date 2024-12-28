@@ -395,7 +395,7 @@ export class Mark {
      * @returns 
      */
     async doRootNest(root, crow) {
-      let query = this.newConstructQuery()
+      let query = this.constructQuery()
       let dummyroot = this.makeDummyRoot()
       let rows = await this.c.db.conn.exec(query)
 
@@ -419,6 +419,7 @@ export class Mark {
 
       // render final marks
       let {mark, markInfo} = this.makemark(channels, crow)
+
       root
         .append("g")
         .attr("transform", `translate(${crow.x}, ${crow.y})`)
@@ -451,7 +452,7 @@ export class Mark {
        */
       for (let i = 0; i < outermarkData[IDNAME].length; i++) {
         let crow = outermarkVizData[i]
-        let query = this.newConstructQuery(nest, crow)
+        let query = this.constructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
@@ -473,7 +474,7 @@ export class Mark {
       return 1
     }
 
-    newConstructQuery(nest?, crow?) {
+    constructQuery(nest?, crow?) {
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
       let currColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
       let nestingPath = new Map<FKConstraint[], Boolean>()
@@ -561,11 +562,7 @@ export class Mark {
       }
 
       if (nest && crow) {
-        console.log("nesting", nest)
-
         let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.marktable, nest.fk)
-
-        console.log("possibleNewPath", possibleNewPath)
         let pathInMap = null
 
         if (!possibleNewPath)
@@ -609,11 +606,9 @@ export class Mark {
       let pathCounter = 1;
 
       for (let [path, queryItemSet] of pathQueryItemMap.entries()){
-        console.log("path00", path)
         let tableRenameMap = new Map<string, string>()
 
         tableRenameMap.set(this.src.internalname, this.src.internalname) /* never rename the src table for this mark */
-        console.log("all constraints", this.c.db.constraints)
 
         for (let i = 0; i < path.length; i++) {
           let constraint = path[i]
@@ -710,29 +705,15 @@ export class Mark {
         let currItem = this.channels[i]
         let {visualAttr, dataAttr, refLayout, callback} = currItem
         if (currItem.isGet) {
-
-          /**
-           * First we check to see if the actual visual attribute or dom prop is different from visualAttr
-           * This is to cover cases like x -> cx. 
-           * Suppose we are plotting a dot where x -> cx, and the user does a get method to create x.
-           * In such a case, we don't want x to be changed ie. not scaling.
-           * We achieve this by setting visualAttr to cx, so OPlot will not scale it.
-           */
-          let va = this.mark[visualAttr]
-          if (va) {
-            visualAttr = va[0]
-          }
-
+          let arr = data[visualAttr]
           /**
            * If callback exists, then we run the callback function and assign the resulting array
            * from handlecallback to channels[visualAttr]
            */
-          if (callback) {
-            channels[visualAttr] = this.handleCallback(currItem, data)
-          }
-          else {
-            channels[visualAttr] = data[visualAttr]
-          }
+          if (callback)
+            arr = this.handleCallback(currItem, data)
+
+          channels[visualAttr] = arr
         }
         else if (refLayout) {
           /**
@@ -860,19 +841,15 @@ export class Mark {
      * @returns
      * 
      * 
-     * 
-     * Construct a graph/DAG that is executed in order. Output of 1 node becomes input of following node
-     * 
      */
     makemark(data, crow, scales?) {
       let mark = OPlot.plot( {
-        ...this._scales, 
-        ...(scales??{}),
-        ...this.options,
         ...R.pick(['width', 'height'], crow),
+        ...(this.options),
         marks: [ 
           this.mark.klass(data[IDNAME], data)
-        ] })
+        ],
+        ...(this._scales)})
       
       if (this.marktype == "text" && ("textAnchor" in this.options)) {
         /**

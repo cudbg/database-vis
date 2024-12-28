@@ -18,15 +18,15 @@ export const store_example_code = {
                                     `let VA = c.dot("A", { x: 0, y: 'a', fill:'black'}, o);`,
                                     `c.nest(VA, VB, "bid");`],
     
-    "categorical_scatterplot":      [`let VA = c.dot("A", {x: "bid", y: "a", fill:"black"}, { x: {domain: [0,10]} });`,
-                                    `let VB = c.text("B", {x: VA.get("bid", ['x']), text: "b"}, {textAnchor:"bottom"});`],
+    "categorical_scatterplot":      [`let VB = c.text("B", {x: "bid", text: "b"}, {textAnchor:"bottom"}, { x: {domain: [0,10]} });`,
+                                    `let VA = c.dot("A", {x: VB.get("bid",["x"]), y: "a", fill:"black"}, { x: {domain: [0,10]} });`],
                                 
     "table":                        [`const o = { x: {domain: [0,10]}};`,
                                     `function adjustPos(x) {
                                         return x + 20
                                     }`,
                                     `let VA = c.text("A", {x: 3, y: 'aid', text: "a"}, o);`,
-                                    `let VB = c.text("B", {x: VA.get(null, ['x'], adjustPos), y: 'bid', text: "b"}, o)`],
+                                    `let VB = c.text("B", {x: VA.get("bid", ['x'], adjustPos), y: 'bid', text: "b"}, o)`],
     
     "layout":                       [`let rect1 = c.rectX("test", { ...sq("b")('y1', 'y2'), x:'b', stroke:"b", fill:"none" })`,
                                     `let rect2 = c.rect("t1", { ...sq('f')(), stroke: "grey", fill: 'none' }, {axis:null})`,
@@ -122,11 +122,10 @@ export const store_example_schema = {
     "nesting":                      [`B(bid int primary key, b int)`,`A( _rav_id int primary key, a int, bid int, FOREIGN KEY(bid) references B(bid))`],
     
     "categorical_scatterplot":      [`B(bid int primary key, b int)`,
-                                    `A( _rav_id int primary key, a int, bid int, FOREIGN KEY (bid) references B (bid))`],
+                                    `A(_rav_id int primary key, a int, bid int, FOREIGN KEY (bid) references B(bid))`],
     
     "table":                        [`A (aid int primary key, a int)`,
-                                    `B (bid int primary key, b int)`,
-                                    `T (aid int, bid int, FOREIGN KEY (aid) references A(aid), FOREIGN KEY (bid) references B(bid))`],
+                                    `B (bid int primary key, b int, FOREIGN KEY (bid) references A(aid))`],
     
     "layout":                       [`test (a int primary key, b int, c int, d int,_rav_id int unique )`,
                                     `t1 (_rav_id int primary key,a int references test(a), f int)`,],
@@ -190,24 +189,22 @@ export const store_example_data = {
                                     (40, 12, 4), (41, 60, 0), (42, 31, 0), (43, 28, 3), (44, 45, 0), (45, 17, 3), (46, 42, 2), (47, 22, 4),
                                     (48, 32, 1), (49, 7, 0)`],
     
-    "categorical_scatterplot":      [`(0, 0), (1, 3), (2, 2), (3, 1), (4, 4), (5, 5)`,
-                                    `(0, 68, 0), (1, 27, 1), (2, 61, 2), (3, 49, 0), (4, 37, 3), (5, 6, 0), (6, 38, 4), (7, 6, 2), 
-                                    (8, 53, 4), (9, 77, 2), (10, 95, 3), (11, 93, 4), (12, 7, 5), (13, 7, 3), (14, 22, 0), (15, 1, 3),
-                                    (16, 29, 5), (17, 84, 3), (18, 51, 5), (19, 41, 5), (20, 0, 5), (21, 62, 0), (22, 4, 1), (23, 56, 1),
-                                    (24, 46, 1), (25, 69, 0), (26, 67, 0), (27, 98, 2), (28, 2, 4), (29, 69, 4), (30, 50, 2), (31, 11, 4),
-                                    (32, 33, 1), (33, 72, 0), (34, 21, 3), (35, 87, 0), (36, 67, 3), (37, 55, 3), (38, 0, 3), (39, 54, 4),
-                                    (40, 12, 4), (41, 60, 0), (42, 31, 0), (43, 28, 3), (44, 45, 0), (45, 17, 3), (46, 42, 2), (47, 22, 4),
-                                    (48, 32, 1), (49, 7, 0)`],
+    "categorical_scatterplot":      [`(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`,
+                                    `(0, 68, 0), (1, 27, 1), (2, 61, 2), (3, 49, 0), (4, 37, 3), 
+                                    (5, 6, 0), (6, 38, 4), (7, 6, 2), (8, 53, 4), (9, 77, 2), (10, 95, 3), (11, 93, 4), 
+                                    (12, 7, 5), (13, 7, 3), (14, 22, 0), (15, 1, 3), (16, 29, 5), (17, 84, 3), (18, 51, 5), 
+                                    (19, 41, 5), (20, 0, 5), (21, 62, 0), (22, 4, 1), (23, 56, 1), (24, 46, 1), (25, 69, 0), 
+                                    (26, 67, 0), (27, 98, 2), (28, 2, 4), (29, 69, 4), (30, 50, 2), (31, 11, 4), (32, 33, 1), 
+                                    (33, 72, 0), (34, 21, 3), (35, 87, 0), (36, 67, 3), (37, 55, 3), (38, 0, 3), (39, 54, 4), 
+                                    (40, 12, 4), (41, 60, 0), (42, 31, 0), (43, 28, 3), (44, 45, 0), (45, 17, 3), (46, 42, 2), 
+                                    (47, 22, 4), (48, 32, 1), (49, 7, 0)`],
 
     "table":                        [`(0, 1), (1, 2), (2, 5), (3, 6), (4, 19), (5, 30), (6, 22), (7, 40), (8, 35),
                                     (9, 16), (10, 27), (11, 13), (12, 37), (13, 53), (14, 26), (15, 89), (16, 42),
                                     (17, 55), (18, 71), (19, 62)`,
                                     `(0, 3), (1, 10), (2, 1), (3, 12), (4, 38), (5, 47), (6, 6), (7, 48), (8, 42),
                                     (9, 39), (10, 56), (11, 11), (12, 77), (13, 25), (14, 74), (15, 45), (16, 81),
-                                    (17, 42), (18, 66), (19, 50)`,
-                                    `(0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),
-                                    (9, 9), (10, 10), (11, 11), (12, 12), (13, 13), (14, 14), (15, 15), (16, 16),
-                                    (17, 17), (18, 18), (19, 19)`],
+                                    (17, 42), (18, 66), (19, 50)`],
 
     "layout":                       [`(1,2,3,100,0), (4,5,6,111,1), (7, 8, 9,132,2), (10, 51, 12,145,3)`,
                                     `(0, 1, 1), (1, 1, 2), (2, 1, 5), 

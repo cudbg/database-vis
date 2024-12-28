@@ -447,7 +447,7 @@
         if (1) { //node link WORKS
             let VA = c.dot("airports", {x: "latitude", y: "longitude"})
             let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})
-            //let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
+            let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
         if (0) {
