@@ -294,6 +294,15 @@ export class Mark {
      * Called in the init method for handling a call to get method
      * @param getObj the object that was created from a get method 
      */
+
+    checkValidFkConstraint(c: FKConstraint, othermark, currSearchkey) {
+      if (c.t1 == othermark.src && c.t2 == this.src && c.Y == currSearchkey && (c.card == Cardinality.ONEMANY || c.card == Cardinality.ONEONE))
+        return true
+      else if (c.t2 == othermark.src && c.t1 == this.src && c.X == currSearchkey && (c.card == Cardinality.ONEMANY || c.card == Cardinality.ONEONE))
+        return true
+      return false
+    }
+
     processGet(getObj) {
       let othermark = getObj.othermark
       let searchkeys = getObj.searchkeys
@@ -313,10 +322,10 @@ export class Mark {
              * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
              * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
              */
-            if (c.t1 == othermark.src && c.t2 == this.src && c.Y == searchkeys[i] && (c.card == Cardinality.ONEMANY || c.card == Cardinality.ONEONE)) {
+            let validFkConstraint = this.checkValidFkConstraint(c, othermark, searchkeys[i])
+
+            if (validFkConstraint)
               constraint = c
-              break
-            }
           }
           if (!constraint)
             throw new Error("No such foreign key reference!")
