@@ -46,11 +46,10 @@ export const store_example_code = {
     
     "taxonomy_hier":                [`let tables = await c.hier("species", ["morder", "family", "genus", "specificEpithet"])`,
                                     `let vorder = c.dot("morder", {x: "morder", y: 50}, {y: {range: [0, 100]}})`,
-                                    `let vorder_family = c.dot("morder_family_fact", {x: "family", y: 150}, {y: {range: [100, 200]}})`,
-                                    `let vorder_family_genus = c.dot("morder_family_genus_fact", {x: "genus", y: 250}, {y: {range: [200, 300]}})`,
-                                    `let vlink1 = c.link("morder_family", {x1: vorder.get("morder", ["x"]), y1: vorder.get("morder", ["y"]), x2: vorder_family.get("family", ["x"]), y2: vorder_family.get("family", ["y"])})`,
-                                    `let vlink2 = c.link("morder_family_genus", {x1: vorder_family.get("family", ["x"]), y1: vorder_family.get("family", ["y"]), x2: vorder_family_genus.get("genus", ["x"]), y2: vorder_family_genus.get("genus", ["y"])})`],
-    
+                                    `let vfamily = c.dot("family", {x: "family", y: 150}, {y: {range: [100, 200]}})`,
+                                    `let vgenus = c.dot("genus", {x: "genus", y: 250}, {y: {range: [200, 300]}})`,
+                                    `let vlink1 = c.link("family", {x1: vorder.get("morder", ["x"]), y1: vorder.get("morder", ["y"]), x2: vfamily.get(["morder", "family"], ["x"]), x2: vfamily.get(["morder", "family"], ["y"]) })`],
+
     "hr_layout":                    [`await db.normalizeMany("hrdata", ['DeptID', 'Salary', 'Absences', 'PerformanceScore'].map((a)=>[a]))`,
                                     `let rect1 = c.rect("hrdata_DeptID", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })`,
                                     `let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })`,

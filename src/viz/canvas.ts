@@ -323,24 +323,29 @@ export class Canvas implements IMark {
     return this.node.node();
   }
 
-  async hier(tablename, attrHierarchy) {
-    console.log("tablename", tablename)
-    console.log("attr_hierarchy", attrHierarchy)
-    let tables = {dimtables: [], facttables: [], jointables: []}
-    let currTablename = tablename;
-    for (let i = attrHierarchy.length; i > 0; i--) {
-      let currAttrs = attrHierarchy.slice(0, i);
-      console.log("curr_attrs", currAttrs)
-      let dimname = `${currAttrs.join("_")}`
-      console.log("curr_tablename", currTablename)
-      let createdTables = await this.db.normalize(currTablename, currAttrs, dimname)
-      tables.dimtables.push(createdTables[0])
-      tables.facttables.push(createdTables[1])
-      tables.jointables.push(createdTables[2])
-      currTablename = createdTables[0].internalname
+  async hier(tablename: string, attrHierarchy: string []) {
+    let newTableNames = attrHierarchy.slice()
+    let currTable = this.db.table(tablename)
+    let prevTable = null
+    let prevKeys = null
+
+    for (let i = 0; i < attrHierarchy.length; i++) {
+      let currAttrs = attrHierarchy.slice(0, i + 1)
+      let select = currTable.schema.pick(currAttrs).asObject()
+      let newTable = await currTable.distinctproject(select, newTableNames[i])
+      newTable.keys(IDNAME)
+
+      if (prevTable) {
+        let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
+        this.db.addConstraint(c)
+      }
+      prevTable = newTable
+      prevKeys = currAttrs
     }
-    return tables
+    console.log("all constraints", this.db.constraints)
+    return newTableNames
   }
+
 }
 
 for (const mtype of R.keys(marksbytype(Canvas.plotConfig))) {
