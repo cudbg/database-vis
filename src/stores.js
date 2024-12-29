@@ -36,14 +36,6 @@ export const store_example_code = {
                                     
                                     `c.nest(rect2, rect1, "a")`],
     
-    "callback_example":             [`const o = { x: {domain: [0,10]}};`,
-                                    `function adjustPos(x) {
-                                        return x + 20
-                                    }`,
-                                    `let VA = c.dot("A", {x: 3, y: 'aid', fill: 'black'}, o);`,
-                                    `let VB = c.dot("B", {x: VA.get(null, ['x'], adjustPos), y: 'bid', fill: 'red'}, o)`],
-    
-    
     "taxonomy_hier":                [`let tables = await c.hier("species", ["morder", "family", "genus", "specificEpithet"])`,
                                     `let vorder = c.dot("morder", {x: "morder", y: 50}, {y: {range: [0, 100]}})`,
                                     `let vfamily = c.dot("family", {x: "family", y: 150}, {y: {range: [100, 200]}})`,
@@ -71,7 +63,7 @@ export const store_example_code = {
     "housing_scatter":              [`let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})`],
 
     "housing_punchcard":            [`await db.normalizeMany("housing",['Rooms','Bathroom'].map((a) => [a]))`,
-                                    `let sa = c.linear("room_scale", "housing_fact", "Rooms", "room_scale")`,
+                                    `let sa = c.linear("room_scale", "housing_fact", "Rooms")`,
                                     `let sb = c.linear("bathroom_scale", "housing_fact", "Bathroom")`,
                                     `let VT = c.dot("housing_fact", { x: sb("Bathroom"), y: sa("Rooms")})`,
 
