@@ -289,14 +289,14 @@
         await duckdb.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
         await duckdb.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
-        await duckdb.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int)`)
+        await duckdb.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname))`)
         await duckdb.exec(`INSERT INTO columns VALUES
                 (0, 'coursenum', 1, 'int', 0), (0, 'coursename', 0, 'string', 1), (0, 'deptname', 0, 'string', 2),
                 (1, 'semester', 1, 'string', 0), (1, 'year', 1, 'int', 1),
                 (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
                 
         `)
-        await duckdb.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, cols2 string)`)
+        await duckdb.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
         await duckdb.exec(`INSERT INTO fkeys VALUES
                 (2, 'coursenum', 0, 'coursenum')`)
         

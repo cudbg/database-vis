@@ -48,7 +48,8 @@ export const store_example_code = {
                                     `let vorder = c.dot("morder", {x: "morder", y: 50}, {y: {range: [0, 100]}})`,
                                     `let vfamily = c.dot("family", {x: "family", y: 150}, {y: {range: [100, 200]}})`,
                                     `let vgenus = c.dot("genus", {x: "genus", y: 250}, {y: {range: [200, 300]}})`,
-                                    `let vlink1 = c.link("family", {x1: vorder.get("morder", ["x"]), y1: vorder.get("morder", ["y"]), x2: vfamily.get(["morder", "family"], ["x"]), x2: vfamily.get(["morder", "family"], ["y"]) })`],
+                                    `let vlink1 = c.link("family", {x1: vorder.get("morder", ["x"]), y1: vorder.get("morder", ["y"]), x2: vfamily.get(["morder", "family"], ["x"]), y2: vfamily.get(["morder", "family"], ["y"]) })`,
+                                    `let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })`],
 
     "hr_layout":                    [`await db.normalizeMany("hrdata", ['DeptID', 'Salary', 'Absences', 'PerformanceScore'].map((a)=>[a]))`,
                                     `let rect1 = c.rect("hrdata_DeptID", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })`,
