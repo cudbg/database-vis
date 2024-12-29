@@ -233,7 +233,6 @@ export class Mark {
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
             let {othermark, constraint, othervattr, callback} = this.processGet(dattr)
-            console.log("constraint", constraint)
             rawChannelItem.mark = othermark
             rawChannelItem.constraint = constraint
             rawChannelItem.dataAttr = othervattr
@@ -352,7 +351,6 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
-          console.log("processGet", path)
           let possiblePath = true
 
           for (let i = 1; i < path.length; i++) {
@@ -584,7 +582,6 @@ export class Mark {
             }
 
             if (!pathInMap) {
-              console.log("adding new path")
               pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
               nestingPath.set(possibleNewPath, false)
 
@@ -683,7 +680,6 @@ export class Mark {
       let srcTableAliasIndex = 0
 
       for (let [path, queryItemSet] of pathQueryItemMap.entries()){
-        console.log("what is happening")
         /**
          * tableRenameMap is a mapping from internal table names to in-query aliases
          */
@@ -707,7 +703,6 @@ export class Mark {
 
         for (let i = startPathIterIndex; i < path.length; i++) {
           let constraint = path[i]
-          console.log("constraint", constraint)
           let {t1, t2, X, Y} = constraint
           let renameT1 = null
           let renameT2 = null
