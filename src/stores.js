@@ -122,9 +122,6 @@ export const store_example_schema = {
     "layout":                       [`test (a int primary key, b int, c int, d int,_rav_id int unique )`,
                                     `t1 (_rav_id int primary key,a int references test(a), f int)`,],
     
-    "callback_example":             [`A (aid int primary key, a int)`,
-                                    `B (bid int primary key, b int)`,
-                                    `T (aid int, bid int, FOREIGN KEY (aid) references A(aid), FOREIGN KEY (bid) references B(bid))`],
 
     "taxonomy_hier":                [``],
 
