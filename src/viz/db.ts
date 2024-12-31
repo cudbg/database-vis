@@ -290,38 +290,59 @@ export class Database {
   }
 
 
+  dfs(edges, curr: string, destination: string, visited: Set<string>, path: FKConstraint[], currEdge: FKConstraint) {
+    visited.add(curr)
+    path.push(currEdge)
+
+    if (curr == destination)
+      return path
+
+
+    for (let { dst:_dst, c } of (edges[curr]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination, visited, path, c)
+        if (result)
+          return result
+      }
+    }
+    path.pop()
+    visited.delete(curr)
+    return null
+  }
+
   getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
     let edges = this.getFkDependencyGraph()
 
-    let seen = new Set()
+    let visited = new Set<string>()
+    visited.add(source.internalname)
     let path = [searchConstraint]
-    let queue = []
+    let start
 
-    if (searchConstraint.card == Cardinality.ONEMANY)
-      queue.push(searchConstraint.t1.internalname)
-    else if (searchConstraint.t1.internalname != source.internalname)
-      queue.push(searchConstraint.t1.internalname)
-    else
-      queue.push(searchConstraint.t2.internalname)
 
-    while (queue.length > 0) {
-      let currTableName = queue.shift()
+    if (searchConstraint.card == Cardinality.ONEMANY) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else if (searchConstraint.t1.internalname != source.internalname) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else {
+      start = searchConstraint.t2.internalname
+      visited.add(searchConstraint.t2.internalname)
+    }
 
-      if (seen.has(currTableName))
-        continue
-      seen.add(currTableName)
-      if (currTableName == destination.internalname)
-        return path
-      for (let { dst:_dst, c } of (edges[currTableName]??[])) {
-        queue.push(_dst);
-        path.push(c)
+    if (start == destination.internalname)
+      return path
+
+    for (let { dst:_dst, c } of (edges[start]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination.internalname, visited, path, c)
+        if (result)
+          return result
       }
     }
 
-    /**
-     * If we end up here, no such path exists, throw error
-     */
-    throw new Error("No possible path!")
+    return null
+
   }
 
   constraint(name) {

@@ -327,6 +327,28 @@ export class Mark {
        * If both marks share the same source table, then skip checking and create a new FKConstraint
        */
       if (othermark.src == this.src) {
+        /**
+         * Search currently available constraints so that we don't add redundant constraints
+         */
+        for (let constraint of Object.values(this.c.db.constraints)) {
+          if (!(constraint instanceof FKConstraint))
+            continue
+
+          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
+            continue
+          
+          if ((constraint.X.length != searchkeys.length) || (constraint.Y.length != searchkeys.length))
+            continue
+
+          if (!(constraint.X.every((value, index) => value == searchkeys[index])))
+            continue
+
+          if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
+            continue
+
+          return {othermark, constraint, othervattr, callback}
+        }
+
         let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
 
         this.c.db.addConstraint(constraint)
@@ -353,15 +375,16 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
-          let possiblePath = true
 
+          if (!path)
+            throw new Error("No possible path!")
+          
           for (let i = 1; i < path.length; i++) {
             if (path[i].card != Cardinality.ONEONE)
-              possiblePath = false
+              throw new Error("No possible path!")
           }
 
-          if (possiblePath)
-            return {othermark, constraint, othervattr, callback}
+          return {othermark, constraint, othervattr, callback}
         }
       }
 
@@ -574,7 +597,7 @@ export class Mark {
         if (!columns.some(column => source.schema.attrs.includes(column.dataAttr)))
           continue
         /**
-         * This is a get method ie. foreign key reference
+         * This is a foreign key reference
          */
         if (constraint) {
           let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
@@ -597,7 +620,7 @@ export class Mark {
               /**
                * Create a path for each constraint and check if this new path is already present
                */
-              if ((constraint.t1 == constraint.t2) && constraint.t1 == this.src) {
+              if ((constraint.t1 == constraint.t2) && (constraint.t1 == this.src)) {
                 let currlen = possibleSrcTableAliases.length
                 possibleSrcTableAliases.push(`${this.src.internalname}_${currlen}`)
               }
