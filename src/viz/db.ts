@@ -291,36 +291,32 @@ export class Database {
 
 
   getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
-    console.log("source", source)
-    console.log("destination", destination)
-    console.log("searchConstraint", searchConstraint)
     let edges = this.getFkDependencyGraph()
-    console.log("edges", edges)
 
-      let seen = new Set()
-      let path = [searchConstraint]
-      let queue = []
-  
-      if (searchConstraint.card == Cardinality.ONEMANY)
-        queue.push(searchConstraint.t1.internalname)
-      else if (searchConstraint.t1.internalname != source.internalname)
-        queue.push(searchConstraint.t1.internalname)
-      else
-        queue.push(searchConstraint.t2.internalname)
+    let seen = new Set()
+    let path = [searchConstraint]
+    let queue = []
 
-      while (queue.length > 0) {
-        let currTableName = queue.shift()
+    if (searchConstraint.card == Cardinality.ONEMANY)
+      queue.push(searchConstraint.t1.internalname)
+    else if (searchConstraint.t1.internalname != source.internalname)
+      queue.push(searchConstraint.t1.internalname)
+    else
+      queue.push(searchConstraint.t2.internalname)
 
-        if (seen.has(currTableName))
-          continue
-        seen.add(currTableName)
-        if (currTableName == destination.internalname)
-          return path
-        for (let { dst:_dst, c } of (edges[currTableName]??[])) {
-          queue.push(_dst);
-          path.push(c)
-        }
+    while (queue.length > 0) {
+      let currTableName = queue.shift()
+
+      if (seen.has(currTableName))
+        continue
+      seen.add(currTableName)
+      if (currTableName == destination.internalname)
+        return path
+      for (let { dst:_dst, c } of (edges[currTableName]??[])) {
+        queue.push(_dst);
+        path.push(c)
       }
+    }
 
     /**
      * If we end up here, no such path exists, throw error

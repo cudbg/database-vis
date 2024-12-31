@@ -1311,20 +1311,36 @@ export class Mark {
 
       const tname = this.src.internalname + "_marktable" + this.id;
 
+      for (let i = 0; i < markInfo.length; i++) {
+        for (let [key,value] of Object.entries(markInfo[i])) {
+          /**
+           * Turn cx, x1 into x, cy, y1 into y etc.
+           * We don't want to insert a cx column into the marktable
+           * Eg.
+           * because some other mark may want to get x attribute from this mark
+           * and we want that other mark to find x attribute
+           */
+          let aliasObj = this.mark.alias2scale
+          if (Object.keys(aliasObj).includes(key)) {
+            
+            delete markInfo[i][key]
 
-      let query = loadObjects(tname, markInfo)
+            key = aliasObj[key]
+            markInfo[i][key] = value
+          }
 
-      await this.c.db.conn.exec(query)
+          if (parseFloat(value)) {
+            let numValue = parseFloat(value)
+            markInfo[i][key] = numValue
+          }
+        }
+      }
 
-      let marktable = await this.c.db.tableFromConnection(tname)
-      marktable.keys(IDNAME)
+      await this.createNewMarkTable(markInfo, tname)
 
-      this.c.db.setTable(marktable)
-      let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
+      let tuples = this.valuesFromMarkInfo(markInfo).map((row) => `(${row.join(", ")})`).join(", ")
 
-      this.c.db.addConstraint(fkConstraint)
-
-      this.marktable = marktable
+      await this.c.db.conn.exec(`INSERT INTO ${tname} VALUES ${tuples}`)
     }
 
     /**
@@ -1367,6 +1383,32 @@ export class Mark {
       this.c.db.addConstraint(fkConstraint)
       this.marktable = marktable
     }
+
+    /**
+     * Preparing markinfo to put inside marktable
+     * @param markInfo 
+     * @returns 2D array, where each array corresponds to a row in marktable
+     */
+    valuesFromMarkInfo(markInfo) {
+      let values = []
+      for (const obj of markInfo) {
+        let rowValues = []
+        for (const [k,v] of Object.entries(obj)) {
+            if (k == IDNAME) {
+              rowValues.push(parseInt(obj[k]));
+            } else {
+              if (isNaN(Number(v))) { //ie string
+                rowValues.push(`'${v}'`)
+              } else {
+                rowValues.push(parseFloat(obj[k]));
+              }
+            }
+        }
+        values.push(rowValues);
+      }
+      return values
+    }
+
 
     /**
      * data has format [{}, {}, {}], where each object represents attributes for a single row.
