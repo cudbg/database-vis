@@ -81,23 +81,6 @@
             SELECT ORIGIN, DEST FROM routes_csv;
             `
         )
-        
-        //ER diagram experiment
-        await duckdb.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-        await duckdb.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
-
-        await duckdb.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname))`)
-        await duckdb.exec(`INSERT INTO columns VALUES
-                (0, 'coursenum', 1, 'int', 0), (0, 'coursename', 0, 'string', 1), (0, 'deptname', 0, 'string', 2),
-                (1, 'semester', 1, 'string', 0), (1, 'year', 1, 'int', 1),
-                (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
-                
-        `)
-        await duckdb.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
-        await duckdb.exec(`INSERT INTO fkeys VALUES
-                (2, 'coursenum', 0, 'coursenum')`)
-        
-        
         })(duckdb);
 
 
@@ -423,7 +406,7 @@
             c.nest(rect2, rect1, "Rooms")
         }
 
-        if (1) { /* airport nodelink */
+        if (0) { /* airport nodelink */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -436,7 +419,21 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (0) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
+        if (1) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
+                    //ER diagram experiment
+            await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
+            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
+
+            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname))`)
+            await db.conn.exec(`INSERT INTO columns VALUES
+                    (0, 'coursenum', 1, 'int', 0), (0, 'coursename', 0, 'string', 1), (0, 'deptname', 0, 'string', 2),
+                    (1, 'semester', 1, 'string', 0), (1, 'year', 1, 'int', 1),
+                    (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
+                    
+            `)
+            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
+            await db.conn.exec(`INSERT INTO fkeys VALUES
+                    (2, 'coursenum', 0, 'coursenum')`)
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -455,14 +452,21 @@
                 return x + 50
             }
             let vtype = c.text("columns", {
+                                            x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
                                             y: "ordinal_position",
-                                            x: vcolname.get(null, ["x"], adjustPos),
                                             text: "type"
                                         })
             c.nest(vcolname, vtables, "tid")
             c.nest(vtype, vtables, "tid")
+
+            let VT = c.link("fkeys", {
+                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
+                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
+                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
+                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
+
                     
-            // let VF = c.link('FKeys', {
+            // let VF = c.link('fkeys', {
             //                             x1: vcolname.get(["tid1","col1"], ["x"]),
             //                             y1: vcolname.get(["tid1","col1"], ["y"]),
             //                             x2: vcolname.get(["tid2","col2"], ["x"]),

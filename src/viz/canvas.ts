@@ -234,6 +234,12 @@ export class Canvas implements IMark {
    * Remembers which Marks rely on a RefMark
   */
   registerRefMark(rm:Mark, m:Mark) {
+    for (let i = 0; i < this.refmarks.length; i++) {
+      let currReference = this.refmarks[i]
+      if ((currReference.rm == rm) && (currReference.m == rm)) {
+        return
+      }
+    }
     this.refmarks.push({ rm, m })
   }
 
@@ -242,53 +248,122 @@ export class Canvas implements IMark {
     // they should ideally be aligned as well
   }
 
-  // topologically sort marks by the Nest relationships and markof references
+  /**
+   * Topologically sort marks by nest and foreign key references
+   */
   sortedmarks() {
-    // compute mark dependency graph
-    let edges = {};   // markid --dependson--> markid[]
-    let dsts = {};    // dst markid -> true
+    let referenceCounts = new Map<number, number>() /* mapping from mark id to number of other marks it is dependent on */
+    let graph = new Map<number, number[]>() /* mapping from mark id to array of other marks that are dependent on it */
+
+    for (let i = 0; i < this.marks.length; i++) {
+      let currmark = this.marks[i]
+      referenceCounts.set(currmark.id, 0)
+      graph.set(currmark.id, [])
+    }
+
     for (const n of this.nests) {
       if (n instanceof MarkNest) {
-        for (const Nm of this.marksof(n.fk.t2)) {
-          for (const ONEm of this.marksof(n.fk.t1)) {
-            (edges[ONEm.id] ??= []).push(Nm.id);
-            dsts[Nm.id] = true;
-          }
+        let {outerMark, innerMark} = n
+        let outerMarkID = outerMark.id
+        let innerMarkID = innerMark.id
+
+        graph.get(outerMarkID).push(innerMarkID)
+        referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
+      }
+    }
+
+    for (let i = 0; i < this.refmarks.length; i++) {
+      let currReference = this.refmarks[i]
+      let {rm, m} = currReference
+      let dstID = rm.id
+      let srcID = m.id
+
+      if (!graph.get(dstID).includes(srcID)) {
+        graph.get(dstID).push(srcID)
+        referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
+      }
+    }
+
+    let queue = []
+  
+    for (let [markID, count] of referenceCounts.entries()) {
+      if (count == 0)
+        queue.push(markID)
+    }
+
+    if (queue.length == 0)
+      throw new Error("Marks cross reference each other, plotting not possible")
+
+    let arr = queue.slice()
+
+    while (queue.length != 0) {
+      let currID = queue.shift()
+      let destMarks = graph.get(currID)
+      
+      for (let i = 0; i < destMarks.length; i++) {
+        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i] - 1))
+
+        if (referenceCounts.get(destMarks[i]) == 0) {
+          queue.push(destMarks[i])
+          arr.push(destMarks[i])
         }
       }
     }
-    for (const {rm,m:srcm} of this.refmarks) {
-      for (const dstm of this.marksof(rm.src)) {
-        (edges[dstm.id] ??= []).push(srcm.id);
-        dsts[srcm.id] = true;
-      }
-    }
 
-    let queue = this.marks
-      .filter((m) => m instanceof Mark && !dsts[m.id])
-      .map((m:Mark) => m.id)
-    // markid -> distance from root
-    let distances = Object.fromEntries(queue.map((markid)=>[markid, 0]));
+    let marks = this.marks.slice().sort((mark1, mark2) => {
+      return arr.indexOf(mark1.id) - arr.indexOf(mark2.id)
+    })
 
-    while (queue.length) {
-      let mid = queue.pop();
-      let d = distances[mid];
-      let added = false;
-      if (d > 50) throw new Error("Loop");
-
-      for (const dstid of (edges[mid] ?? [])) {
-        if (d+1 > (distances[dstid]??0)) {
-          distances[dstid] = d+1;
-          queue.push(dstid)
-        }
-      }
-    }
-
-    let marks = R.sortBy((m) => (m instanceof Mark)
-      ? distances[m.id]??this.marks.length 
-      : 0, this.marks)
-    return marks;
+    return marks
   }
+
+  // topologically sort marks by the Nest relationships and markof references
+  // sortedmarks() {
+  //   // compute mark dependency graph
+  //   let edges = {};   // markid --dependson--> markid[]
+  //   let dsts = {};    // dst markid -> true
+  //   for (const n of this.nests) {
+  //     if (n instanceof MarkNest) {
+  //       for (const Nm of this.marksof(n.fk.t2)) {
+  //         for (const ONEm of this.marksof(n.fk.t1)) {
+  //           (edges[ONEm.id] ??= []).push(Nm.id);
+  //           dsts[Nm.id] = true;
+  //         }
+  //       }
+  //     }
+  //   }
+  //   for (const {rm,m:srcm} of this.refmarks) {
+  //     for (const dstm of this.marksof(rm.src)) {
+  //       (edges[dstm.id] ??= []).push(srcm.id);
+  //       dsts[srcm.id] = true;
+  //     }
+  //   }
+
+  //   let queue = this.marks
+  //     .filter((m) => m instanceof Mark && !dsts[m.id])
+  //     .map((m:Mark) => m.id)
+  //   // markid -> distance from root
+  //   let distances = Object.fromEntries(queue.map((markid)=>[markid, 0]));
+
+  //   while (queue.length) {
+  //     let mid = queue.pop();
+  //     let d = distances[mid];
+  //     let added = false;
+  //     if (d > 50) throw new Error("Loop");
+
+  //     for (const dstid of (edges[mid] ?? [])) {
+  //       if (d+1 > (distances[dstid]??0)) {
+  //         distances[dstid] = d+1;
+  //         queue.push(dstid)
+  //       }
+  //     }
+  //   }
+
+  //   let marks = R.sortBy((m) => (m instanceof Mark)
+  //     ? distances[m.id]??this.marks.length 
+  //     : 0, this.marks)
+  //   return marks;
+  // }
 
   async render(context) {
     context.document ??= document;

@@ -246,6 +246,8 @@ export class Mark {
               this._scales.x =  {type: "identity"}
             else if (va == "y1" || va == "y2" || va == "y")
               this._scales.y = {type: "identity"}
+            
+            this.c.registerRefMark(othermark, this)
 
           }
           else if (dattr instanceof Scale) {
