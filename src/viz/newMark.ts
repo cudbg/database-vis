@@ -438,6 +438,7 @@ export class Mark {
       let query = this.constructQuery()
       let dummyroot = this.makeDummyRoot()
       let rows = await this.c.db.conn.exec(query)
+      console.log("rows", rows)
 
       /**
        * The data from query has format [{}, {}, {}] where each object represents
@@ -448,6 +449,7 @@ export class Mark {
        * 
        */
       let cols = this.rowsToCols(rows)
+      console.log("cols", cols)
 
       /**
        * channels has format {x: [], y: [], ...}
@@ -494,7 +496,9 @@ export class Mark {
         let crow = outermarkVizData[i]
         let query = this.constructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
+        console.log("rows", rows)
         let cols = this.rowsToCols(rows)
+        console.log("cols", cols)
         let channels = this.applychannels(cols)
 
         channels = await this.doLayout(channels, crow, dummyroot)
@@ -676,6 +680,8 @@ export class Mark {
         query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
       }
 
+      query = query.select(column(this.src.internalname, IDNAME))
+
       query = query.from(this.src.internalname)
 
       let pathCounter = 1
@@ -785,11 +791,6 @@ export class Mark {
       if (Object.keys(data).length == 0) {
         return []
       }
-
-      let valueArr = Object.values(data)[0]
-      let numDatapoints = valueArr.length;
-
-      data[IDNAME] = [...Array(numDatapoints).keys()]
 
       let channels = {
         [IDNAME]: [...data[IDNAME]]
@@ -1318,7 +1319,7 @@ export class Mark {
       }
 
       /**
-       * tuples is now in sql query format (...), (...), (...)
+       * tuples are in sql query format (...), (...), (...)
        */
       let tuples = values.map((row) => `(${row.join(", ")})`).join(", ")
       let q = `${tuples}`

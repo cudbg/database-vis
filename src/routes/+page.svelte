@@ -465,13 +465,76 @@
                                     x2: vcolname.get(["tid2", "col2"], ['x']), 
                                     y2: vcolname.get(["tid2", "col2"], ['y'])})
 
-                    
-            // let VF = c.link('fkeys', {
-            //                             x1: vcolname.get(["tid1","col1"], ["x"]),
-            //                             y1: vcolname.get(["tid1","col1"], ["y"]),
-            //                             x2: vcolname.get(["tid2","col2"], ["x"]),
-            //                             y2: vcolname.get(["tid2","col2"], ["y"])
-            // })
+            
+            // select "c1"."tid" as "left_id", "c1"."colname" as "left_col",
+            // "c2"."tid" as "right_id", "c2"."colname" as "right_col"
+            // FROM "columns" as "c1", "columns" as "c2", "fkeys"
+            // WHERE "fkeys"."tid1" = "c1"."tid" AND "fkeys"."col1" = "c1"."colname" AND "fkeys"."tid2" = "c2"."tid" AND "fkeys"."col2" = "c2"."colname"
+            
+            /**
+             * Creating vtype
+             * SELECT DISTINCT "columns"."ordinal_position" AS "ordinal_position", 
+             *                 "columns"."type" AS "type",
+             *                 "columns_marktable3_1"."x" AS "x" 
+             * 
+             * FROM "columns", 
+             *      "columns" AS "columns_0", 
+             *      "columns_marktable1" AS "columns_marktable1_1", 
+             *      "columns_marktable2" AS "columns_marktable2_1",
+             *      "columns_marktable3" AS "columns_marktable3_1",
+             *      "tables" AS "tables_2",
+             *      "tables_marktable0" AS "tables_marktable0_2" 
+             * 
+             * WHERE ("columns"."tid" = "columns_0"."tid")
+             * AND ("columns"."colname" = "columns_0"."colname")
+             * AND ("columns_0"."tid" = "columns_0"."tid")
+             * AND ("columns_0"."colname" = "columns_0"."colname")
+             * AND ("columns_0"."tid" = "columns_0"."tid")
+             * AND ("columns_0"."colname" = "columns_0"."colname")
+             * AND ("columns_marktable1_1"."_rav_id" = "columns_0"."_rav_id")
+             * AND ("columns_marktable2_1"."_rav_id" = "columns_0"."_rav_id")
+             * AND ("columns_marktable3_1"."_rav_id" = "columns_0"."_rav_id")
+             * AND ("tables_2"."tid" = "columns"."tid")
+             * AND ("tables_marktable0_2"."_rav_id" = "tables_2"."_rav_id")
+             * AND ("tables_marktable0_2"."_rav_id" = 0)
+            */
+
+            /**
+             * Creating link
+             * SELECT DISTINCT "columns_marktable3_1"."x" AS "x1", 
+             *                 "columns_marktable3_1"."y" AS "y1",
+             *                 "columns_marktable3_2"."x" AS "x2", 
+             *              "columns_marktable3_2"."y" AS "y2"
+             * 
+             * FROM "fkeys", 
+             *      "columns" AS "columns_1",
+             *      "columns_marktable1" AS "columns_marktable1_1", 
+             *      "columns_marktable2" AS "columns_marktable2_1", 
+             *      "columns_marktable3" AS "columns_marktable3_1", 
+             *      "columns" AS "columns_2", 
+             *      "columns_marktable1" AS "columns_marktable1_2", 
+             *      "columns_marktable2" AS "columns_marktable2_2", 
+             *      "columns_marktable3" AS "columns_marktable3_2"
+             * 
+             * WHERE ("columns_1"."tid" = "fkeys"."tid1") 
+             * AND ("columns_1"."colname" = "fkeys"."col1") 
+             * AND ("columns_1"."tid" = "columns_1"."tid")
+             * AND ("columns_1"."colname" = "columns_1"."colname") 
+             * AND ("columns_1"."tid" = "columns_1"."tid") 
+             * AND ("columns_1"."colname" = "columns_1"."colname") 
+             * AND ("columns_marktable1_1"."_rav_id" = "columns_1"."_rav_id") 
+             * AND ("columns_marktable2_1"."_rav_id" = "columns_1"."_rav_id") 
+             * AND ("columns_marktable3_1"."_rav_id" = "columns_1"."_rav_id") 
+             * AND ("columns_2"."tid" = "fkeys"."tid2") 
+             * AND ("columns_2"."colname" = "fkeys"."col2") 
+             * AND ("columns_2"."tid" = "columns_2"."tid") 
+             * AND ("columns_2"."colname" = "columns_2"."colname") 
+             * AND ("columns_2"."tid" = "columns_2"."tid") 
+             * AND ("columns_2"."colname" = "columns_2"."colname") 
+             * AND ("columns_marktable1_2"."_rav_id" = "columns_2"."_rav_id") 
+             * AND ("columns_marktable2_2"."_rav_id" = "columns_2"."_rav_id") 
+             * AND ("columns_marktable3_2"."_rav_id" = "columns_2"."_rav_id")
+            */
         }
 
         (await canvas.render({ document, svg }));

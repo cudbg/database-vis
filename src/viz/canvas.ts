@@ -133,12 +133,9 @@ export class Canvas implements IMark {
   }
 
   invalidPredicate(t1, t2, predicate) {
-    console.log("t1", t1)
-    console.log("t2", t2)
     if (!t1.schema.attrs.includes(predicate) || !t2.schema.attrs.includes(predicate))
       return false
     let tmpFkConstraint = new FKConstraint({t1: t1, X:predicate, t2:t2, Y:predicate})
-    console.log("tmpFkConstraint", tmpFkConstraint)
     console.log(tmpFkConstraint.card != Cardinality.ONEMANY)
     if (tmpFkConstraint.card != Cardinality.ONEMANY)
       return true
