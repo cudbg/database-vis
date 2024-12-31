@@ -151,12 +151,12 @@ export class Database {
     return t;
   }
 
-  async insertIntoTable(q, name: string) {
-    let sql = `INSERT INTO ${name} VALUES ${q}`
-    await this.conn.exec(sql)
-    const ret = await this.tableFromConnection(name)
-    return ret
-  }
+  // async insertIntoTable(q, name: string) {
+  //   let sql = `INSERT INTO ${name} VALUES ${q}`
+  //   await this.conn.exec(sql)
+  //   const ret = await this.tableFromConnection(name)
+  //   return ret
+  // }
 
   async loadFromConnection(...tablenames) {
     (await this.tablesFromConnection(tablenames))
@@ -291,7 +291,11 @@ export class Database {
 
 
   getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    console.log("source", source)
+    console.log("destination", destination)
+    console.log("searchConstraint", searchConstraint)
     let edges = this.getFkDependencyGraph()
+    console.log("edges", edges)
 
       let seen = new Set()
       let path = [searchConstraint]

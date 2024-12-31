@@ -492,6 +492,7 @@ export class Mark {
        * 
        * Could we call doRootNest in here?
        */
+      let markInfoArr = []
       for (let i = 0; i < outermarkData[IDNAME].length; i++) {
         let crow = outermarkVizData[i]
         let query = this.constructQuery(nest, crow)
@@ -510,10 +511,12 @@ export class Mark {
           .attr("transform", `translate(${crow.x}, ${crow.y})`)
           .node().appendChild(mark);
 
-        await this.createMarkTable(markInfo)
+        markInfoArr.push(...markInfo)
         
         this._markelsidx = markels(root, this.marktype);
       }
+      console.log("markInfoArr", markInfoArr)
+      await this.createMarkTable(markInfoArr)
       document.documentElement.removeChild(dummyroot.node());
       return 1
     }
@@ -706,8 +709,6 @@ export class Mark {
           for (let i = 0; i < X.length; i++)
             query = query.where(eq(column(this.src.internalname, X[i]), column(srcTableAlias, Y[i])))
         }
-
-        //tableRenameMap.set(this.src.internalname, this.src.internalname) /* never rename the src table for this mark */
 
         for (let i = startPathIterIndex; i < path.length; i++) {
           let constraint = path[i]
@@ -1109,9 +1110,10 @@ export class Mark {
                 let {x,y} = thisref.getTransformInfo(el)
                 markAttributes["x"] = x
                 markAttributes["y"] = y
-              } else {
-                markAttributes[attrName] = attrValue;
-              }
+              } else if (attrName == `data_${IDNAME}`)
+                markAttributes[IDNAME] = parseInt(attrValue);
+              else
+                markAttributes[attrName] = attrValue
           }
           markInfo.push(markAttributes)
       })
@@ -1131,7 +1133,7 @@ export class Mark {
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
-        .attr(`data_${IDNAME}`, (d,i) => {data[IDNAME][i];})
+        .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
         .attr(`data_xoffset`, crow.x)  // TODO: this will not work for recursively nested data
         .attr(`data_yoffset`, crow.y)
         .each(function (d, i) {
@@ -1144,13 +1146,14 @@ export class Mark {
 
           for (let j = 0; j < elAttrs.length; j++) {
               let attrName = elAttrs[j].name;
-              if (attrName == "transform") {
-                continue
-              }
-
               let attrValue = elAttrs[j].value;
 
-              markAttributes[attrName] = attrValue;
+              if (attrName == "transform")
+                continue
+              else if (attrName == `data_${IDNAME}`)
+                markAttributes[IDNAME] = parseInt(attrValue);
+              else
+                markAttributes[attrName] = attrValue;
           }
           markInfo.push(markAttributes)
       })
@@ -1303,39 +1306,25 @@ export class Mark {
      * @returns 
      */
     async createMarkTable(markInfo) {
-      if (markInfo.length == 0)
-        return
+      console.log("createMarkTable")
+      console.log("markInfo", markInfo)
 
-      /**
-       * values is a 2d array. each inner array represents a row to insert into the marktable
-       */
-      let values = this.valuesFromMarkInfo(markInfo)
+      const tname = this.src.internalname + "_marktable" + this.id;
 
-      /**
-       * This fills up the rav_id column
-       */
-      for (let i = 0; i < values.length; i++) {
-        values[i].push(i)
-      }
 
-      /**
-       * tuples are in sql query format (...), (...), (...)
-       */
-      let tuples = values.map((row) => `(${row.join(", ")})`).join(", ")
-      let q = `${tuples}`
-      const tname = this.src.internalname + "_marktable" + this.id++;
+      let query = loadObjects(tname, markInfo)
 
-      if (!this.c.db.tables.has(tname)) { //create non existent table
-        await this.createNewMarkTable(markInfo, tname)
-      } else { //check if schema has changed. If yes, recreate the marktable
-        let table = this.c.db.tables.get(tname)
+      await this.c.db.conn.exec(query)
 
-        if (table.schema.attrs.length != values[0].length) {
-          await this.c.db.conn.exec(`DROP TABLE ${tname}`)
-          await this.createNewMarkTable(markInfo, tname)
-        }
-      }
-      await this.c.db.insertIntoTable(q, tname)
+      let marktable = await this.c.db.tableFromConnection(tname)
+      marktable.keys(IDNAME)
+
+      this.c.db.setTable(marktable)
+      let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
+
+      this.c.db.addConstraint(fkConstraint)
+
+      this.marktable = marktable
     }
 
     /**
@@ -1377,33 +1366,6 @@ export class Mark {
       let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
       this.c.db.addConstraint(fkConstraint)
       this.marktable = marktable
-    }
-
-    /**
-     * Preparing markinfo to put inside marktable
-     * @param markInfo 
-     * @returns 2D array, where each array corresponds to a row in marktable
-     */
-    valuesFromMarkInfo(markInfo) {
-      let values = []
-
-      for (const obj of markInfo) {
-        let rowValues = []
-
-        for (const [k,v] of Object.entries(obj)) {
-            if (k == IDNAME) {
-              rowValues.push(parseInt(obj[k]));
-            } else {
-              if (isNaN(Number(v))) { //ie string
-                rowValues.push(`'${v}'`)
-              } else {
-                rowValues.push(parseFloat(obj[k]));
-              }
-            }
-        }
-        values.push(rowValues);
-      }
-      return values
     }
 
     /**

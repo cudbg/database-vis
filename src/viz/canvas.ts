@@ -68,8 +68,7 @@ export class Canvas implements IMark {
     this.marks = [];
     this.nests = [];
     this.refmarks = [];
-    this.available_scales = new Map<string, d_scale>()
-    console.log("available_scales", this.available_scales)
+    this.available_scales = new Map<string, Scale>()
 
     options ??= {};
 
@@ -125,9 +124,9 @@ export class Canvas implements IMark {
 
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
-    let src = maybesource(this.db, source)
-    let canvas = findcanvas(this, src);
-    let mark = new Mark(canvas, marktype, src, mapping, plotoptions, Canvas.plotConfig)
+    let srcTable = this.db.table(source)
+    let canvas = findcanvas(this, srcTable);
+    let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
     return mark;
   }
@@ -136,7 +135,6 @@ export class Canvas implements IMark {
     if (!t1.schema.attrs.includes(predicate) || !t2.schema.attrs.includes(predicate))
       return false
     let tmpFkConstraint = new FKConstraint({t1: t1, X:predicate, t2:t2, Y:predicate})
-    console.log(tmpFkConstraint.card != Cardinality.ONEMANY)
     if (tmpFkConstraint.card != Cardinality.ONEMANY)
       return true
     return false
