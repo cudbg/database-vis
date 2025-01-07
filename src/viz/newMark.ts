@@ -14,7 +14,7 @@ import { markof, RefColumn, RefLayout, RefMark } from "./ref";
 import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
-import { Scale } from "./newScale";
+import { Scale, ScaleObject } from "./newScale";
 
 /**
  * Used in QueryItem
@@ -184,7 +184,7 @@ export class Mark {
     options;
     refmarks;
     layouts;
-    scaling_fns;
+    scaling_fns: {va, scale: Scale}[]
 
     _scales;
     _markelsidx;  // IDNAME -> HTML mark element
@@ -245,9 +245,13 @@ export class Mark {
             this.c.registerRefMark(othermark, this)
 
           }
-          else if (dattr instanceof Scale) {
+          else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
-              rawChannelItem.dataAttr = [dattr.getCol()] // we scale a single column at a time, so this is ok
+
+              rawChannelItem.dataAttr = [dattr.col] // we scale a single column at a time, so this is ok
+
+              if (dattr.scale.callback)
+                rawChannelItem.callback = dattr.scale.callback
           }
           this.channels.push(rawChannelItem)
       }
@@ -395,20 +399,22 @@ export class Mark {
      *            Contains information about domain, range, col
      *            See dynamicScale.ts. 
      */
-    setScaleForVA(va, scaleObj: Scale) {
-      if (!this.src.schema.attrs.includes(scaleObj.getCol()))
-        throw new Error(`Trying to scale invalid column: ${scaleObj.getCol()}`)
+    setScaleForVA(va, scaleObj: ScaleObject) {
+      let {col, scale} = scaleObj
+      if (!this.src.schema.attrs.includes(col))
+        throw new Error(`Trying to scale invalid column: ${col}`)
 
-      let range = scaleObj.getRange()
-      let type = scaleObj.getType()
+      let range = scale.range
+      let type = scale.type
 
       this._scales[va] = {}
-      if (range) {
-        this._scales[va] = {range: range}
-      }
       if (type) {
-        this._scales[va] = {...this._scales[va], type: type}
+        this._scales[va] = {type: type}
       }
+      if (range) {
+        this._scales[va] = {...this._scales[va], range: range}
+      }
+
       
       this.scaling_fns.push({va: va, scale: scaleObj})
     }
@@ -823,6 +829,7 @@ export class Mark {
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
         let {visualAttr, dataAttr, refLayout, callback} = currItem
+
         if (currItem.isGet) {
           let arr = data[visualAttr]
           /**
@@ -851,7 +858,10 @@ export class Mark {
            * If the first element in dataAttr is present in the data, then we just assign it directly
            */
           if (Object.keys(data).includes(dataAttr[0])) {
-            channels[visualAttr] = data[dataAttr[0]]
+            if (callback)
+              channels[visualAttr] = this.handleCallback(currItem, data)
+            else
+              channels[visualAttr] = data[dataAttr[0]]
           } else {
             /**
              * This runs in cases like x: 0, width: "5em"
@@ -1303,21 +1313,15 @@ export class Mark {
         let va = curr_scaling_fn.va
         let scale = curr_scaling_fn.scale
 
-        //bookkeeping purposes?
-        if (!scale.getDomain()) {
-          let va_domain = mark.scale(va)?.domain
-          scale.setDomain(va_domain)
-        }
-
-        if (!scale.getType()) {
+        if (!scale.type) {
           let va_type = mark.scale(va)?.type
-          scale.setType(va_type)
+          scale.type = va_type
         }
 
         // this is the update we actually care about because range affects the position on screen
-        if (!scale.getRange()) {
+        if (!scale.range) {
           let va_range = mark.scale(va)?.range
-          scale.setRange(va_range)
+          scale.range = va_range
         }
       }
     }

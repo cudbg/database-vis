@@ -1,44 +1,28 @@
+export class ScaleObject {
+    col: string
+    scale: Scale
+    constructor(col, scale) {
+        this.col = col
+        this.scale = scale
+    }
+}
+
 export class Scale {
     domain;
     range;
     type;
-    col;
+    callback;
 
-    constructor(col) {
+    constructor(callback) {
         this.domain = null;
         this.range = null;
         this.type = null;
-        this.col = col;
+        this.callback = callback
+
     }
 
-    getCol(){
-        return this.col;
-    }
-
-    getDomain() {
-        return this.domain;
-    }
-
-    setDomain(newDomain) {
-        this.domain = newDomain;
-        return this.domain;
-    }
-
-    getRange() {
-        return this.range;
-    }
-
-    setRange(newRange) {
-        this.range = newRange;
-        return this.range;
-    }
-
-    getType() {
-        return this.type;
-    }
-
-    setType(newType) {
-        this.type = newType;
-        return this.type;
+    apply(data) {
+        if (this.callback)
+            return this.callback(data)
     }
 }
