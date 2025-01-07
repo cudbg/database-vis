@@ -393,12 +393,17 @@ export class Mark {
 
     /**
      * Called in the init method handle scaling
-     * @param va  The visual attribute to scale
-     * @param v   Has type Scale (need to come up with better name). 
+     * @param va  
+     *            The visual attribute to scale
+     * @param scaleObj
+     *            Has type Scale (need to come up with better name). 
      *            Contains information about domain, range, col
      *            See dynamicScale.ts. 
      */
-    setScaleForVA(va, scaleObj) {
+    setScaleForVA(va, scaleObj: Scale) {
+      if (!this.src.schema.attrs.includes(scaleObj.getCol()))
+        throw new Error(`Trying to scale invalid column: ${scaleObj.getCol()}`)
+
       let range = scaleObj.getRange()
       let type = scaleObj.getType()
 
