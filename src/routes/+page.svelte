@@ -298,7 +298,7 @@
             let VB = c.text("B", {x: VA.get("bid", ['x'], adjustPos), y: 'bid', text: "b"}, o)
         }
 
-        if (0) { /* layout example */
+        if (1) { /* layout example */
             await db.conn.exec(`CREATE TABLE test (a int primary key, b int, c int, d int,_rav_id int unique )`)
             await db.conn.exec(`CREATE TABLE t1 (_rav_id int primary key,a int references test(a), f int)`)
 
@@ -316,11 +316,13 @@
 
             let rect1 = c.rectX("test", { ...sq("b")('y1', 'y2'), x:'b', stroke:"b", fill:"none" })
             let rect2 = c.rect("t1", { ...sq('f')(), stroke: "grey", fill: 'none' }, {axis:null})
-            let text2 = c.text("t1", { ...sq('f')('x', 'y'), dx:10, text: 'f', fill:'white' }, {axis:null})
+            let text2 = c.text("t1", { ...sq('f')('x', 'y'), dx:10, text: 'f', fill:'black' }, {axis:null})
                             
             let dot1 = c.dot("t1", { x: 'f', ...propY('f')(), fill:'red' })
                                     
             c.nest(rect2, rect1, "a")
+            c.nest(text2, rect1, "a")
+            c.nest(dot1, rect1, "a")
         }
 
 
@@ -435,7 +437,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (1) { /* housing treemap */
+        if (0) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})

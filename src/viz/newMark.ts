@@ -223,12 +223,7 @@ export class Mark {
           if (dattr instanceof RefLayout) {
               dattr.add(va);
               this.addLayout(dattr);
-              /**
-               * For a reflayout, we select all columns from the table except for IDNAME
-               * The user should never select IDNAME!
-               */
-              dataAttr = this.src.schema.except([IDNAME]).attrs;
-              rawChannelItem.dataAttr = dataAttr
+              rawChannelItem.dataAttr = dattr.dattrs
               rawChannelItem.refLayout = dattr
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
