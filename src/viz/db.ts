@@ -421,15 +421,6 @@ export class Database {
     let rest = t.schema.except([...attrs, IDNAME]).attrs;
     const fkattr = (attrs.length==1)? attrs[0] : `${dimname}_id`;
 
-    if (!t.schema.attrs.includes(fkattr)) {
-      await this.conn.exec(`ALTER TABLE ${t.internalname} ADD COLUMN ${fkattr} INTEGER;`)
-      let where_clauses = attrs.map((a) => `${t.internalname}.${a} = ${newDim.internalname}.${a}`)
-      let where_stmt = where_clauses.join(" AND ")
-      await this.conn.exec(`UPDATE ${t.internalname}
-                            SET ${fkattr} = ${newDim.internalname}.${IDNAME}
-                            FROM ${newDim.internalname}
-                            WHERE ${where_stmt}`)
-    }
     let q = Query
       .from({l:t.internalname, r:newDim.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column('r',a)))))
@@ -440,31 +431,12 @@ export class Database {
     newFact.name(factname)
     newFact.keys(IDNAME)
     //let c1 = new FKConstraint({t1: t, X: fkattr, t2: newDim, Y: IDNAME})
+    let c1 = new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]})
     let c2 = new FKConstraint({t1: newFact, X: [fkattr], t2: newDim, Y: [IDNAME]})
     this.setTable(newDim)
     this.setTable(newFact)
-    //this.addConstraint(c1)
+    this.addConstraint(c1)
     this.addConstraint(c2)
-
-    let intertablename = `${t.internalname}_inter_${fkattr}`
-    q = Query
-      .from({a:newDim.internalname, b:newFact.internalname, c:t.internalname})
-      .where(and(attrs.map((a) => eq(column('a',a),column('c',a)))))
-      .where(and(rest.map((a) => eq(column('b',a),column('c',a)))))
-      .select({leftid: column('a', IDNAME)})
-      .select({rightid: column('b', IDNAME)})
-      .select({[IDNAME]: column('c',IDNAME)})
-    
-    let interTable = await this.fromSql(q, intertablename)
-    interTable.name(intertablename)
-    interTable.keys(IDNAME)
-    let c3 = new FKConstraint({t1: t, X: [IDNAME], t2: interTable, Y: [IDNAME]})
-    this.addConstraint(c3)
-    let c4 = new FKConstraint({t1: interTable, X: ["leftid"], t2: newDim, Y: [IDNAME]})
-    this.addConstraint(c4)
-    let c5 = new FKConstraint({t1: interTable, X: ["rightid"], t2: newFact, Y: [IDNAME]})
-    this.addConstraint(c5)
-    return [newDim, newFact, interTable]
   }
 
 

@@ -551,7 +551,7 @@ export class Mark {
 
     constructQuery(nest?, crow?) {
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
-      let currColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
+      let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
       let nestingPath = new Map<FKConstraint[], Boolean>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
 
@@ -639,12 +639,12 @@ export class Mark {
           for (let i = 0; i < columns.length; i++) {
             let foundColumn = false
 
-            for (const columnObj of currColumnObjSet) {
+            for (const columnObj of noConstraintColumnObjSet) {
               if (eqColumnObjs(columnObj, columns[i]))
                 foundColumn = true
             }
             if (!foundColumn)
-              currColumnObjSet.add(columns[i])
+              noConstraintColumnObjSet.add(columns[i])
           }
         }
       }
@@ -705,7 +705,7 @@ export class Mark {
 
       query = query.distinct()
 
-      for (let columnObj of currColumnObjSet.values()) {
+      for (let columnObj of noConstraintColumnObjSet.values()) {
         let {dataAttr, renameAs} = columnObj
 
         query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})

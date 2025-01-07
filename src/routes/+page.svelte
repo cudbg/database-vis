@@ -386,7 +386,7 @@
             let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})
         }
 
-        if (1) { /* housing punchcard */
+        if (0) { /* housing punchcard */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -435,7 +435,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (0) { /* housing treemap */
+        if (1) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
