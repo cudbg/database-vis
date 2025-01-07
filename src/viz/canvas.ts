@@ -10,7 +10,7 @@ import {type Nest, RootNest, MarkNest } from "./nest";
 import * as Plot from "@observablehq/plot";
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { RefMark } from "./ref";
-import { Scale } from "./newScale";
+import { Scale, ScaleObject } from "./newScale";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -109,12 +109,31 @@ export class Canvas implements IMark {
     let c = this;
     //col is going to be used in initScaling method of mark!
     return function(col) {
-      if (c.available_scales.has(scalename))
-        return c.available_scales.get(scalename)
+      let scale = null
 
-      let scale =  new Scale(col)
-      c.available_scales.set(scalename, scale)
-      return scale
+      if (c.available_scales.has(scalename))
+        scale = c.available_scales.get(scalename)
+      else {
+        scale =  new Scale(null)
+        c.available_scales.set(scalename, scale)
+      }
+      return new ScaleObject(col, scale)
+    }
+  }
+
+  log(scalename) {
+    let c = this;
+    //col is going to be used in initScaling method of mark!
+    return function(col) {
+      let scale = null
+
+      if (c.available_scales.has(scalename))
+        scale = c.available_scales.get(scalename)
+      else {
+        scale =  new Scale(Math.log)
+        c.available_scales.set(scalename, scale)
+      }
+      return new ScaleObject(col, scale)
     }
   }
 

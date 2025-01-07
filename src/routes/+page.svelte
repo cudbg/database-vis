@@ -130,9 +130,11 @@
             window.c = c;
             window.db = db;
 
+            let logscale = c.log("logscale1")
+
             let vrect = c.rect("TimeProvince2", {x: "province", y:0, fill: "white", stroke: "black"})
             let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
-            let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: "confirmed"}) //define boundary
+            let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
             //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
 
             
@@ -298,7 +300,7 @@
             let VB = c.text("B", {x: VA.get("bid", ['x'], adjustPos), y: 'bid', text: "b"}, o)
         }
 
-        if (1) { /* layout example */
+        if (0) { /* layout example */
             await db.conn.exec(`CREATE TABLE test (a int primary key, b int, c int, d int,_rav_id int unique )`)
             await db.conn.exec(`CREATE TABLE t1 (_rav_id int primary key,a int references test(a), f int)`)
 
@@ -388,7 +390,7 @@
             let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})
         }
 
-        if (0) { /* housing punchcard */
+        if (1) { /* housing punchcard */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
