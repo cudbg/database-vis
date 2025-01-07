@@ -152,11 +152,14 @@ export class Canvas implements IMark {
       for (const [key, value] of Object.entries(this.db.constraints)) {
         if (value.t2 == innerTable && value.t1 == outerTable) {
           fkConstraint = value
+        } else if (value.t1 == innerTable && value.t2 == outerTable){
+          fkConstraint = value
         }
       }
     }
     if (fkConstraint == null) {
-      fkConstraint = new FKConstraint({t1: innerTable, X:[predicate], t2:outerTable, Y:[predicate]})
+      predicate = Array.isArray(predicate) ? predicate : [predicate]
+      fkConstraint = new FKConstraint({t1: innerTable, X:predicate, t2:outerTable, Y:predicate})
     }
     this.nests.push(new MarkNest(this, fkConstraint, innerMark, outerMark))
   }
@@ -203,7 +206,7 @@ export class Canvas implements IMark {
       if (n instanceof MarkNest) {
         if (o instanceof Mark && o.src instanceof Table) {
           const mark = o;
-          if (n.fk.t2 == mark.src) {
+          if (n.fk.t2 == mark.src && n.innerMark == mark) {
             for (const m2 of this.marksof(n.fk.t1)) {
               if (m2 && m2 instanceof Mark && m2.src == n.fk.t1){
                 ret.push(n)
@@ -278,7 +281,7 @@ export class Canvas implements IMark {
         referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
       }
     }
-
+    console.log("testingJan6", referenceCounts)
     let queue = []
   
     for (let [markID, count] of referenceCounts.entries()) {
@@ -308,7 +311,7 @@ export class Canvas implements IMark {
     let marks = this.marks.slice().sort((mark1, mark2) => {
       return arr.indexOf(mark1.id) - arr.indexOf(mark2.id)
     })
-
+    console.log("testingJan6", marks)
     return marks
   }
 

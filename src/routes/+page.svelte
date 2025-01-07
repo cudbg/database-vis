@@ -47,6 +47,14 @@
                 url: "/clean_species.csv"
             },
             {
+                name: "TimeProvince",
+                url: "Filtered_TimeProvince_Data_Without_Sejong.csv"
+            },
+            {
+                name: "Weather",
+                url: "Filtered_Weather_Data_3.csv"
+            },
+            {
                 name: "hrdata",
                 url: "/HRDataset_v14.csv"
             }]
@@ -81,6 +89,26 @@
             SELECT ORIGIN, DEST FROM routes_csv;
             `
         )
+
+        await duckdb.exec( //creating new table with primary key
+            `CREATE TABLE TimeProvince2 (date DATE, province TEXT, confirmed INT, PRIMARY KEY (date,province))`
+        )
+        await duckdb.exec(
+            `CREATE TABLE Weather2 (date DATE, province TEXT, avgtemp REAL, PRIMARY KEY (date,province), FOREIGN KEY (date,province) references TimeProvince2(date,province))`
+        )
+
+        await duckdb.exec( 
+            `
+            INSERT INTO TimeProvince2 (date, province, confirmed)
+            SELECT date, province, confirmed FROM TimeProvince;
+            `
+        )
+        await duckdb.exec(
+            `
+            INSERT INTO Weather2 (date, province, avgtemp)
+            SELECT date, province, avg_temp FROM Weather;
+            `
+        )
         })(duckdb);
 
 
@@ -92,6 +120,23 @@
         await db.init();
         await db.loadFromConnection();
         let canvas
+
+
+        if (1) { /* fig a, scatter plot */
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vrect = c.rect("TimeProvince2", {x: "province", y:0, fill: "white", stroke: "black"})
+            let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
+            let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: "confirmed"}) //define boundary
+            //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
+
+            
+        }
 
 
         if (0) { /* fig a, scatter plot */
@@ -419,7 +464,7 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (1) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
+        if (0) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
                     //ER diagram experiment
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
