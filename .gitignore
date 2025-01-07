@@ -4,3 +4,4 @@ dist
 docs
 .svelte-kit/
 .svelte-kit/ambient.d.ts
+meeting_notes

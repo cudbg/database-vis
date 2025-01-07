@@ -151,12 +151,12 @@ export class Database {
     return t;
   }
 
-  async insertIntoTable(q, name: string) {
-    let sql = `INSERT INTO ${name} VALUES ${q}`
-    await this.conn.exec(sql)
-    const ret = await this.tableFromConnection(name)
-    return ret
-  }
+  // async insertIntoTable(q, name: string) {
+  //   let sql = `INSERT INTO ${name} VALUES ${q}`
+  //   await this.conn.exec(sql)
+  //   const ret = await this.tableFromConnection(name)
+  //   return ret
+  // }
 
   async loadFromConnection(...tablenames) {
     (await this.tablesFromConnection(tablenames))
@@ -243,12 +243,15 @@ export class Database {
     for (const [cname, c] of Object.entries(this.constraints)) {
       if (!(c instanceof FKConstraint)) continue
       let {t1,t2,card} = c;
-      if (card == Cardinality.ONEONE || card == Cardinality.ONEMANY) {
+      if (card == Cardinality.ONEONE) {
         edges[t1.internalname] ??= [];
         edges[t2.internalname] ??= [];
         edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
-      } else {
+      } else if (card == Cardinality.ONEMANY) {
+        edges[t1.internalname] ??= [];
+        edges[t2.internalname] ??= [];
+        edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
     }
@@ -272,7 +275,6 @@ export class Database {
     let paths = [];
     let seen = {};
     let queue = [{ src: source, dst: destination, path: [] }];
-    console.log({ src: source, dst: destination, path: [] })
 
     while (queue.length > 0) {
       let { src, dst, path } = queue.shift();
@@ -285,6 +287,62 @@ export class Database {
     }
     paths = R.uniqBy((path) => R.pluck("id",path).join("--"), paths)
     return paths;
+  }
+
+
+  dfs(edges, curr: string, destination: string, visited: Set<string>, path: FKConstraint[], currEdge: FKConstraint) {
+    visited.add(curr)
+    path.push(currEdge)
+
+    if (curr == destination)
+      return path
+
+
+    for (let { dst:_dst, c } of (edges[curr]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination, visited, path, c)
+        if (result)
+          return result
+      }
+    }
+    path.pop()
+    visited.delete(curr)
+    return null
+  }
+
+  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    let edges = this.getFkDependencyGraph()
+
+    let visited = new Set<string>()
+    visited.add(source.internalname)
+    let path = [searchConstraint]
+    let start
+
+
+    if (searchConstraint.card == Cardinality.ONEMANY) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else if (searchConstraint.t1.internalname != source.internalname) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else {
+      start = searchConstraint.t2.internalname
+      visited.add(searchConstraint.t2.internalname)
+    }
+
+    if (start == destination.internalname)
+      return path
+
+    for (let { dst:_dst, c } of (edges[start]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination.internalname, visited, path, c)
+        if (result)
+          return result
+      }
+    }
+
+    return null
+
   }
 
   constraint(name) {
@@ -363,15 +421,6 @@ export class Database {
     let rest = t.schema.except([...attrs, IDNAME]).attrs;
     const fkattr = (attrs.length==1)? attrs[0] : `${dimname}_id`;
 
-    if (!t.schema.attrs.includes(fkattr)) {
-      await this.conn.exec(`ALTER TABLE ${t.internalname} ADD COLUMN ${fkattr} INTEGER;`)
-      let where_clauses = attrs.map((a) => `${t.internalname}.${a} = ${newDim.internalname}.${a}`)
-      let where_stmt = where_clauses.join(" AND ")
-      await this.conn.exec(`UPDATE ${t.internalname}
-                            SET ${fkattr} = ${newDim.internalname}.${IDNAME}
-                            FROM ${newDim.internalname}
-                            WHERE ${where_stmt}`)
-    }
     let q = Query
       .from({l:t.internalname, r:newDim.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column('r',a)))))
@@ -382,31 +431,12 @@ export class Database {
     newFact.name(factname)
     newFact.keys(IDNAME)
     //let c1 = new FKConstraint({t1: t, X: fkattr, t2: newDim, Y: IDNAME})
-    let c2 = new FKConstraint({t1: newFact, X: fkattr, t2: newDim, Y: IDNAME})
+    let c1 = new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]})
+    let c2 = new FKConstraint({t1: newFact, X: [fkattr], t2: newDim, Y: [IDNAME]})
     this.setTable(newDim)
     this.setTable(newFact)
-    //this.addConstraint(c1)
+    this.addConstraint(c1)
     this.addConstraint(c2)
-
-    let intertablename = `${t.internalname}_inter_${fkattr}`
-    q = Query
-      .from({a:newDim.internalname, b:newFact.internalname, c:t.internalname})
-      .where(and(attrs.map((a) => eq(column('a',a),column('c',a)))))
-      .where(and(rest.map((a) => eq(column('b',a),column('c',a)))))
-      .select({leftid: column('a', IDNAME)})
-      .select({rightid: column('b', IDNAME)})
-      .select({[IDNAME]: column('c',IDNAME)})
-    
-    let interTable = await this.fromSql(q, intertablename)
-    interTable.name(intertablename)
-    interTable.keys(IDNAME)
-    let c3 = new FKConstraint({t1: t, X: IDNAME, t2: interTable, Y: IDNAME})
-    this.addConstraint(c3)
-    let c4 = new FKConstraint({t1: interTable, X: "leftid", t2: newDim, Y: IDNAME})
-    this.addConstraint(c4)
-    let c5 = new FKConstraint({t1: interTable, X: "rightid", t2: newFact, Y: IDNAME})
-    this.addConstraint(c5)
-    return [newDim, newFact, interTable]
   }
 
 
@@ -428,7 +458,7 @@ export class Database {
 
       this.setTable(new_table)
       new_table.keys(IDNAME)
-      constraints.push({t1: null, X: fkattr, t2: new_table, Y: IDNAME})
+      constraints.push({t1: null, X: [fkattr], t2: new_table, Y: [IDNAME]})
       q
       .from({[dimname as string]: new_table.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column(dimname,a)))))

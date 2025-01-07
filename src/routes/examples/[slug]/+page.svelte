@@ -112,8 +112,12 @@
               url: "/HRDataset_v14.csv"
             },
             {
-              name: "flights",
-              url: "/clean_flights.csv"
+                name: "airports_csv",
+                url: "/airports.csv"
+            },
+            {
+                name: "routes_csv",
+                url: "/routes.csv"
             },
             {
                 name: "species",
@@ -125,6 +129,36 @@
         console.log("dbGoLive")
         await duckdb.init()
         duckdb.on("data debugrender", debug.render)
+
+        /**
+         * Need to set up foreign key references for airport nodelink diagram to work properly
+        */
+        await duckdb.exec(
+            `CREATE TABLE airports (airport text PRIMARY KEY, latitude REAL, longitude REAL)`
+        )
+
+        await duckdb.exec(
+            `CREATE TABLE routes (
+                ORIGIN TEXT,
+                DEST TEXT,
+                FOREIGN KEY (ORIGIN) REFERENCES airports(airport),
+                FOREIGN KEY (DEST) REFERENCES airports(airport)
+            )`
+        )
+
+        await duckdb.exec(
+            `
+            INSERT INTO airports (airport, latitude, longitude)
+            SELECT airport, latitude, longitude FROM airports_csv;
+            `
+        )
+        
+        await duckdb.exec(
+            `
+            INSERT INTO routes (ORIGIN, DEST)
+            SELECT ORIGIN, DEST FROM routes_csv;
+            `
+        )
 
         console.log("plotType has housing?", plotType.includes("housing"))
 

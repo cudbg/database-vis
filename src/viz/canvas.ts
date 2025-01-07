@@ -68,8 +68,7 @@ export class Canvas implements IMark {
     this.marks = [];
     this.nests = [];
     this.refmarks = [];
-    this.available_scales = new Map<string, d_scale>()
-    console.log("available_scales", this.available_scales)
+    this.available_scales = new Map<string, Scale>()
 
     options ??= {};
 
@@ -105,7 +104,7 @@ export class Canvas implements IMark {
     return c;
   }
 
-  linear(scalename, table?, attr?) {
+  linear(scalename) {
     //skip error checking to see if attr in table
     let c = this;
     //col is going to be used in initScaling method of mark!
@@ -125,21 +124,17 @@ export class Canvas implements IMark {
 
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
-    let src = maybesource(this.db, source)
-    let canvas = findcanvas(this, src);
-    let mark = new Mark(canvas, marktype, src, mapping, plotoptions, Canvas.plotConfig)
+    let srcTable = this.db.table(source)
+    let canvas = findcanvas(this, srcTable);
+    let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
     return mark;
   }
 
   invalidPredicate(t1, t2, predicate) {
-    console.log("t1", t1)
-    console.log("t2", t2)
     if (!t1.schema.attrs.includes(predicate) || !t2.schema.attrs.includes(predicate))
       return false
     let tmpFkConstraint = new FKConstraint({t1: t1, X:predicate, t2:t2, Y:predicate})
-    console.log("tmpFkConstraint", tmpFkConstraint)
-    console.log(tmpFkConstraint.card != Cardinality.ONEMANY)
     if (tmpFkConstraint.card != Cardinality.ONEMANY)
       return true
     return false
@@ -157,10 +152,13 @@ export class Canvas implements IMark {
       for (const [key, value] of Object.entries(this.db.constraints)) {
         if (value.t2 == innerTable && value.t1 == outerTable) {
           fkConstraint = value
+        } else if (value.t1 == innerTable && value.t2 == outerTable){
+          fkConstraint = value
         }
       }
     }
     if (fkConstraint == null) {
+      predicate = Array.isArray(predicate) ? predicate : [predicate]
       fkConstraint = new FKConstraint({t1: innerTable, X:predicate, t2:outerTable, Y:predicate})
     }
     this.nests.push(new MarkNest(this, fkConstraint, innerMark, outerMark))
@@ -208,7 +206,7 @@ export class Canvas implements IMark {
       if (n instanceof MarkNest) {
         if (o instanceof Mark && o.src instanceof Table) {
           const mark = o;
-          if (n.fk.t2 == mark.src) {
+          if (n.fk.t2 == mark.src && n.innerMark == mark) {
             for (const m2 of this.marksof(n.fk.t1)) {
               if (m2 && m2 instanceof Mark && m2.src == n.fk.t1){
                 ret.push(n)
@@ -234,6 +232,12 @@ export class Canvas implements IMark {
    * Remembers which Marks rely on a RefMark
   */
   registerRefMark(rm:Mark, m:Mark) {
+    for (let i = 0; i < this.refmarks.length; i++) {
+      let currReference = this.refmarks[i]
+      if ((currReference.rm == rm) && (currReference.m == rm)) {
+        return
+      }
+    }
     this.refmarks.push({ rm, m })
   }
 
@@ -242,53 +246,122 @@ export class Canvas implements IMark {
     // they should ideally be aligned as well
   }
 
-  // topologically sort marks by the Nest relationships and markof references
+  /**
+   * Topologically sort marks by nest and foreign key references
+   */
   sortedmarks() {
-    // compute mark dependency graph
-    let edges = {};   // markid --dependson--> markid[]
-    let dsts = {};    // dst markid -> true
+    let referenceCounts = new Map<number, number>() /* mapping from mark id to number of other marks it is dependent on */
+    let graph = new Map<number, number[]>() /* mapping from mark id to array of other marks that are dependent on it */
+
+    for (let i = 0; i < this.marks.length; i++) {
+      let currmark = this.marks[i]
+      referenceCounts.set(currmark.id, 0)
+      graph.set(currmark.id, [])
+    }
+
     for (const n of this.nests) {
       if (n instanceof MarkNest) {
-        for (const Nm of this.marksof(n.fk.t2)) {
-          for (const ONEm of this.marksof(n.fk.t1)) {
-            (edges[ONEm.id] ??= []).push(Nm.id);
-            dsts[Nm.id] = true;
-          }
+        let {outerMark, innerMark} = n
+        let outerMarkID = outerMark.id
+        let innerMarkID = innerMark.id
+
+        graph.get(outerMarkID).push(innerMarkID)
+        referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
+      }
+    }
+
+    for (let i = 0; i < this.refmarks.length; i++) {
+      let currReference = this.refmarks[i]
+      let {rm, m} = currReference
+      let dstID = rm.id
+      let srcID = m.id
+
+      if (!graph.get(dstID).includes(srcID)) {
+        graph.get(dstID).push(srcID)
+        referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
+      }
+    }
+    console.log("testingJan6", referenceCounts)
+    let queue = []
+  
+    for (let [markID, count] of referenceCounts.entries()) {
+      if (count == 0)
+        queue.push(markID)
+    }
+
+    if (queue.length == 0)
+      throw new Error("Marks cross reference each other, plotting not possible")
+
+    let arr = queue.slice()
+
+    while (queue.length != 0) {
+      let currID = queue.shift()
+      let destMarks = graph.get(currID)
+      
+      for (let i = 0; i < destMarks.length; i++) {
+        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i] - 1))
+
+        if (referenceCounts.get(destMarks[i]) == 0) {
+          queue.push(destMarks[i])
+          arr.push(destMarks[i])
         }
       }
     }
-    for (const {rm,m:srcm} of this.refmarks) {
-      for (const dstm of this.marksof(rm.src)) {
-        (edges[dstm.id] ??= []).push(srcm.id);
-        dsts[srcm.id] = true;
-      }
-    }
 
-    let queue = this.marks
-      .filter((m) => m instanceof Mark && !dsts[m.id])
-      .map((m:Mark) => m.id)
-    // markid -> distance from root
-    let distances = Object.fromEntries(queue.map((markid)=>[markid, 0]));
-
-    while (queue.length) {
-      let mid = queue.pop();
-      let d = distances[mid];
-      let added = false;
-      if (d > 50) throw new Error("Loop");
-
-      for (const dstid of (edges[mid] ?? [])) {
-        if (d+1 > (distances[dstid]??0)) {
-          distances[dstid] = d+1;
-          queue.push(dstid)
-        }
-      }
-    }
-
-    let marks = R.sortBy((m) => (m instanceof Mark)
-      ? distances[m.id]??this.marks.length 
-      : 0, this.marks)
-    return marks;
+    let marks = this.marks.slice().sort((mark1, mark2) => {
+      return arr.indexOf(mark1.id) - arr.indexOf(mark2.id)
+    })
+    console.log("testingJan6", marks)
+    return marks
   }
+
+  // topologically sort marks by the Nest relationships and markof references
+  // sortedmarks() {
+  //   // compute mark dependency graph
+  //   let edges = {};   // markid --dependson--> markid[]
+  //   let dsts = {};    // dst markid -> true
+  //   for (const n of this.nests) {
+  //     if (n instanceof MarkNest) {
+  //       for (const Nm of this.marksof(n.fk.t2)) {
+  //         for (const ONEm of this.marksof(n.fk.t1)) {
+  //           (edges[ONEm.id] ??= []).push(Nm.id);
+  //           dsts[Nm.id] = true;
+  //         }
+  //       }
+  //     }
+  //   }
+  //   for (const {rm,m:srcm} of this.refmarks) {
+  //     for (const dstm of this.marksof(rm.src)) {
+  //       (edges[dstm.id] ??= []).push(srcm.id);
+  //       dsts[srcm.id] = true;
+  //     }
+  //   }
+
+  //   let queue = this.marks
+  //     .filter((m) => m instanceof Mark && !dsts[m.id])
+  //     .map((m:Mark) => m.id)
+  //   // markid -> distance from root
+  //   let distances = Object.fromEntries(queue.map((markid)=>[markid, 0]));
+
+  //   while (queue.length) {
+  //     let mid = queue.pop();
+  //     let d = distances[mid];
+  //     let added = false;
+  //     if (d > 50) throw new Error("Loop");
+
+  //     for (const dstid of (edges[mid] ?? [])) {
+  //       if (d+1 > (distances[dstid]??0)) {
+  //         distances[dstid] = d+1;
+  //         queue.push(dstid)
+  //       }
+  //     }
+  //   }
+
+  //   let marks = R.sortBy((m) => (m instanceof Mark)
+  //     ? distances[m.id]??this.marks.length 
+  //     : 0, this.marks)
+  //   return marks;
+  // }
 
   async render(context) {
     context.document ??= document;
@@ -323,24 +396,29 @@ export class Canvas implements IMark {
     return this.node.node();
   }
 
-  async hier(tablename, attrHierarchy) {
-    console.log("tablename", tablename)
-    console.log("attr_hierarchy", attrHierarchy)
-    let tables = {dimtables: [], facttables: [], jointables: []}
-    let currTablename = tablename;
-    for (let i = attrHierarchy.length; i > 0; i--) {
-      let currAttrs = attrHierarchy.slice(0, i);
-      console.log("curr_attrs", currAttrs)
-      let dimname = `${currAttrs.join("_")}`
-      console.log("curr_tablename", currTablename)
-      let createdTables = await this.db.normalize(currTablename, currAttrs, dimname)
-      tables.dimtables.push(createdTables[0])
-      tables.facttables.push(createdTables[1])
-      tables.jointables.push(createdTables[2])
-      currTablename = createdTables[0].internalname
+  async hier(tablename: string, attrHierarchy: string []) {
+    let newTableNames = attrHierarchy.slice()
+    let currTable = this.db.table(tablename)
+    let prevTable = null
+    let prevKeys = null
+
+    for (let i = 0; i < attrHierarchy.length; i++) {
+      let currAttrs = attrHierarchy.slice(0, i + 1)
+      let select = currTable.schema.pick(currAttrs).asObject()
+      let newTable = await currTable.distinctproject(select, newTableNames[i])
+      newTable.keys(IDNAME)
+
+      if (prevTable) {
+        let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
+        this.db.addConstraint(c)
+      }
+      prevTable = newTable
+      prevKeys = currAttrs
     }
-    return tables
+    console.log("all constraints", this.db.constraints)
+    return newTableNames
   }
+
 }
 
 for (const mtype of R.keys(marksbytype(Canvas.plotConfig))) {
