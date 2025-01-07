@@ -104,7 +104,7 @@ export class Canvas implements IMark {
     return c;
   }
 
-  linear(scalename, table?, attr?) {
+  linear(scalename) {
     //skip error checking to see if attr in table
     let c = this;
     //col is going to be used in initScaling method of mark!

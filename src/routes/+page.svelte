@@ -122,7 +122,7 @@
         let canvas
 
 
-        if (1) { /* fig a, scatter plot */
+        if (0) { /* fig a, scatter plot */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
@@ -182,8 +182,8 @@
             window.c = c;
             window.db = db;
 
-            let sa = c.linear("sa", "T", "aid")
-            let sb = c.linear("sb", "T", "bid")
+            let sa = c.linear("sa")
+            let sb = c.linear("sb")
             let VT = c.dot("T", { x: sa('aid'), y: sb('bid'), fill:'black'})
             let VA = c.text("A", {x: 0, y: sa('aid'), text: 'a'}, {textAnchor: "left"})
             let VB = c.text("B", {x: sb('bid'), y: 0, text: 'b'}, {textAnchor: "bottom"})
@@ -386,7 +386,7 @@
             let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})
         }
 
-        if (0) { /* housing punchcard */
+        if (1) { /* housing punchcard */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -395,8 +395,8 @@
             window.db = db;
 
             await db.normalizeMany("housing",['Rooms','Bathroom'].map((a) => [a]))
-            let sa = c.linear("room_scale", "housing_fact", "Rooms")
-            let sb = c.linear("bathroom_scale", "housing_fact", "Bathroom")
+            let sa = c.linear("room_scale")
+            let sb = c.linear("bathroom_scale")
             let VT = c.dot("housing_fact", { x: sb("Bathroom"), y: sa("Rooms")})
 
             let VA = c.text("housing_Rooms", {x: 0, y: sa("Rooms"), text: "Rooms"}, {textAnchor: "left"})
