@@ -159,11 +159,32 @@ export class Canvas implements IMark {
     return false
   }
 
-  nest(innerMark: Mark, outerMark: Mark, predicate) { //TODO: need to get a fk constraint from db if user passes no predicate
+  nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
+    if (predicate) {
+      predicate = Array.isArray(predicate) ? predicate : [predicate]
+      this.nestWithPredicate(innerMark, outerMark, predicate)
+    }
+    else
+      this.nestWithoutPredicate(innerMark, outerMark)
+  }
+
+  nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    predicate = Array.isArray(predicate) ? predicate : [predicate]
+    let path = this.db.getFkPath(innerTable, outerTable)
+
+    if (!path)
+      throw new Error("No possible path!")
+
+    console.log("path", path)
+
+    this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
+  }
+
+  nestWithPredicate(innerMark: Mark, outerMark: Mark, predicate: string[]) {
+    let innerTable = innerMark.src
+    let outerTable = outerMark.src
 
     for (const [cname, constraint] of Object.entries(this.db.constraints)) {
       if (!(constraint instanceof FKConstraint))
@@ -204,7 +225,8 @@ export class Canvas implements IMark {
         return
       }
     }
-    throw new Error("Cannot find foreign key reference to nest!")    
+
+    throw new Error("Cannot find foreign key reference to nest using predicate!")  
   }
 
   /*

@@ -418,7 +418,7 @@
 
             let VB = c.rect("housing_rooms", { x: 'Rooms', y: 0, w: 10, h: 20, fill:'white', stroke:'black'})
             let VA = c.dot("housing_price_landsize", { x: 'Landsize', y: 'Price', fill:'Price'})
-            c.nest(VA, VB, "Rooms")
+            c.nest(VA, VB)
         }
 
         if (0) { /* housing table WORK IN PROGRESS !!!!!!!!! DO NOT RENDER THIS*/
@@ -437,7 +437,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (0) { /* housing treemap */
+        if (0) { /* housing treemap CURRENTLY BROKEN*/
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -450,7 +450,7 @@
 
             let rect1 = c.rectX("housing_room", { ...sq("Rooms")(), x:'Rooms', stroke: "Rooms", fill:"none" })
             let rect2 = c.rectX("housing_room_year_price", { ...sq("YearBuilt")(), x:'YearBuilt', "stroke-width":"1px", stroke: "black", fill:"Price" })
-            c.nest(rect2, rect1, "Rooms")
+            c.nest(rect2, rect1)
         }
 
         if (0) { /* airport nodelink */
