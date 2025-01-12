@@ -180,6 +180,7 @@ export class Canvas implements IMark {
     console.log("path", path)
 
     this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
+    innerMark.outermark = outerMark
   }
 
   nestWithPredicate(innerMark: Mark, outerMark: Mark, predicate: string[]) {
@@ -206,6 +207,7 @@ export class Canvas implements IMark {
           continue
 
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        innerMark.outermark = outerMark
         return
       }
 
@@ -222,6 +224,7 @@ export class Canvas implements IMark {
           continue
   
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        innerMark.outermark = outerMark
         return
       }
     }
@@ -261,32 +264,25 @@ export class Canvas implements IMark {
    * if there is a fk t1 -1-n- mark.table that is mapped to a Nest
    * then return the nesting, otherwise return root
    */
-  nestof(o:Mark|FKConstraint) {
+  nestof(o:Mark) {
     // TODO
     // filter fk constraints for those where
     // 1) mark.table is fk.t2 and
     // 2) constraint maps to container
-    let ret = [];
+
+    if (!o.outermark)
+      return new RootNest(this, this.options)
+
     for (const n of this.nests) {
       if (n instanceof MarkNest) {
-        if (o instanceof Mark && o.src instanceof Table) {
-          const mark = o;
-          if (n.fk.t2 == mark.src && n.innerMark == mark) {
-            for (const m2 of this.marksof(n.fk.t1)) {
-              if (m2 && m2 instanceof Mark && m2.src == n.fk.t1){
-                ret.push(n)
-                break;
-              }
-            }
-          }
-        } else if (n.fk == o) {
-          ret.push(n)
-        }
+          if (n.innerMark == o && n.outerMark == o.outermark)
+            return n
       } 
     }
-    if (ret.length == 0)
-      ret.push(new RootNest(this, this.options))
-    return ret;
+    /**
+     * We technically should not end up here because the nest call should succeed and create a new MarkNest
+     */
+    throw new Error("No such nest!")
   }
 
 

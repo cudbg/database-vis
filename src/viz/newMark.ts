@@ -456,7 +456,7 @@ export class Mark {
         let root = this.node = select(
             creator("svg:g").call(document.documentElement))
             .classed(`${this.marktype}-${this.id}`, true);
-        let nest = this.c.nestof(this)[0]
+        let nest = this.c.nestof(this)
         let mark = null;
 
         /*

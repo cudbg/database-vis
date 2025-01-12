@@ -437,7 +437,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (0) { /* housing treemap CURRENTLY BROKEN*/
+        if (1) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -466,7 +466,7 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (1) { // nesting experiment
+        if (0) { // nesting experiment
             await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
             await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
             await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
