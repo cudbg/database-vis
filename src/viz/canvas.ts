@@ -159,28 +159,42 @@ export class Canvas implements IMark {
     return false
   }
 
-  nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
+  nest(innerMark: Mark, outerMark: Mark, predicate) { //TODO: need to get a fk constraint from db if user passes no predicate
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    if (predicate != null && this.invalidPredicate(innerTable, outerTable, predicate))
-      throw new Error("Predicate must be a column present in both tables and must have N-1 cardinality!")
-    
-    let fkConstraint = null
-    if (predicate == null) {
-      for (const [key, value] of Object.entries(this.db.constraints)) {
-        if (value.t2 == innerTable && value.t1 == outerTable) {
-          fkConstraint = value
-        } else if (value.t1 == innerTable && value.t2 == outerTable){
-          fkConstraint = value
-        }
+    predicate = Array.isArray(predicate) ? predicate : [predicate]
+
+    for (const [cname, constraint] of Object.entries(this.db.constraints)) {
+      if (!(constraint instanceof FKConstraint))
+        continue
+
+      if (constraint.card != Cardinality.ONEONE && constraint.card != Cardinality.ONEMANY)
+        continue
+
+      if ((constraint.t1 == innerTable) && (constraint.t2 == outerTable)) {
+        if ((constraint.X.length != predicate.length) || (constraint.Y.length != predicate.length))
+          continue
+  
+        if (!(constraint.X.every((value, index) => value == predicate[index])))
+          continue
+
+        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        return
+      }
+
+      if ((constraint.t1 == outerTable) && (constraint.t2 == innerTable)) {
+        if ((constraint.X.length != predicate.length) || (constraint.Y.length != predicate.length))
+          continue
+
+        if (!(constraint.Y.every((value, index) => value == predicate[index])))
+          continue
+
+        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        return
       }
     }
-    if (fkConstraint == null) {
-      predicate = Array.isArray(predicate) ? predicate : [predicate]
-      fkConstraint = new FKConstraint({t1: innerTable, X:predicate, t2:outerTable, Y:predicate})
-    }
-    this.nests.push(new MarkNest(this, fkConstraint, innerMark, outerMark))
+    throw new Error("Cannot find foreign key reference to nest!")    
   }
 
   /*

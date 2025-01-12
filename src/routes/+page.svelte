@@ -470,6 +470,30 @@
 
         if (1) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
                     //ER diagram experiment
+            await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
+            await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
+            await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
+
+            await db.conn.exec(`INSERT INTO outerrects VALUES (0), (1)`)
+            await db.conn.exec(`INSERT INTO innerrects VALUES (0, 0), (0, 1), (1, 0), (1, 1)`)
+            await db.conn.exec(`INSERT INTO dots VALUES (0, 0, 0), (0, 1, 1), (1, 0, 0), (1, 1, 1)`)
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vouter = c.rect("outerrects", { x: 'a', fill:'white', stroke:'black'})
+            let vinner = c.rect("innerrects", { x: 'bid', fill:'white', stroke:'black'})
+            //let vdots = c.rect("outerrects", { x: 'a', fill:'white', stroke:'black'})
+            c.nest(vinner, vouter, ["aid"])
+
+
+        }
+
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -490,29 +514,6 @@
             window.c = c;
             window.db = db;
 
-            let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
-            let vcolname= c.text("columns", {
-                                            y: 'ordinal_position',
-                                            text: "colname",
-                                            //'text-decoration': (d) => d.is_key? 'underline': 'none',
-                                            x: 0
-                            })
-            function adjustPos(x) {
-                return x + 50
-            }
-            let vtype = c.text("columns", {
-                                            x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
-                                            y: "ordinal_position",
-                                            text: "type"
-                                        })
-            c.nest(vcolname, vtables, "tid")
-            c.nest(vtype, vtables, "tid")
-
-            let VT = c.link("fkeys", {
-                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
-                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
-                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
-                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
 
         }
 
