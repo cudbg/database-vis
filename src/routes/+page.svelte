@@ -390,7 +390,7 @@
             let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})
         }
 
-        if (1) { /* housing punchcard */
+        if (0) { /* housing punchcard */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -407,7 +407,7 @@
             let VB = c.text("housing_Bathroom", {x: sb("Bathroom"), y: 0, text: "Bathroom"}, {textAnchor: "bottom"})
         }
 
-        if (0) { /* housing nesting */
+        if (1) { /* housing nesting */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})

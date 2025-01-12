@@ -185,6 +185,28 @@ export class Mark {
     refmarks;
     layouts;
     scaling_fns: {va, scale: Scale}[]
+    markInfoCache: Map<number, {}>;
+    outermark: Mark;
+    innerToOuter: Map<number, number>;
+
+    
+    /**
+     * Every mark has a pointer to its outermark
+     * Every mark has a inner id to outer id map
+     * 
+     * Every mark will have a id to x,y, width, height, data_xoffset, data_yoffset map. 
+     *  width and height are only for marks that have a width and height eg. rect
+     * 
+     * After you draw a mark
+     * - create the id to x,y,width, height map
+     * 
+     * To draw a nested mark
+     * - Look up the outer mark's id to x,y,width,height map to get the corresponding offsets
+     * 
+     * To draw a mark that has a foreign key reference
+     * 1. Look up the level of the mark you are getting a reference from
+     * 2. If the level you found is different, than 
+     */
 
     _scales;
     _markelsidx;  // IDNAME -> HTML mark element
@@ -205,6 +227,8 @@ export class Mark {
         this.refmarks = []
         this._scales = {}
         this.scaling_fns = []
+        this.markInfoCache = new Map<number, {}>()
+        this.innerToOuter = null
 
         this.init()
     }
@@ -496,6 +520,7 @@ export class Mark {
         .attr("transform", `translate(${crow.x}, ${crow.y})`)
         .node().appendChild(mark);
       
+      this.prepareMarkInfo(markInfo)
       await this.createMarkTable(markInfo)
 
       document.documentElement.removeChild(dummyroot.node());
@@ -512,8 +537,6 @@ export class Mark {
     async doMarkNest(root, nest) {
       let dummyroot = this.makeDummyRoot()
       let outermark = nest.outerMark
-      let outermarkData = await outermark.src.data("col")
-      let outermarkVizData = await outermark.marktable.data()
 
       /**
        * Query for child marks in a nest is a simple
@@ -522,8 +545,8 @@ export class Mark {
        * Could we call doRootNest in here?
        */
       let markInfoArr = []
-      for (let i = 0; i < outermarkData[IDNAME].length; i++) {
-        let crow = outermarkVizData[i]
+      for (let [outermarkID, outermarkInfo] of outermark.markInfoCache) {
+        let crow = outermarkInfo
         let query = this.constructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
         console.log("rows", rows)
@@ -545,6 +568,7 @@ export class Mark {
         this._markelsidx = markels(root, this.marktype);
       }
       console.log("markInfoArr", markInfoArr)
+      this.prepareMarkInfo(markInfoArr)
       await this.createMarkTable(markInfoArr)
       document.documentElement.removeChild(dummyroot.node());
       return 1
@@ -1326,18 +1350,7 @@ export class Mark {
       }
     }
 
-    /**
-     * 
-     * @param markInfo array of objects. each object describes a single datapoint 
-     *                 and corresponds to a single row to insert into the marktable
-     * @returns 
-     */
-    async createMarkTable(markInfo) {
-      console.log("createMarkTable")
-      console.log("markInfo", markInfo)
-
-      const tname = this.src.internalname + "_marktable" + this.id;
-
+    prepareMarkInfo(markInfo) {
       for (let i = 0; i < markInfo.length; i++) {
         for (let [key,value] of Object.entries(markInfo[i])) {
           /**
@@ -1356,12 +1369,51 @@ export class Mark {
             markInfo[i][key] = value
           }
 
-          if (parseFloat(value)) {
+          if (parseFloat(value) || key == "data_xoffset" || key == "data_yoffset") {
             let numValue = parseFloat(value)
             markInfo[i][key] = numValue
           }
         }
+
+        /**
+         * Populate markInfoCache here so that other marks can reference it if needed
+         */
+        let x = markInfo[i]["x"]
+        let y = markInfo[i]["y"]
+        let data_xoffset = markInfo[i]["data_xoffset"]
+        let data_yoffset = markInfo[i]["data_yoffset"]
+        
+        let obj = {x,y,data_xoffset, data_yoffset}
+        if (markInfo[i]["width"])
+          obj["width"] = markInfo[i]["width"]
+
+        if (markInfo[i]["height"])
+          obj["height"] = markInfo[i]["height"]
+
+        obj[IDNAME] = markInfo[i][IDNAME]
+        this.markInfoCache.set(markInfo[i][IDNAME], obj)
+
+        /**
+         * Delete data_xoffset and data_yoffset as they do not need to be stored in database
+         */
+        delete markInfo[i]["data_xoffset"]
+        delete markInfo[i]["data_yoffset"]
+
       }
+      console.log("preparedmarkInfo", markInfo)
+    }
+
+    /**
+     * 
+     * @param markInfo array of objects. each object describes a single datapoint 
+     *                 and corresponds to a single row to insert into the marktable
+     * @returns 
+     */
+    async createMarkTable(markInfo) {
+      console.log("createMarkTable")
+      console.log("markInfo", markInfo)
+
+      const tname = this.src.internalname + "_marktable" + this.id;
 
       await this.createNewMarkTable(markInfo, tname)
 
