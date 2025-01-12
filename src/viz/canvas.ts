@@ -172,24 +172,34 @@ export class Canvas implements IMark {
       if (constraint.card != Cardinality.ONEONE && constraint.card != Cardinality.ONEMANY)
         continue
 
-      if ((constraint.t1 == innerTable) && (constraint.t2 == outerTable)) {
-        if ((constraint.X.length != predicate.length) || (constraint.Y.length != predicate.length))
+      if (constraint.t1 == innerTable) {
+        if ((constraint.X.length != predicate.length))
           continue
   
         if (!(constraint.X.every((value, index) => value == predicate[index])))
+          continue
+
+        let path = this.db.getFKPath(innerTable, outerTable, constraint)
+
+        if (!path)
           continue
 
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         return
       }
 
-      if ((constraint.t1 == outerTable) && (constraint.t2 == innerTable)) {
-        if ((constraint.X.length != predicate.length) || (constraint.Y.length != predicate.length))
+      if (constraint.t2 == innerTable) {
+        if (constraint.Y.length != predicate.length)
           continue
 
         if (!(constraint.Y.every((value, index) => value == predicate[index])))
           continue
 
+        let path = this.db.getFKPath(innerTable, outerTable, constraint)
+
+        if (!path)
+          continue
+  
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         return
       }

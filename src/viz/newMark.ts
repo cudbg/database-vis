@@ -540,8 +540,9 @@ export class Mark {
      */
     async doMarkNest(root, nest) {
       let dummyroot = this.makeDummyRoot()
-      let outermark = nest.outerMark
+      let outermark: Mark = nest.outerMark
       this.outermark = outermark
+      this.innerToOuter = new Map<number, number>()
 
       /**
        * Query for child marks in a nest is a simple
@@ -559,13 +560,43 @@ export class Mark {
         console.log("cols", cols)
         let channels = this.applychannels(cols)
 
+        for (let i = 0; i < channels[IDNAME].length; i++)
+          this.innerToOuter.set(channels[IDNAME][i], crow[IDNAME])
+        
+        console.log("new channels", channels)
+        console.log("crow", crow)
+
         channels = await this.doLayout(channels, crow, dummyroot)
 
         // render final marks
         let {mark, markInfo} = this.makemark(channels, crow)
+
+        let tmpOuterMark = outermark
+        let outerID = crow[IDNAME]
+        let xoffset = crow.x
+        let yoffset = crow.y
+
+        /**
+         * Walk upwards until you hit a non-nested mark
+         * Add to xoffset and yoffset as you walk upwards
+         */
+
+        while (tmpOuterMark && tmpOuterMark.innerToOuter) {
+          outerID = tmpOuterMark.innerToOuter.get(outerID)
+          tmpOuterMark = tmpOuterMark.outermark
+
+          let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
+          xoffset += tmpCrow.x
+          yoffset += tmpCrow.y
+        }
+
+
+        console.log("xoffset", xoffset)
+        console.log("yoffset", yoffset)
+
         root
           .append("g")
-          .attr("transform", `translate(${crow.x}, ${crow.y})`)
+          .attr("transform", `translate(${xoffset}, ${yoffset})`)
           .node().appendChild(mark);
 
         markInfoArr.push(...markInfo)
@@ -858,7 +889,6 @@ export class Mark {
      *          Has format {x: [...], y: [...], ...}
      */
     applychannels(data) {
-      console.log("applychannels data", data)
       if (Object.keys(data).length == 0) {
         return []
       }

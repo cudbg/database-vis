@@ -136,8 +136,6 @@
             let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
             let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
             //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
-
-            
         }
 
 
@@ -468,8 +466,7 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (1) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
-                    //ER diagram experiment
+        if (1) { // nesting experiment
             await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
             await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
             await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
@@ -486,9 +483,15 @@
             window.db = db;
 
             let vouter = c.rect("outerrects", { x: 'a', fill:'white', stroke:'black'})
-            let vinner = c.rect("innerrects", { x: 'bid', fill:'white', stroke:'black'})
-            //let vdots = c.rect("outerrects", { x: 'a', fill:'white', stroke:'black'})
+            /**
+             * The statement below causes bug in scaling!
+             */
+            //let vinner = c.rect("innerrects", { x: vouter.get(["aid"], "x"),y: 'bid', fill:'white', stroke:'black'})
+            let vinner = c.rect("innerrects", {y: 'bid', fill:'white', stroke:'black'})
+
+            let vdots = c.dot("dots", { x: 0, y: 'c', fill:'red'})
             c.nest(vinner, vouter, ["aid"])
+            c.nest(vdots, vinner, ["aid", "bid"])
 
 
         }
