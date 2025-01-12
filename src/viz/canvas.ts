@@ -265,10 +265,49 @@ export class Canvas implements IMark {
     // they should ideally be aligned as well
   }
 
+  setMarkLevels() {
+    let edges = new Map()
+    let incoming = new Map()
+    for (let i = 0; i < this.marks.length; i++) {
+      this.marks[i].level = 0
+      edges.set(this.marks[i], [])
+      incoming.set(this.marks[i], 0)
+    }
+
+    for (const n of this.nests) {
+      if (n instanceof MarkNest) {
+        let {outerMark, innerMark} = n
+
+        edges.get(outerMark).push(innerMark)
+        incoming.set(innerMark, incoming.get(innerMark) + 1)
+      }
+    }
+
+    let queue = []
+    for (let [mark, incomingCount] of incoming.entries()){
+      if (incomingCount == 0)
+        queue.push(mark)
+    }
+
+    /**
+     * We are guranteed that each child has a single parent as a mark can only be nested inside one other mark (duh)
+     */
+
+    while(queue.length != 0) {
+      let curr = queue.shift()
+      let children = edges.get(curr)
+      for (let i = 0; i < children.length; i++) {
+        let child = children[i]
+        child.level = curr.level + 1
+        queue.push(child)
+      }
+    }
+  }
   /**
    * Topologically sort marks by nest and foreign key references
    */
   sortedmarks() {
+    this.setMarkLevels()
     let referenceCounts = new Map<number, number>() /* mapping from mark id to number of other marks it is dependent on */
     let graph = new Map<number, number[]>() /* mapping from mark id to array of other marks that are dependent on it */
 

@@ -407,7 +407,7 @@
             let VB = c.text("housing_Bathroom", {x: sb("Bathroom"), y: 0, text: "Bathroom"}, {textAnchor: "bottom"})
         }
 
-        if (1) { /* housing nesting */
+        if (0) { /* housing nesting */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -468,7 +468,7 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (0) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
+        if (1) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
                     //ER diagram experiment
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)

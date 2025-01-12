@@ -188,6 +188,8 @@ export class Mark {
     markInfoCache: Map<number, {}>;
     outermark: Mark;
     innerToOuter: Map<number, number>;
+    level: number;
+    idVisualAttrMap: Map<number, Set<string>>;
 
     
     /**
@@ -227,8 +229,10 @@ export class Mark {
         this.refmarks = []
         this._scales = {}
         this.scaling_fns = []
+        this.outermark = null
         this.markInfoCache = new Map<number, {}>()
         this.innerToOuter = null
+        this.idVisualAttrMap = new Map<number, Set<string>>()
 
         this.init()
     }
@@ -537,6 +541,7 @@ export class Mark {
     async doMarkNest(root, nest) {
       let dummyroot = this.makeDummyRoot()
       let outermark = nest.outerMark
+      this.outermark = outermark
 
       /**
        * Query for child marks in a nest is a simple
@@ -575,10 +580,13 @@ export class Mark {
     }
 
     constructQuery(nest?, crow?) {
+      let idCounter = 0
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
+      let pathIDMap = new Map<FKConstraint[], number>()
       let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
       let nestingPath = new Map<FKConstraint[], Boolean>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
+
 
       /**
       * An array of possible aliases for this.src
@@ -644,6 +652,11 @@ export class Mark {
             }
 
             if (!pathInMap) {
+              queryItems[i].columns.push({dataAttr: IDNAME, renameAs: `idcounter_${idCounter}`})
+              pathIDMap.set(possibleNewPath, idCounter)
+              this.idVisualAttrMap.set(idCounter, new Set(queryItems[i].columns.map(columnObj => columnObj.renameAs)))
+              idCounter++
+
               pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
               nestingPath.set(possibleNewPath, false)
 
@@ -657,8 +670,11 @@ export class Mark {
 
             } else {
               let queryItemSet = pathQueryItemMap.get(pathInMap)
+              let id = pathIDMap.get(pathInMap)
+              queryItems[i].columns.forEach(columnObj => this.idVisualAttrMap.get(id).add(columnObj.renameAs))
   
               queryItemSet.add(queryItems[i])
+
             }
         } else {
           for (let i = 0; i < columns.length; i++) {
@@ -842,6 +858,7 @@ export class Mark {
      *          Has format {x: [...], y: [...], ...}
      */
     applychannels(data) {
+      console.log("applychannels data", data)
       if (Object.keys(data).length == 0) {
         return []
       }
@@ -852,7 +869,7 @@ export class Mark {
 
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
-        let {visualAttr, dataAttr, refLayout, callback} = currItem
+        let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
 
         if (currItem.isGet) {
           let arr = data[visualAttr]
@@ -862,6 +879,55 @@ export class Mark {
            */
           if (callback)
             arr = this.handleCallback(currItem, data)
+
+          if (mark.level != this.level){
+            console.log("triggered level diff")
+            if (visualAttr == "x1" 
+              || visualAttr == "x2" 
+              || visualAttr == "x"
+              || visualAttr == "y1"
+              || visualAttr == "y2"
+              || visualAttr == "y") {
+                let idcounter
+
+
+                for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
+                  if (visualAttrSet.has(visualAttr))
+                    idcounter = id
+                }
+
+                let idcounterArr = data[`idcounter_${idcounter}`]
+
+                for (let j = 0; j < idcounterArr.length; j++) {
+                  let currOtherId = idcounterArr[j]
+                  let othermark = mark
+                  let othermarkInfoCache = mark.markInfoCache
+                  let otherlevel = mark.level
+
+                  while (othermark && (otherlevel > this.level)) {
+                    console.log("while loop")
+                    let obj = othermarkInfoCache.get(currOtherId)
+                    console.log("hello???", obj)
+
+                    if (visualAttr == "x1" 
+                      || visualAttr == "x2" 
+                      || visualAttr == "x") {
+                        arr = arr.map(elem => elem + obj.data_xoffset)
+                      }
+                    else if (visualAttr == "y1" 
+                      || visualAttr == "y2" 
+                      || visualAttr == "y") {
+                        arr = arr.map(elem => elem + obj.data_yoffset)
+                      }
+                      console.log("arr???", arr)
+                      othermark = othermark.outermark
+                      othermarkInfoCache = othermark.markInfoCache
+                    otherlevel--
+                  }
+
+                }
+            }
+          }
 
           channels[visualAttr] = arr
         }
@@ -1401,6 +1467,7 @@ export class Mark {
 
       }
       console.log("preparedmarkInfo", markInfo)
+      console.log(this.markInfoCache)
     }
 
     /**
