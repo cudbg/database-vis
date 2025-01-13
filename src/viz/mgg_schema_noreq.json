@@ -1,0 +1,202 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "mark": {
+        "type": "string",
+        "enum": [
+          "bar", "barX", "barY", "cell", "dot", "link", "point",
+          "rect", "rectX", "rectY", "text", "arrow",
+          "axisX", "axisY"
+        ]
+      }
+    },
+    "oneOf": [
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "bar" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "barX" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "barY" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "cell" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "size": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "dot" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "size": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "link" },
+          "x1": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y1": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "x2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "point" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "radius": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "rect" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "rectX" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": {"oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "rectY" },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "text" },
+          "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "text": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "arrow" },
+          "x1": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y1": { "oneOf": [{"type": "number"}, {"type": "string"}]},
+          "x2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "y2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "axisX" },
+          "x": { "type": "number" },
+          "ticks": { "type": "number" },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      },
+      {
+        "type": "object",
+        "properties": {
+          "mark": { "const": "axisY" },
+          "y": { "type": "number" },
+          "ticks": { "type": "number" },
+          "fill": { "type": "string" },
+          "stroke": { "type": "string" },
+          "dx": { "type": "number" },
+          "dy": { "type": "number" }
+        }
+      }
+    ]
+  }

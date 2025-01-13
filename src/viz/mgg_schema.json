@@ -5,8 +5,8 @@
     "mark": {
       "type": "string",
       "enum": [
-        "bar", "cell", "dot", "link", "point",
-        "rect", "rectX", "rectY", "text", "arrow", "axis",
+        "bar", "barX", "barY", "cell", "dot", "link", "point",
+        "rect", "rectX", "rectY", "text", "arrow",
         "axisX", "axisY"
       ]
     }
@@ -20,9 +20,42 @@
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "color": { "oneOf": [{"type": "number"}, {"type": "string"}] }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
-      "required": ["x", "y", "width", "height"]
+      "required": ["x", "y"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "mark": { "const": "barX" },
+        "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
+      },
+      "required": ["x", "y"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "mark": { "const": "barY" },
+        "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
+      },
+      "required": ["x", "y"]
     },
     {
       "type": "object",
@@ -31,9 +64,12 @@
         "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "size": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "fill": { "oneOf": [{"type": "number"}, {"type": "string"}] }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
-      "required": ["x", "y", "size"]
+      "required": ["x", "y"]
     },
     {
       "type": "object",
@@ -42,9 +78,12 @@
         "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "size": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "color": { "oneOf": [{"type": "number"}, {"type": "string"}] }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
-      "required": ["x", "y", "size"]
+      "required": ["x", "y"]
     },
     {
       "type": "object",
@@ -54,7 +93,10 @@
         "y1": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "x2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "stroke": { "type": "string" }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x1", "y1", "x2", "y2"]
     },
@@ -65,7 +107,10 @@
         "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "radius": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "color": { "type": "string" }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x", "y"]
     },
@@ -77,7 +122,10 @@
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "fill": { "oneOf": [{"type": "number"}, {"type": "string"}] }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x", "y", "width", "height"]
     },
@@ -88,7 +136,10 @@
         "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "width": {"oneOf": [{"type": "number"}, {"type": "string"}] },
         "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "stroke": { "type": "string" }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x", "width", "height"]
     },
@@ -99,7 +150,10 @@
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "width": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "height": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "stroke": { "type": "string" }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["y", "width", "height"]
     },
@@ -109,7 +163,11 @@
         "mark": { "const": "text" },
         "x": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "text": { "oneOf": [{"type": "number"}, {"type": "string"}] }
+        "text": { "oneOf": [{"type": "number"}, {"type": "string"}] },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x", "y", "text"]
     },
@@ -121,40 +179,38 @@
         "y1": { "oneOf": [{"type": "number"}, {"type": "string"}]},
         "x2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
         "y2": { "oneOf": [{"type": "number"}, {"type": "string"}] },
-        "stroke": { "type": "string" }
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
       "required": ["x1", "y1", "x2", "y2"]
     },
     {
       "type": "object",
       "properties": {
-        "mark": { "const": "axis" },
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
-        "ticks": { "type": "number" }
-      },
-      "required": ["x", "y", "orientation"]
-    },
-    {
-      "type": "object",
-      "properties": {
         "mark": { "const": "axisX" },
         "x": { "type": "number" },
-        "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
-        "ticks": { "type": "number" }
+        "ticks": { "type": "number" },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
-      "required": ["x", "orientation"]
+      "required": ["x"]
     },
     {
       "type": "object",
       "properties": {
         "mark": { "const": "axisY" },
         "y": { "type": "number" },
-        "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
-        "ticks": { "type": "number" }
+        "ticks": { "type": "number" },
+        "fill": { "type": "string" },
+        "stroke": { "type": "string" },
+        "dx": { "type": "number" },
+        "dy": { "type": "number" }
       },
-      "required": ["y", "orientation"]
+      "required": ["y"]
     }
   ]
 }
