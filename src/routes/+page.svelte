@@ -437,7 +437,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (1) { /* housing treemap */
+        if (0) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -496,7 +496,7 @@
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -517,7 +517,28 @@
             window.c = c;
             window.db = db;
 
-
+            let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
+            let vcolname= c.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: "colname",
+                                            //'text-decoration': (d) => d.is_key? 'underline': 'none',
+                                            x: 0
+                            })
+            function adjustPos(x) {
+                return x + 50
+            }
+            let vtype = c.text("columns", {
+                                            x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
+                                            y: "ordinal_position",
+                                            text: "type"
+                                        })
+            c.nest(vcolname, vtables, "tid")
+            c.nest(vtype, vtables, "tid")
+            let VT = c.link("fkeys", {
+                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
+                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
+                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
+                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
         }
 
         (await canvas.render({ document, svg }));
