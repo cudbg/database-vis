@@ -121,7 +121,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) {
+        if (0) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
@@ -136,7 +136,7 @@
             window.c = c;
             window.db = db;
 
-            let vrect = c.rect("Provinces", {x: "province", y:0, fill: "white", stroke: "black"})
+            let vrect = c.rectX("Provinces", {...sq("province")(), x: "province", fill: "none", stroke: "black"})
             let vdot = c.dot("info_fact", {x: "confirmed", y: "avg_temp"})
             c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
         }
@@ -361,7 +361,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (0) { /* hr_layout example */
+        if (0) { /* hr_layout example BROKEN */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -372,7 +372,7 @@
             await db.normalizeMany("hrdata", ['DeptID', 'Salary', 'Absences', 'PerformanceScore'].map((a)=>[a]))
             let rect1 = c.rect("hrdata_DeptID", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
             let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })
-            c.nest(bar1, rect1, "DeptID")
+            c.nest(bar1, rect1)
         }
 
         if (0) { /* penguins parallel coordinates */
@@ -515,7 +515,7 @@
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -535,6 +535,31 @@
             canvas = c
             window.c = c;
             window.db = db;
+
+            let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
+            let vcolname= c.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: "colname",
+                                            //'text-decoration': (d) => d.is_key? 'underline': 'none',
+                                            x: 0
+                            })
+            function adjustPos(x) {
+                return x + 50
+            }
+            let vtype = c.text("columns", {
+                                            x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
+                                            y: "ordinal_position",
+                                            text: "type"
+                                        })
+            c.nest(vcolname, vtables, "tid")
+            c.nest(vtype, vtables, "tid")
+
+            let VT = c.link("fkeys", {
+                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
+                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
+                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
+                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
+
 
 
         }
