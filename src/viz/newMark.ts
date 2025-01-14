@@ -1061,14 +1061,15 @@ export class Mark {
       // run layouts
       let markrows = markdata(required, tmpMark, this.mark, channels);
       console.log("markrows", markrows)
+
       if (!R.all((a) => a in markrows, required)) {
         console.log("Missing required attr in markrows", required, R.keys(markrows))
       }
       for (const rl of rls) {
-        const layout = rl.layout(markrows, crow) 
+        const layout = rl.layout(markrows, crow)
         for (const va of rl.vattrs)  {
           channels[va] = { value: layout[va] }
-          this._scales[this.mark.alias2scale[va]] = { type: "identity" }
+          //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
       return channels

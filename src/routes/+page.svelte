@@ -121,7 +121,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) {
+        if (1) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
@@ -136,8 +136,8 @@
             window.c = c;
             window.db = db;
 
-            let vrect = c.rectX("Provinces", {...sq("province")(), x: "province", fill: "none", stroke: "black"})
-            let vdot = c.dot("info_fact", {x: "confirmed", y: "avg_temp"})
+            let vrect = c.rect("Provinces", { ...sq("province")("x", "y"), fill: "none", stroke: "black"})
+            let vdot = c.dot("info", {x: "confirmed", y: "avg_temp", fill: "black", r: 20})
             c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
         }
 
@@ -515,7 +515,7 @@
 
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
