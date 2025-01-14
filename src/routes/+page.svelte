@@ -121,6 +121,25 @@
         await db.loadFromConnection();
         let canvas
 
+        if (1) {
+            let tables = {t1: "TimeProvince", t2: "Weather"}
+            let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
+            let joinKeys = {date: "date", province: "province"}
+
+            await db.join(tables, selectCols, joinKeys, "info")
+
+            await db.normalize("info", "province", "Provinces")
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vrect = c.rect("Provinces", {x: "province", y:0, fill: "white", stroke: "black"})
+            let vdot = c.dot("info", {x: "confirmed", y: "date", fill: "avg_temp"})
+            c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
+        }
 
         if (0) { /* fig a, scatter plot */
             await db.loadFromConnection()
