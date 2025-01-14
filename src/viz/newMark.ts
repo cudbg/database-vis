@@ -495,7 +495,7 @@ export class Mark {
       let query = this.constructQuery()
       let dummyroot = this.makeDummyRoot()
       let rows = await this.c.db.conn.exec(query)
-      console.log("rows", rows)
+      console.log("query output", rows)
 
       /**
        * The data from query has format [{}, {}, {}] where each object represents
@@ -506,7 +506,6 @@ export class Mark {
        * 
        */
       let cols = this.rowsToCols(rows)
-      console.log("cols", cols)
 
       /**
        * channels has format {x: [], y: [], ...}
@@ -518,6 +517,7 @@ export class Mark {
 
       // render final marks
       let {mark, markInfo} = this.makemark(channels, crow)
+      console.log("markInfo", markInfo)
 
       root
         .append("g")
@@ -555,17 +555,13 @@ export class Mark {
         let crow = outermarkInfo
         let query = this.constructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
-        console.log("rows", rows)
+        console.log("query output", rows)
         let cols = this.rowsToCols(rows)
-        console.log("cols", cols)
         let channels = this.applychannels(cols)
 
         for (let i = 0; i < channels[IDNAME].length; i++)
           this.innerToOuter.set(channels[IDNAME][i], crow[IDNAME])
         
-        console.log("new channels", channels)
-        console.log("crow", crow)
-
         channels = await this.doLayout(channels, crow, dummyroot)
 
         // render final marks
@@ -589,10 +585,6 @@ export class Mark {
           xoffset += tmpCrow.x
           yoffset += tmpCrow.y
         }
-
-
-        console.log("xoffset", xoffset)
-        console.log("yoffset", yoffset)
 
         root
           .append("g")
@@ -816,7 +808,7 @@ export class Mark {
           let renameT1 = null
           let renameT2 = null
 
-          if (t1 != this.src) {
+          if (t1.internalname != this.src.internalname) {
             if (!tableRenameMap.has(t1.internalname)) {
               renameT1 = `${t1.internalname}_${pathCounter}`
               query = query.from({[renameT1]: t1.internalname})
@@ -826,10 +818,11 @@ export class Mark {
             }
           } else if (srcTableAlias)
             renameT1 = srcTableAlias
-          else
+          else {
             renameT1 = this.src.internalname
+          }
 
-          if (t2 != this.src) {
+          if (t2.internalname != this.src.internalname) {
             if (!tableRenameMap.has(t2.internalname)) {
               renameT2 = `${t2.internalname}_${pathCounter}`
               query = query.from({[renameT2]: t2.internalname})
@@ -837,10 +830,12 @@ export class Mark {
             } else {
               renameT2 = tableRenameMap.get(t2.internalname)
             }
-          } else if (srcTableAlias)
+          } else if (srcTableAlias) {
             renameT2 = srcTableAlias
-          else
+          }
+          else {
             renameT2 = this.src.internalname
+          }
 
           if (nestingPath.get(path) && i == path.length - 1)
             query = query.where(eq(column(renameT1, X[0]), literal(Y[0])))
@@ -935,9 +930,7 @@ export class Mark {
                   let otherlevel = mark.level
 
                   while (othermark && (otherlevel > this.level)) {
-                    console.log("while loop")
                     let obj = othermarkInfoCache.get(currOtherId)
-                    console.log("hello???", obj)
 
                     if (visualAttr == "x1" 
                       || visualAttr == "x2" 
@@ -949,7 +942,6 @@ export class Mark {
                       || visualAttr == "y") {
                         arr = arr.map(elem => elem + obj.data_yoffset)
                       }
-                      console.log("arr???", arr)
                       othermark = othermark.outermark
                       othermarkInfoCache = othermark.markInfoCache
                     otherlevel--
@@ -1496,8 +1488,6 @@ export class Mark {
         delete markInfo[i]["data_yoffset"]
 
       }
-      console.log("preparedmarkInfo", markInfo)
-      console.log(this.markInfoCache)
     }
 
     /**
@@ -1507,9 +1497,6 @@ export class Mark {
      * @returns 
      */
     async createMarkTable(markInfo) {
-      console.log("createMarkTable")
-      console.log("markInfo", markInfo)
-
       const tname = this.src.internalname + "_marktable" + this.id;
 
       await this.createNewMarkTable(markInfo, tname)

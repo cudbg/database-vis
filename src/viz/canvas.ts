@@ -144,6 +144,7 @@ export class Canvas implements IMark {
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
     let srcTable = this.db.table(source)
+    console.log("srcTable", srcTable)
     let canvas = findcanvas(this, srcTable);
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);

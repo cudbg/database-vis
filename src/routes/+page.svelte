@@ -123,7 +123,7 @@
 
         if (1) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
-            let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
+            let selectCols = {TimeProvince: ["province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
 
             await db.join(tables, selectCols, joinKeys, "info")
@@ -137,7 +137,7 @@
             window.db = db;
 
             let vrect = c.rect("Provinces", {x: "province", y:0, fill: "white", stroke: "black"})
-            let vdot = c.dot("info", {x: "confirmed", y: "date", fill: "avg_temp"})
+            let vdot = c.dot("info_fact", {x: "confirmed", y: "avg_temp"})
             c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
         }
 
@@ -456,7 +456,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (1) { /* housing treemap */
+        if (0) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
