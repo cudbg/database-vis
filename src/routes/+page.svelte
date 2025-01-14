@@ -123,7 +123,7 @@
 
         if (1) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
-            let selectCols = {TimeProvince: ["province", "confirmed"], Weather: ["avg_temp"]}
+            let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
 
             await db.join(tables, selectCols, joinKeys, "info")
@@ -131,13 +131,14 @@
             await db.normalize("info", "province", "Provinces")
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
             let vrect = c.rect("Provinces", { ...sq("province")("x", "y"), fill: "none", stroke: "black"})
-            let vdot = c.dot("info", {x: "confirmed", y: "avg_temp", fill: "black", r: 20})
+            let vdot = c.dot("info", {x: "date", y: "confirmed", fill: "avg_temp", r: 20})
+            let vtext = c.text("Provinces", {x: vrect.get(mgg.id, "x"), y: vrect.get(mgg.id, "y"), text: "province"})
             c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
         }
 
