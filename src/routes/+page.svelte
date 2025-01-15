@@ -362,7 +362,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (0) { /* hr_layout example BROKEN */
+        if (1) { /* hr_layout example BROKEN */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -370,8 +370,8 @@
             window.c = c;
             window.db = db;
 
-            await db.normalizeMany("hrdata", ['DeptID', 'Salary', 'Absences', 'PerformanceScore'].map((a)=>[a]))
-            let rect1 = c.rect("hrdata_DeptID", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
+            await db.normalize("hrdata", ['DeptID'], "departments")
+            let rect1 = c.rect("departments", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
             let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })
             c.nest(bar1, rect1)
         }
@@ -457,7 +457,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (1) { /* housing treemap */
+        if (0) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
