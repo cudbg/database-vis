@@ -486,7 +486,7 @@
 
             let VA = c.dot("airports", {x: "latitude", y: "longitude"})
             let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})
-            let vtext_origin = c.text("airports", {x: VA.get("airports", "x"), y: VA.get("airports", "y"), text: "airport", fill: "red"})
+            let vtext_origin = c.text("airports", {x: VA.get("airport", "x"), y: VA.get("airport", "y"), text: "airport", fill: "red"})
         }
 
         if (0) { // nesting experiment

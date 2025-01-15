@@ -459,7 +459,6 @@ export class Mark {
             creator("svg:g").call(document.documentElement))
             .classed(`${this.marktype}-${this.id}`, true);
         let nest = this.c.nestof(this)
-        let mark = null;
 
         /*
         mark was really appended to the root after doRootNest and doMarkNest
@@ -468,9 +467,11 @@ export class Mark {
         if (nest instanceof RootNest) {
           let crow = nest.parentmarkdata()
           let fixedCrow = this.handleCrow(crow)
-          await this.doRootNest(root, fixedCrow)
+          await this.doWorkFlow(root, fixedCrow, false)
         } else {
-          await this.doMarkNest(root, nest)
+          this.outermark = nest.outerMark
+          this.innerToOuter = new Map<number, number>()
+          await this.doWorkFlow(root, nest, true)
         }
         return root.node()
     }
@@ -484,10 +485,10 @@ export class Mark {
         this.layouts[rl.id].add(rl.vattrs)
     }
 
-    async runQueryTask(root, nest?) {
+    async runQueryTask(root, outer, isNested) {
       let query
-      if (nest instanceof MarkNest)
-        query = this.constructQuery(nest)
+      if (isNested)
+        query = this.constructQuery(outer)
       else
         query = this.constructQuery()
       let rows = await this.c.db.conn.exec(query)
@@ -495,7 +496,7 @@ export class Mark {
       return rows
     }
 
-    runLayoutTask(rows, crow, dummyroot) {
+    runLayoutTask(rows, outer, dummyroot, isNested) {
       /**
        * The data from query has format [{}, {}, {}] where each object represents
        * a single data point ie. each object looks like {x: ..., y: ...}
@@ -504,7 +505,7 @@ export class Mark {
        * This is to allow applychannels to work properly
        * 
        */
-      if (crow instanceof MarkNest) {
+      if (isNested) {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
@@ -524,15 +525,13 @@ export class Mark {
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
   
-        channels = this.doLayout(channels, crow, dummyroot)
+        channels = this.doLayout(channels, outer, dummyroot)
   
         return channels
       }
     }
 
     runRenderTask(root, channels, crow, isNested) {
-      console.log("channels runRenderTask", channels)
-      console.log("isNested", isNested)
       if (isNested) {
         let markInfoArr = []
 
@@ -572,7 +571,6 @@ export class Mark {
 
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
-        console.log("markInfo", markInfo)
   
         root
           .append("g")
@@ -590,18 +588,13 @@ export class Mark {
       document.documentElement.removeChild(dummyroot.node());
     }
 
-    /**
-     * 
-     * @param root 
-     * @param crow An object of format {width: ..., height: ..., x: ..., y: ....}
-     * @returns 
-     */
-    async doRootNest(root, crow) {
+    async doWorkFlow(root, outer, isNested) {
       let dummyroot = this.makeDummyRoot()
+
       let queryTask = await taskGraph.addTask(
         HOOK_PLACE.SELECT_QUERY, 
         this, 
-        async () => {return await this.runQueryTask(root, crow)}, 
+        async () => {return await this.runQueryTask(root, outer, isNested)}, 
         false)
 
       let layoutTask = await taskGraph.addTask(
@@ -609,7 +602,7 @@ export class Mark {
         this, 
         async () => {
           let rows = queryTask.getOutput()
-          let channels = this.runLayoutTask(rows, crow, dummyroot)
+          let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
       
@@ -620,58 +613,7 @@ export class Mark {
         this, 
         async () => {
           let channels = layoutTask.getOutput()
-          let markInfo = this.runRenderTask(root, channels, crow, false)
-          return markInfo
-        }, false)
-      
-      taskGraph.addDependency(renderTask, layoutTask, false)
-
-      let cleanupTask = await taskGraph.addTask(
-          HOOK_PLACE.CREATE_MARKTABLE, 
-          this, 
-          async () => {
-            let markInfo = renderTask.getOutput()
-            await this.runCleanupTask(root, dummyroot, markInfo)
-          }, false)
-      
-      taskGraph.addDependency(cleanupTask, renderTask, false)
-    }
-
-    /**
-     * 
-     * @param root domain element to append mark to
-     * @param nest an instance of MarkNest
-     * @returns 1 on success
-     */
-    async doMarkNest(root, nest) {
-      let dummyroot = this.makeDummyRoot()
-      let outermark: Mark = nest.outerMark
-      this.outermark = outermark
-      this.innerToOuter = new Map<number, number>()
-
-      let queryTask = await taskGraph.addTask(
-        HOOK_PLACE.SELECT_QUERY, 
-        this, 
-        async () => {return await this.runQueryTask(root, nest)}, 
-        false)
-
-      let layoutTask = await taskGraph.addTask(
-        HOOK_PLACE.LAYOUT, 
-        this, 
-        async () => {
-          let rows = queryTask.getOutput()
-          let channels = this.runLayoutTask(rows, nest, dummyroot)
-          return channels
-        }, false)
-      
-      taskGraph.addDependency(layoutTask, queryTask, false)
-
-      let renderTask = await taskGraph.addTask(
-        HOOK_PLACE.RENDER, 
-        this, 
-        async () => {
-          let channels = layoutTask.getOutput()
-          let markInfo = this.runRenderTask(root, channels, nest, true)
+          let markInfo = this.runRenderTask(root, channels, outer, isNested)
           return markInfo
         }, false)
       
@@ -1159,8 +1101,6 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
-      console.log("data makemark", data)
-      console.log("crow", crow)
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),
