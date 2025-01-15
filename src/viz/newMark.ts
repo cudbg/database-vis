@@ -1458,7 +1458,8 @@ export class Mark {
             markInfo[i][key] = value
           }
 
-          if (parseFloat(value) || key == "data_xoffset" || key == "data_yoffset") {
+          if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
+            console.log("key that was parsed", key)
             let numValue = parseFloat(value)
             markInfo[i][key] = numValue
           }

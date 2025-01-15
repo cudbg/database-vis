@@ -121,7 +121,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) {
+        if (0) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
@@ -457,7 +457,7 @@
             let vrooms = c.text("rooms", { y: mgg.id, text:'Rooms', x: 5}, o);
         }
 
-        if (0) { /* housing treemap */
+        if (1) { /* housing treemap */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -468,8 +468,8 @@
             await db.normalize("small_housing", ['Rooms', 'YearBuilt', 'Price'], "housing_room_year_price")
             await db.normalize("housing_room_year_price", ['Rooms'], "housing_room", "housing_year_price")
 
-            let rect1 = c.rectX("housing_room", { ...sq("Rooms")(), x:'Rooms', stroke: "Rooms", fill:"none" })
-            let rect2 = c.rectX("housing_room_year_price", { ...sq("YearBuilt")(), x:'YearBuilt', "stroke-width":"1px", stroke: "black", fill:"Price" })
+            let rect1 = c.rectX("housing_room", { ...sq("Rooms")(), stroke: "Rooms", fill:"none" })
+            let rect2 = c.rectX("housing_room_year_price", { ...sq("YearBuilt")(), "stroke-width":"1px", stroke: "black", fill:"Price" })
             c.nest(rect2, rect1)
         }
 
