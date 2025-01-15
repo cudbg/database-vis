@@ -200,8 +200,11 @@ export class RLSQ extends RLSpaceFilling {
     treemap.size([width, height])
     treemap.padding(this.padding)
 
-    let root = d3.hierarchy({ children: data[this.dattrs[0]] })
-    root.sum((d)=>+d)
+    let hierarchyData = { children: data[this.dattrs[0]].map((elem) => ({"name": elem, "value": 1})) }
+
+    let root = d3.hierarchy(hierarchyData)
+
+    root.sum((d)=>d.value)
     treemap(root)
 
     let x1 = R.pluck("x0", root.children as any[])

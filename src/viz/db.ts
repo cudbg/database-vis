@@ -184,13 +184,10 @@ export class Database {
     let schemas = {};
     let res = await this.conn.exec(q);
 
-    console.log("res tablesFromConnection", res)
     res.forEach(({table_name, column_name, data_type}) => {
       schemas[table_name] ??= new Schema();
       schemas[table_name].push(column_name, coercetype(data_type));
     })
-
-    console.log("schemas", schemas)
 
     for (const [name, schema] of Object.entries(schemas)) {
       if (!schema.attrs.includes(IDNAME)) {
@@ -430,7 +427,7 @@ export class Database {
     let newFact = await this.fromSql(q, factname)
     newFact.name(factname)
     newFact.keys(IDNAME)
-    //let c1 = new FKConstraint({t1: t, X: fkattr, t2: newDim, Y: IDNAME})
+
     let c1 = new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]})
     let c2 = new FKConstraint({t1: newFact, X: [fkattr], t2: newDim, Y: [IDNAME]})
     this.setTable(newDim)
@@ -474,6 +471,45 @@ export class Database {
       this.addConstraint(new FKConstraint(c))
     }
   }
+
+    /**
+   * It would be really nice if we had a function that allowed the user to combine columns 
+   * from different tables to create a new table
+   * Something like
+   * db.join({t1, t2}, {tablename: column, ...}, {x: y, ...} <new table name>)
+   * 
+   * t1: left table name
+   * t2: right table name
+   * 
+   * {x: y, ...}: obj that specifies what columns to join on. x is a column in t1. y is a column in t2
+   * 
+   * {tablename: column}: obj that specify what columns to select from what table.
+   *                        tablename must be either t1 or t2
+  */
+    async join({t1, t2}, selectCols: {[key: string]: string[]}, joinKeys, newTableName) {
+      t1 = this.table(t1)
+      t2 = this.table(t2)
+    
+      let q = Query.from(t1.internalname, t2.internalname)
+  
+      for (let [tablename, cols] of Object.entries(selectCols)) {
+        for (let col of cols)
+          q = q.select({[col]: column(tablename, col)})
+      }
+  
+      /**
+       * Assume that user never selects _rav_id because that is not supposed to be exposed to user
+       */
+      q = q.select({[IDNAME]: idexpr})
+      
+      for (let [leftcol, rightcol] of Object.entries(joinKeys))
+        q = q.where(eq(column(t1.internalname, leftcol), column(t2.internalname, rightcol)))
+  
+      let newTable = await this.fromSql(q, newTableName)
+      newTable.name(newTableName)
+      newTable.keys(IDNAME)
+      this.setTable(newTable)
+    }
 
 
   async appendID(name) {

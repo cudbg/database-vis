@@ -121,6 +121,26 @@
         await db.loadFromConnection();
         let canvas
 
+        if (1) {
+            let tables = {t1: "TimeProvince", t2: "Weather"}
+            let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
+            let joinKeys = {date: "date", province: "province"}
+
+            await db.join(tables, selectCols, joinKeys, "info")
+
+            await db.normalize("info", "province", "Provinces")
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vrect = c.rect("Provinces", { ...sq("province")("x", "y"), fill: "none", stroke: "black"})
+            let vdot = c.dot("info", {x: "date", y: "confirmed", fill: "avg_temp", r: 20})
+            let vtext = c.text("Provinces", {x: vrect.get(mgg.id, "x"), y: vrect.get(mgg.id, "y"), text: "province"})
+            c.nest(vdot, vrect) //(inner objext, outer object, foreign key)  
+        }
 
         if (0) { /* fig a, scatter plot */
             await db.loadFromConnection()
@@ -136,8 +156,6 @@
             let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
             let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
             //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
-
-            
         }
 
 
@@ -344,7 +362,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (0) { /* hr_layout example */
+        if (0) { /* hr_layout example BROKEN */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -355,7 +373,7 @@
             await db.normalizeMany("hrdata", ['DeptID', 'Salary', 'Absences', 'PerformanceScore'].map((a)=>[a]))
             let rect1 = c.rect("hrdata_DeptID", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
             let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })
-            c.nest(bar1, rect1, "DeptID")
+            c.nest(bar1, rect1)
         }
 
         if (0) { /* penguins parallel coordinates */
@@ -390,7 +408,7 @@
             let vdot = c.dot("housing", {x: 'Lattitude', y: 'Longtitude', r: 'Landsize', fill: "Price"})
         }
 
-        if (1) { /* housing punchcard */
+        if (0) { /* housing punchcard */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -420,7 +438,7 @@
 
             let VB = c.rect("housing_rooms", { x: 'Rooms', y: 0, w: 10, h: 20, fill:'white', stroke:'black'})
             let VA = c.dot("housing_price_landsize", { x: 'Landsize', y: 'Price', fill:'Price'})
-            c.nest(VA, VB, "Rooms")
+            c.nest(VA, VB)
         }
 
         if (0) { /* housing table WORK IN PROGRESS !!!!!!!!! DO NOT RENDER THIS*/
@@ -452,7 +470,7 @@
 
             let rect1 = c.rectX("housing_room", { ...sq("Rooms")(), x:'Rooms', stroke: "Rooms", fill:"none" })
             let rect2 = c.rectX("housing_room_year_price", { ...sq("YearBuilt")(), x:'YearBuilt', "stroke-width":"1px", stroke: "black", fill:"Price" })
-            c.nest(rect2, rect1, "Rooms")
+            c.nest(rect2, rect1)
         }
 
         if (0) { /* airport nodelink */
@@ -468,8 +486,37 @@
             let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
         }
 
-        if (0) { /* ER diagram WORK IN PROGRESS !!!!!!!! */
-                    //ER diagram experiment
+        if (0) { // nesting experiment
+            await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
+            await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
+            await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
+
+            await db.conn.exec(`INSERT INTO outerrects VALUES (0), (1)`)
+            await db.conn.exec(`INSERT INTO innerrects VALUES (0, 0), (0, 1), (1, 0), (1, 1)`)
+            await db.conn.exec(`INSERT INTO dots VALUES (0, 0, 0), (0, 1, 1), (1, 0, 0), (1, 1, 1)`)
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vouter = c.rect("outerrects", { x: 'a', fill:'white', stroke:'black'})
+            /**
+             * The statement below causes bug in scaling!
+             */
+            //let vinner = c.rect("innerrects", { x: vouter.get(["aid"], "x"),y: 'bid', fill:'white', stroke:'black'})
+            let vinner = c.rect("innerrects", {y: 'bid', fill:'white', stroke:'black'})
+
+            let vdots = c.dot("dots", { x: 0, y: 'c', fill:'red'})
+            c.nest(vinner, vouter, ["aid"])
+            c.nest(vdots, vinner, ["aid", "bid"])
+
+
+        }
+
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -513,6 +560,8 @@
                                     y1: vcolname.get(["tid1", "col1"], ['y']), 
                                     x2: vcolname.get(["tid2", "col2"], ['x']), 
                                     y2: vcolname.get(["tid2", "col2"], ['y'])})
+
+
 
         }
 

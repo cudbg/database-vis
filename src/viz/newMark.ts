@@ -185,6 +185,30 @@ export class Mark {
     refmarks;
     layouts;
     scaling_fns: {va, scale: Scale}[]
+    markInfoCache: Map<number, {}>;
+    outermark: Mark;
+    innerToOuter: Map<number, number>;
+    level: number;
+    idVisualAttrMap: Map<number, Set<string>>;
+
+    
+    /**
+     * Every mark has a pointer to its outermark
+     * Every mark has a inner id to outer id map
+     * 
+     * Every mark will have a id to x,y, width, height, data_xoffset, data_yoffset map. 
+     *  width and height are only for marks that have a width and height eg. rect
+     * 
+     * After you draw a mark
+     * - create the id to x,y,width, height map
+     * 
+     * To draw a nested mark
+     * - Look up the outer mark's id to x,y,width,height map to get the corresponding offsets
+     * 
+     * To draw a mark that has a foreign key reference
+     * 1. Look up the level of the mark you are getting a reference from
+     * 2. If the level you found is different, than 
+     */
 
     _scales;
     _markelsidx;  // IDNAME -> HTML mark element
@@ -205,6 +229,10 @@ export class Mark {
         this.refmarks = []
         this._scales = {}
         this.scaling_fns = []
+        this.outermark = null
+        this.markInfoCache = new Map<number, {}>()
+        this.innerToOuter = null
+        this.idVisualAttrMap = new Map<number, Set<string>>()
 
         this.init()
     }
@@ -428,7 +456,7 @@ export class Mark {
         let root = this.node = select(
             creator("svg:g").call(document.documentElement))
             .classed(`${this.marktype}-${this.id}`, true);
-        let nest = this.c.nestof(this)[0]
+        let nest = this.c.nestof(this)
         let mark = null;
 
         /*
@@ -467,7 +495,7 @@ export class Mark {
       let query = this.constructQuery()
       let dummyroot = this.makeDummyRoot()
       let rows = await this.c.db.conn.exec(query)
-      console.log("rows", rows)
+      console.log("query output", rows)
 
       /**
        * The data from query has format [{}, {}, {}] where each object represents
@@ -478,7 +506,6 @@ export class Mark {
        * 
        */
       let cols = this.rowsToCols(rows)
-      console.log("cols", cols)
 
       /**
        * channels has format {x: [], y: [], ...}
@@ -490,12 +517,14 @@ export class Mark {
 
       // render final marks
       let {mark, markInfo} = this.makemark(channels, crow)
+      console.log("markInfo", markInfo)
 
       root
         .append("g")
         .attr("transform", `translate(${crow.x}, ${crow.y})`)
         .node().appendChild(mark);
       
+      this.prepareMarkInfo(markInfo)
       await this.createMarkTable(markInfo)
 
       document.documentElement.removeChild(dummyroot.node());
@@ -511,9 +540,9 @@ export class Mark {
      */
     async doMarkNest(root, nest) {
       let dummyroot = this.makeDummyRoot()
-      let outermark = nest.outerMark
-      let outermarkData = await outermark.src.data("col")
-      let outermarkVizData = await outermark.marktable.data()
+      let outermark: Mark = nest.outerMark
+      this.outermark = outermark
+      this.innerToOuter = new Map<number, number>()
 
       /**
        * Query for child marks in a nest is a simple
@@ -522,22 +551,44 @@ export class Mark {
        * Could we call doRootNest in here?
        */
       let markInfoArr = []
-      for (let i = 0; i < outermarkData[IDNAME].length; i++) {
-        let crow = outermarkVizData[i]
+      for (let [outermarkID, outermarkInfo] of outermark.markInfoCache) {
+        let crow = outermarkInfo
         let query = this.constructQuery(nest, crow)
         let rows = await this.c.db.conn.exec(query)
-        console.log("rows", rows)
+        console.log("query output", rows)
         let cols = this.rowsToCols(rows)
-        console.log("cols", cols)
         let channels = this.applychannels(cols)
 
+        for (let i = 0; i < channels[IDNAME].length; i++)
+          this.innerToOuter.set(channels[IDNAME][i], crow[IDNAME])
+        
         channels = await this.doLayout(channels, crow, dummyroot)
 
         // render final marks
         let {mark, markInfo} = this.makemark(channels, crow)
+
+        let tmpOuterMark = outermark
+        let outerID = crow[IDNAME]
+        let xoffset = crow.x
+        let yoffset = crow.y
+
+        /**
+         * Walk upwards until you hit a non-nested mark
+         * Add to xoffset and yoffset as you walk upwards
+         */
+
+        while (tmpOuterMark && tmpOuterMark.innerToOuter) {
+          outerID = tmpOuterMark.innerToOuter.get(outerID)
+          tmpOuterMark = tmpOuterMark.outermark
+
+          let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
+          xoffset += tmpCrow.x
+          yoffset += tmpCrow.y
+        }
+
         root
           .append("g")
-          .attr("transform", `translate(${crow.x}, ${crow.y})`)
+          .attr("transform", `translate(${xoffset}, ${yoffset})`)
           .node().appendChild(mark);
 
         markInfoArr.push(...markInfo)
@@ -545,16 +596,20 @@ export class Mark {
         this._markelsidx = markels(root, this.marktype);
       }
       console.log("markInfoArr", markInfoArr)
+      this.prepareMarkInfo(markInfoArr)
       await this.createMarkTable(markInfoArr)
       document.documentElement.removeChild(dummyroot.node());
       return 1
     }
 
     constructQuery(nest?, crow?) {
+      let idCounter = 0
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
+      let pathIDMap = new Map<FKConstraint[], number>()
       let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
       let nestingPath = new Map<FKConstraint[], Boolean>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
+
 
       /**
       * An array of possible aliases for this.src
@@ -620,6 +675,11 @@ export class Mark {
             }
 
             if (!pathInMap) {
+              queryItems[i].columns.push({dataAttr: IDNAME, renameAs: `idcounter_${idCounter}`})
+              pathIDMap.set(possibleNewPath, idCounter)
+              this.idVisualAttrMap.set(idCounter, new Set(queryItems[i].columns.map(columnObj => columnObj.renameAs)))
+              idCounter++
+
               pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
               nestingPath.set(possibleNewPath, false)
 
@@ -633,8 +693,11 @@ export class Mark {
 
             } else {
               let queryItemSet = pathQueryItemMap.get(pathInMap)
+              let id = pathIDMap.get(pathInMap)
+              queryItems[i].columns.forEach(columnObj => this.idVisualAttrMap.get(id).add(columnObj.renameAs))
   
               queryItemSet.add(queryItems[i])
+
             }
         } else {
           for (let i = 0; i < columns.length; i++) {
@@ -745,7 +808,7 @@ export class Mark {
           let renameT1 = null
           let renameT2 = null
 
-          if (t1 != this.src) {
+          if (t1.internalname != this.src.internalname) {
             if (!tableRenameMap.has(t1.internalname)) {
               renameT1 = `${t1.internalname}_${pathCounter}`
               query = query.from({[renameT1]: t1.internalname})
@@ -755,10 +818,11 @@ export class Mark {
             }
           } else if (srcTableAlias)
             renameT1 = srcTableAlias
-          else
+          else {
             renameT1 = this.src.internalname
+          }
 
-          if (t2 != this.src) {
+          if (t2.internalname != this.src.internalname) {
             if (!tableRenameMap.has(t2.internalname)) {
               renameT2 = `${t2.internalname}_${pathCounter}`
               query = query.from({[renameT2]: t2.internalname})
@@ -766,10 +830,12 @@ export class Mark {
             } else {
               renameT2 = tableRenameMap.get(t2.internalname)
             }
-          } else if (srcTableAlias)
+          } else if (srcTableAlias) {
             renameT2 = srcTableAlias
-          else
+          }
+          else {
             renameT2 = this.src.internalname
+          }
 
           if (nestingPath.get(path) && i == path.length - 1)
             query = query.where(eq(column(renameT1, X[0]), literal(Y[0])))
@@ -828,7 +894,7 @@ export class Mark {
 
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
-        let {visualAttr, dataAttr, refLayout, callback} = currItem
+        let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
 
         if (currItem.isGet) {
           let arr = data[visualAttr]
@@ -838,6 +904,52 @@ export class Mark {
            */
           if (callback)
             arr = this.handleCallback(currItem, data)
+
+          if (mark.level != this.level){
+            console.log("triggered level diff")
+            if (visualAttr == "x1" 
+              || visualAttr == "x2" 
+              || visualAttr == "x"
+              || visualAttr == "y1"
+              || visualAttr == "y2"
+              || visualAttr == "y") {
+                let idcounter
+
+
+                for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
+                  if (visualAttrSet.has(visualAttr))
+                    idcounter = id
+                }
+
+                let idcounterArr = data[`idcounter_${idcounter}`]
+
+                for (let j = 0; j < idcounterArr.length; j++) {
+                  let currOtherId = idcounterArr[j]
+                  let othermark = mark
+                  let othermarkInfoCache = mark.markInfoCache
+                  let otherlevel = mark.level
+
+                  while (othermark && (otherlevel > this.level)) {
+                    let obj = othermarkInfoCache.get(currOtherId)
+
+                    if (visualAttr == "x1" 
+                      || visualAttr == "x2" 
+                      || visualAttr == "x") {
+                        arr = arr.map(elem => elem + obj.data_xoffset)
+                      }
+                    else if (visualAttr == "y1" 
+                      || visualAttr == "y2" 
+                      || visualAttr == "y") {
+                        arr = arr.map(elem => elem + obj.data_yoffset)
+                      }
+                      othermark = othermark.outermark
+                      othermarkInfoCache = othermark.markInfoCache
+                    otherlevel--
+                  }
+
+                }
+            }
+          }
 
           channels[visualAttr] = arr
         }
@@ -949,14 +1061,15 @@ export class Mark {
       // run layouts
       let markrows = markdata(required, tmpMark, this.mark, channels);
       console.log("markrows", markrows)
+
       if (!R.all((a) => a in markrows, required)) {
         console.log("Missing required attr in markrows", required, R.keys(markrows))
       }
       for (const rl of rls) {
-        const layout = rl.layout(markrows, crow) 
+        const layout = rl.layout(markrows, crow)
         for (const va of rl.vattrs)  {
           channels[va] = { value: layout[va] }
-          this._scales[this.mark.alias2scale[va]] = { type: "identity" }
+          //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
       return channels
@@ -1326,18 +1439,7 @@ export class Mark {
       }
     }
 
-    /**
-     * 
-     * @param markInfo array of objects. each object describes a single datapoint 
-     *                 and corresponds to a single row to insert into the marktable
-     * @returns 
-     */
-    async createMarkTable(markInfo) {
-      console.log("createMarkTable")
-      console.log("markInfo", markInfo)
-
-      const tname = this.src.internalname + "_marktable" + this.id;
-
+    prepareMarkInfo(markInfo) {
       for (let i = 0; i < markInfo.length; i++) {
         for (let [key,value] of Object.entries(markInfo[i])) {
           /**
@@ -1356,12 +1458,47 @@ export class Mark {
             markInfo[i][key] = value
           }
 
-          if (parseFloat(value)) {
+          if (parseFloat(value) || key == "data_xoffset" || key == "data_yoffset") {
             let numValue = parseFloat(value)
             markInfo[i][key] = numValue
           }
         }
+
+        /**
+         * Populate markInfoCache here so that other marks can reference it if needed
+         */
+        let x = markInfo[i]["x"]
+        let y = markInfo[i]["y"]
+        let data_xoffset = markInfo[i]["data_xoffset"]
+        let data_yoffset = markInfo[i]["data_yoffset"]
+        
+        let obj = {x,y,data_xoffset, data_yoffset}
+        if (markInfo[i]["width"])
+          obj["width"] = markInfo[i]["width"]
+
+        if (markInfo[i]["height"])
+          obj["height"] = markInfo[i]["height"]
+
+        obj[IDNAME] = markInfo[i][IDNAME]
+        this.markInfoCache.set(markInfo[i][IDNAME], obj)
+
+        /**
+         * Delete data_xoffset and data_yoffset as they do not need to be stored in database
+         */
+        delete markInfo[i]["data_xoffset"]
+        delete markInfo[i]["data_yoffset"]
+
       }
+    }
+
+    /**
+     * 
+     * @param markInfo array of objects. each object describes a single datapoint 
+     *                 and corresponds to a single row to insert into the marktable
+     * @returns 
+     */
+    async createMarkTable(markInfo) {
+      const tname = this.src.internalname + "_marktable" + this.id;
 
       await this.createNewMarkTable(markInfo, tname)
 

@@ -144,6 +144,7 @@ export class Canvas implements IMark {
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
     let srcTable = this.db.table(source)
+    console.log("srcTable", srcTable)
     let canvas = findcanvas(this, srcTable);
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
@@ -160,27 +161,76 @@ export class Canvas implements IMark {
   }
 
   nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
+    if (predicate) {
+      predicate = Array.isArray(predicate) ? predicate : [predicate]
+      this.nestWithPredicate(innerMark, outerMark, predicate)
+    }
+    else
+      this.nestWithoutPredicate(innerMark, outerMark)
+  }
+
+  nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    if (predicate != null && this.invalidPredicate(innerTable, outerTable, predicate))
-      throw new Error("Predicate must be a column present in both tables and must have N-1 cardinality!")
-    
-    let fkConstraint = null
-    if (predicate == null) {
-      for (const [key, value] of Object.entries(this.db.constraints)) {
-        if (value.t2 == innerTable && value.t1 == outerTable) {
-          fkConstraint = value
-        } else if (value.t1 == innerTable && value.t2 == outerTable){
-          fkConstraint = value
-        }
+    let path = this.db.getFkPath(innerTable, outerTable)
+
+    if (!path)
+      throw new Error("No possible path!")
+
+    console.log("path", path)
+
+    this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
+    innerMark.outermark = outerMark
+  }
+
+  nestWithPredicate(innerMark: Mark, outerMark: Mark, predicate: string[]) {
+    let innerTable = innerMark.src
+    let outerTable = outerMark.src
+
+    for (const [cname, constraint] of Object.entries(this.db.constraints)) {
+      if (!(constraint instanceof FKConstraint))
+        continue
+
+      if (constraint.card != Cardinality.ONEONE && constraint.card != Cardinality.ONEMANY)
+        continue
+
+      if (constraint.t1 == innerTable) {
+        if ((constraint.X.length != predicate.length))
+          continue
+  
+        if (!(constraint.X.every((value, index) => value == predicate[index])))
+          continue
+
+        let path = this.db.getFKPath(innerTable, outerTable, constraint)
+
+        if (!path)
+          continue
+
+        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        innerMark.outermark = outerMark
+        return
+      }
+
+      if (constraint.t2 == innerTable) {
+        if (constraint.Y.length != predicate.length)
+          continue
+
+        if (!(constraint.Y.every((value, index) => value == predicate[index])))
+          continue
+
+        let path = this.db.getFKPath(innerTable, outerTable, constraint)
+
+        if (!path)
+          continue
+  
+        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
+        innerMark.outermark = outerMark
+        return
       }
     }
-    if (fkConstraint == null) {
-      predicate = Array.isArray(predicate) ? predicate : [predicate]
-      fkConstraint = new FKConstraint({t1: innerTable, X:predicate, t2:outerTable, Y:predicate})
-    }
-    this.nests.push(new MarkNest(this, fkConstraint, innerMark, outerMark))
+
+    throw new Error("Cannot find foreign key reference to nest using predicate!")  
   }
 
   /*
@@ -215,32 +265,25 @@ export class Canvas implements IMark {
    * if there is a fk t1 -1-n- mark.table that is mapped to a Nest
    * then return the nesting, otherwise return root
    */
-  nestof(o:Mark|FKConstraint) {
+  nestof(o:Mark) {
     // TODO
     // filter fk constraints for those where
     // 1) mark.table is fk.t2 and
     // 2) constraint maps to container
-    let ret = [];
+
+    if (!o.outermark)
+      return new RootNest(this, this.options)
+
     for (const n of this.nests) {
       if (n instanceof MarkNest) {
-        if (o instanceof Mark && o.src instanceof Table) {
-          const mark = o;
-          if (n.fk.t2 == mark.src && n.innerMark == mark) {
-            for (const m2 of this.marksof(n.fk.t1)) {
-              if (m2 && m2 instanceof Mark && m2.src == n.fk.t1){
-                ret.push(n)
-                break;
-              }
-            }
-          }
-        } else if (n.fk == o) {
-          ret.push(n)
-        }
+          if (n.innerMark == o && n.outerMark == o.outermark)
+            return n
       } 
     }
-    if (ret.length == 0)
-      ret.push(new RootNest(this, this.options))
-    return ret;
+    /**
+     * We technically should not end up here because the nest call should succeed and create a new MarkNest
+     */
+    throw new Error("No such nest!")
   }
 
 
@@ -265,10 +308,49 @@ export class Canvas implements IMark {
     // they should ideally be aligned as well
   }
 
+  setMarkLevels() {
+    let edges = new Map()
+    let incoming = new Map()
+    for (let i = 0; i < this.marks.length; i++) {
+      this.marks[i].level = 0
+      edges.set(this.marks[i], [])
+      incoming.set(this.marks[i], 0)
+    }
+
+    for (const n of this.nests) {
+      if (n instanceof MarkNest) {
+        let {outerMark, innerMark} = n
+
+        edges.get(outerMark).push(innerMark)
+        incoming.set(innerMark, incoming.get(innerMark) + 1)
+      }
+    }
+
+    let queue = []
+    for (let [mark, incomingCount] of incoming.entries()){
+      if (incomingCount == 0)
+        queue.push(mark)
+    }
+
+    /**
+     * We are guranteed that each child has a single parent as a mark can only be nested inside one other mark (duh)
+     */
+
+    while(queue.length != 0) {
+      let curr = queue.shift()
+      let children = edges.get(curr)
+      for (let i = 0; i < children.length; i++) {
+        let child = children[i]
+        child.level = curr.level + 1
+        queue.push(child)
+      }
+    }
+  }
   /**
    * Topologically sort marks by nest and foreign key references
    */
   sortedmarks() {
+    this.setMarkLevels()
     let referenceCounts = new Map<number, number>() /* mapping from mark id to number of other marks it is dependent on */
     let graph = new Map<number, number[]>() /* mapping from mark id to array of other marks that are dependent on it */
 
