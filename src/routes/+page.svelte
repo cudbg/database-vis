@@ -10,6 +10,7 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
+    import { taskGraph } from "../viz/task_graph/task_graph";
 
 
     let innerWidth = 10000;
@@ -17,6 +18,7 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
+    let graphSvg = null;
     let inspector = null;
 
     onMount(async () => {
@@ -109,6 +111,7 @@
             SELECT date, province, avg_temp FROM Weather;
             `
         )
+        taskGraph.clear()
         })(duckdb);
 
 
@@ -362,7 +365,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (0) { /* hr_layout example  */
+        if (1) { /* hr_layout example  */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -371,12 +374,12 @@
             window.db = db;
 
             await db.normalize("hrdata", ['DeptID'], "departments")
-            let rect1 = c.rect("departments", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
+            let rect1 = c.rect("departments", { ...eqX()(), stroke:"grey", fill:"none" })
             let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })
             c.nest(bar1, rect1)
         }
 
-        if (1) { /* penguins parallel coordinates */
+        if (0) { /* penguins parallel coordinates */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -564,8 +567,9 @@
 
 
         }
-
         (await canvas.render({ document, svg }));
+        taskGraph.visualize(graphSvg)
+        await taskGraph.execute()
 
         /*
         c1: T -1-n- S
@@ -607,6 +611,11 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={svg}/>
+            </div>
+        </div>
+        <div class="col">
+            <div bind:this={rootelement}>
+                <svg bind:this={graphSvg}/>
             </div>
         </div>
     </div>

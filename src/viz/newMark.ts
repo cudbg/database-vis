@@ -495,7 +495,7 @@ export class Mark {
       return rows
     }
 
-    runLayoutTask(rows, crow, dummyroot, isNested) {
+    runLayoutTask(rows, crow, dummyroot) {
       /**
        * The data from query has format [{}, {}, {}] where each object represents
        * a single data point ie. each object looks like {x: ..., y: ...}
@@ -505,20 +505,20 @@ export class Mark {
        * 
        */
       if (crow instanceof MarkNest) {
-        for (let [outermarkID, outermarkInfo] of outermark.markInfoCache) {
-          let crow = outermarkInfo
-  
+        let channelObj = {}
+        for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
   
           let cols = this.rowsToCols(children)
           let channels = this.applychannels(cols)
   
           for (let i = 0; i < channels[IDNAME].length; i++)
-            this.innerToOuter.set(channels[IDNAME][i], crow[IDNAME])
+            this.innerToOuter.set(channels[IDNAME][i], outermarkInfo[IDNAME])
           
-          channels = this.doLayout(channels, crow, dummyroot)
-    
+          channels = this.doLayout(channels, outermarkInfo, dummyroot)
+          channelObj[outermarkID] = channels 
         }
+        return channelObj
 
       } else {
         let cols = this.rowsToCols(rows)
@@ -531,35 +531,45 @@ export class Mark {
     }
 
     runRenderTask(root, channels, crow, isNested) {
+      console.log("channels runRenderTask", channels)
+      console.log("isNested", isNested)
       if (isNested) {
+        let markInfoArr = []
+
+        for (let [outermarkID, currChannels] of Object.entries(channels)) {
+          let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
-        let {mark, markInfo} = this.makemark(channels, crow)
-      
-        let tmpOuterMark = this.outermark
-        let outerID = crow[IDNAME]
-        let xoffset = crow.x
-        let yoffset = crow.y
+          let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
+        
+          let tmpOuterMark = this.outermark
+          let outerID = outerMarkRow[IDNAME]
+          let xoffset = outerMarkRow.x
+          let yoffset = outerMarkRow.y
 
-        /**
-         * Walk upwards until you hit a non-nested mark
-         * Add to xoffset and yoffset as you walk upwards
-         */
+          /**
+           * Walk upwards until you hit a non-nested mark
+           * Add to xoffset and yoffset as you walk upwards
+           */
 
-        while (tmpOuterMark && tmpOuterMark.innerToOuter) {
-          outerID = tmpOuterMark.innerToOuter.get(outerID)
-          tmpOuterMark = tmpOuterMark.outermark
+          while (tmpOuterMark && tmpOuterMark.innerToOuter) {
+            outerID = tmpOuterMark.innerToOuter.get(outerID)
+            tmpOuterMark = tmpOuterMark.outermark
 
-          let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
-          xoffset += tmpCrow.x
-          yoffset += tmpCrow.y
+            let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
+            xoffset += tmpCrow.x
+            yoffset += tmpCrow.y
+          }
+
+          root
+            .append("g")
+            .attr("transform", `translate(${xoffset}, ${yoffset})`)
+            .node().appendChild(mark);
+
+          markInfoArr.push(...markInfo)
+          
         }
+        return markInfoArr
 
-        root
-          .append("g")
-          .attr("transform", `translate(${xoffset}, ${yoffset})`)
-          .node().appendChild(mark);
-
-          return markInfo
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
         console.log("markInfo", markInfo)
@@ -575,7 +585,7 @@ export class Mark {
 
     async runCleanupTask(root, dummyroot, markInfo) {
       this.prepareMarkInfo(markInfo)
-      this.createMarkTable(markInfo)
+      await this.createMarkTable(markInfo)
       this._markelsidx = markels(root, this.marktype);
       document.documentElement.removeChild(dummyroot.node());
     }
@@ -600,7 +610,7 @@ export class Mark {
         this, 
         async () => {
           let rows = queryTask.getOutput()
-          let channels = this.runLayoutTask(rows, crow, dummyroot, false)
+          let channels = this.runLayoutTask(rows, crow, dummyroot)
           return channels
         }, false)
       
@@ -651,7 +661,7 @@ export class Mark {
         this, 
         async () => {
           let rows = queryTask.getOutput()
-          let channels = this.runLayoutTask(rows, nest, dummyroot, false)
+          let channels = this.runLayoutTask(rows, nest, dummyroot)
           return channels
         }, false)
       
@@ -662,7 +672,7 @@ export class Mark {
         this, 
         async () => {
           let channels = layoutTask.getOutput()
-          let markInfo = this.runRenderTask(root, channels, nest, false)
+          let markInfo = this.runRenderTask(root, channels, nest, true)
           return markInfo
         }, false)
       
@@ -1150,6 +1160,8 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
+      console.log("data makemark", data)
+      console.log("crow", crow)
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),
