@@ -362,7 +362,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (1) { /* hr_layout example BROKEN */
+        if (0) { /* hr_layout example  */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -376,7 +376,7 @@
             c.nest(bar1, rect1)
         }
 
-        if (0) { /* penguins parallel coordinates */
+        if (1) { /* penguins parallel coordinates */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})

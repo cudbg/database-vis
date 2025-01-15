@@ -11,6 +11,7 @@ import * as Plot from "@observablehq/plot";
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { RefMark } from "./ref";
 import { Scale, ScaleObject } from "./newScale";
+import { taskGraph } from "./task_graph/task_graph";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -167,6 +168,7 @@ export class Canvas implements IMark {
     }
     else
       this.nestWithoutPredicate(innerMark, outerMark)
+    taskGraph.addDependency(innerMark, outerMark, true)
   }
 
   nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
