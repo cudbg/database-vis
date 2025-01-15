@@ -590,7 +590,6 @@ export class Mark {
       document.documentElement.removeChild(dummyroot.node());
     }
 
-
     /**
      * 
      * @param root 

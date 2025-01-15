@@ -365,7 +365,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (1) { /* hr_layout example  */
+        if (0) { /* hr_layout example  */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -476,7 +476,7 @@
             c.nest(rect2, rect1)
         }
 
-        if (0) { /* airport nodelink */
+        if (1) { /* airport nodelink */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -486,7 +486,7 @@
 
             let VA = c.dot("airports", {x: "latitude", y: "longitude"})
             let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})
-            let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
+            let vtext_origin = c.text("airports", {x: VA.get("airports", "x"), y: VA.get("airports", "y"), text: "airport", fill: "red"})
         }
 
         if (0) { // nesting experiment

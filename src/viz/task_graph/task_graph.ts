@@ -102,6 +102,7 @@ export class TaskGraph {
     running: boolean
     markToTasksMap: Map<any, Task[]>
     markDependency: Map<any, Set<any>>
+    tasksSorted: boolean
 
 
 
@@ -109,6 +110,7 @@ export class TaskGraph {
         this.running = running
         this.markToTasksMap = new Map<any, Task[]>()
         this.markDependency = new Map<any, Set<any>>()
+        this.tasksSorted = false
     }
 
     generateNewTaskName(hook_place: HOOK_PLACE, mark, taskName) {
@@ -243,16 +245,19 @@ export class TaskGraph {
                 this.addDependency(dest, src, false)
             }
         }
+        this.tasksSorted = true
     }
 
-    getLastTask(mark) {
-        let tasks = this.markToTasksMap.get(mark)
-        return tasks[tasks.length - 1]
-    }
+    // getLastTask(mark) {
+    //     let tasks = this.markToTasksMap.get(mark)
+    //     return tasks[tasks.length - 1]
+    // }
 
 
     getStartingTasks() {
-        this.topoSortMarks()
+        if (!this.tasksSorted)
+            this.topoSortMarks()
+
         let result: Task[] = []
 
         for (let [mark, tasks] of this.markToTasksMap.entries()) {
@@ -288,6 +293,9 @@ export class TaskGraph {
     }
 
     visualize(svg) {
+        if (!this.tasksSorted)
+            this.topoSortMarks()
+
         let g = new dagre.graphlib.Graph()
 
         g.setGraph({})
@@ -326,6 +334,9 @@ export class TaskGraph {
             x2: target.x, y2: target.y
             };
         });
+
+        console.log("nodes", nodes)
+        console.log("edges", edges)
 
         const labels = g.nodes().map(id => {
             const node = g.node(id)
@@ -435,6 +446,7 @@ export class TaskGraph {
     clear() {
         this.markToTasksMap.clear()
         this.markDependency.clear()
+        this.tasksSorted = false
     }
 }
 
