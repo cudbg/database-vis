@@ -15,6 +15,7 @@ import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
 import { Scale, ScaleObject } from "./newScale";
+import { HOOK_PLACE, taskGraph } from "./task_graph/task_graph";
 
 /**
  * Used in QueryItem
@@ -234,6 +235,7 @@ export class Mark {
         this.innerToOuter = null
         this.idVisualAttrMap = new Map<number, Set<string>>()
 
+        taskGraph.addMark(this)
         this.init()
     }
 
@@ -271,7 +273,7 @@ export class Mark {
               this._scales.y = {type: "identity"}
             
             this.c.registerRefMark(othermark, this)
-
+            taskGraph.addDependency(this, othermark, true)
           }
           else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
@@ -457,7 +459,6 @@ export class Mark {
             creator("svg:g").call(document.documentElement))
             .classed(`${this.marktype}-${this.id}`, true);
         let nest = this.c.nestof(this)
-        let mark = null;
 
         /*
         mark was really appended to the root after doRootNest and doMarkNest
@@ -466,13 +467,12 @@ export class Mark {
         if (nest instanceof RootNest) {
           let crow = nest.parentmarkdata()
           let fixedCrow = this.handleCrow(crow)
-          mark = await this.doRootNest(root, fixedCrow)
+          await this.doWorkFlow(root, fixedCrow, false)
         } else {
-          mark = await this.doMarkNest(root, nest)
+          this.outermark = nest.outerMark
+          this.innerToOuter = new Map<number, number>()
+          await this.doWorkFlow(root, nest, true)
         }
-
-        if (!mark)
-          throw new Error("Uh oh! Couldn't make mark")
         return root.node()
     }
 
@@ -485,18 +485,18 @@ export class Mark {
         this.layouts[rl.id].add(rl.vattrs)
     }
 
-    /**
-     * 
-     * @param root 
-     * @param crow An object of format {width: ..., height: ..., x: ..., y: ....}
-     * @returns 
-     */
-    async doRootNest(root, crow) {
-      let query = this.constructQuery()
-      let dummyroot = this.makeDummyRoot()
+    async runQueryTask(root, outer, isNested) {
+      let query
+      if (isNested)
+        query = this.constructQuery(outer)
+      else
+        query = this.constructQuery()
       let rows = await this.c.db.conn.exec(query)
       console.log("query output", rows)
+      return rows
+    }
 
+    runLayoutTask(rows, outer, dummyroot, isNested) {
       /**
        * The data from query has format [{}, {}, {}] where each object represents
        * a single data point ie. each object looks like {x: ..., y: ...}
@@ -505,109 +505,136 @@ export class Mark {
        * This is to allow applychannels to work properly
        * 
        */
-      let cols = this.rowsToCols(rows)
+      if (isNested) {
+        let channelObj = {}
+        for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
+          let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
+  
+          let cols = this.rowsToCols(children)
+          let channels = this.applychannels(cols)
+  
+          for (let i = 0; i < channels[IDNAME].length; i++)
+            this.innerToOuter.set(channels[IDNAME][i], outermarkInfo[IDNAME])
+          
+          channels = this.doLayout(channels, outermarkInfo, dummyroot)
+          channelObj[outermarkID] = channels 
+        }
+        return channelObj
 
-      /**
-       * channels has format {x: [], y: [], ...}
-       * applychannels prepares the data for rendering
-       */
-      let channels = this.applychannels(cols)
-
-      channels = await this.doLayout(channels, crow, dummyroot)
-
-      // render final marks
-      let {mark, markInfo} = this.makemark(channels, crow)
-      console.log("markInfo", markInfo)
-
-      root
-        .append("g")
-        .attr("transform", `translate(${crow.x}, ${crow.y})`)
-        .node().appendChild(mark);
-      
-      this.prepareMarkInfo(markInfo)
-      await this.createMarkTable(markInfo)
-
-      document.documentElement.removeChild(dummyroot.node());
-      this._markelsidx = markels(root, this.marktype);
-      return mark
-    }
-
-    /**
-     * 
-     * @param root domain element to append mark to
-     * @param nest an instance of MarkNest
-     * @returns 1 on success
-     */
-    async doMarkNest(root, nest) {
-      let dummyroot = this.makeDummyRoot()
-      let outermark: Mark = nest.outerMark
-      this.outermark = outermark
-      this.innerToOuter = new Map<number, number>()
-
-      /**
-       * Query for child marks in a nest is a simple
-       * Need a loop to run through later
-       * 
-       * Could we call doRootNest in here?
-       */
-      let markInfoArr = []
-      for (let [outermarkID, outermarkInfo] of outermark.markInfoCache) {
-        let crow = outermarkInfo
-        let query = this.constructQuery(nest, crow)
-        let rows = await this.c.db.conn.exec(query)
-        console.log("query output", rows)
+      } else {
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
-
-        for (let i = 0; i < channels[IDNAME].length; i++)
-          this.innerToOuter.set(channels[IDNAME][i], crow[IDNAME])
-        
-        channels = await this.doLayout(channels, crow, dummyroot)
-
-        // render final marks
-        let {mark, markInfo} = this.makemark(channels, crow)
-
-        let tmpOuterMark = outermark
-        let outerID = crow[IDNAME]
-        let xoffset = crow.x
-        let yoffset = crow.y
-
-        /**
-         * Walk upwards until you hit a non-nested mark
-         * Add to xoffset and yoffset as you walk upwards
-         */
-
-        while (tmpOuterMark && tmpOuterMark.innerToOuter) {
-          outerID = tmpOuterMark.innerToOuter.get(outerID)
-          tmpOuterMark = tmpOuterMark.outermark
-
-          let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
-          xoffset += tmpCrow.x
-          yoffset += tmpCrow.y
-        }
-
-        root
-          .append("g")
-          .attr("transform", `translate(${xoffset}, ${yoffset})`)
-          .node().appendChild(mark);
-
-        markInfoArr.push(...markInfo)
-        
-        this._markelsidx = markels(root, this.marktype);
+  
+        channels = this.doLayout(channels, outer, dummyroot)
+  
+        return channels
       }
-      console.log("markInfoArr", markInfoArr)
-      this.prepareMarkInfo(markInfoArr)
-      await this.createMarkTable(markInfoArr)
-      document.documentElement.removeChild(dummyroot.node());
-      return 1
     }
 
-    constructQuery(nest?, crow?) {
+    runRenderTask(root, channels, crow, isNested) {
+      if (isNested) {
+        let markInfoArr = []
+
+        for (let [outermarkID, currChannels] of Object.entries(channels)) {
+          let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
+          // render final marks
+          let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
+        
+          let tmpOuterMark = this.outermark
+          let outerID = outerMarkRow[IDNAME]
+          let xoffset = outerMarkRow.x
+          let yoffset = outerMarkRow.y
+
+          /**
+           * Walk upwards until you hit a non-nested mark
+           * Add to xoffset and yoffset as you walk upwards
+           */
+
+          while (tmpOuterMark && tmpOuterMark.innerToOuter) {
+            outerID = tmpOuterMark.innerToOuter.get(outerID)
+            tmpOuterMark = tmpOuterMark.outermark
+
+            let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
+            xoffset += tmpCrow.x
+            yoffset += tmpCrow.y
+          }
+
+          root
+            .append("g")
+            .attr("transform", `translate(${xoffset}, ${yoffset})`)
+            .node().appendChild(mark);
+
+          markInfoArr.push(...markInfo)
+          
+        }
+        return markInfoArr
+
+      } else {    
+        let {mark, markInfo} = this.makemark(channels, crow)
+  
+        root
+          .append("g")
+          .attr("transform", `translate(${crow.x}, ${crow.y})`)
+          .node().appendChild(mark);
+
+        return markInfo
+      }        
+    }
+
+    async runCleanupTask(root, dummyroot, markInfo) {
+      this.prepareMarkInfo(markInfo)
+      await this.createMarkTable(markInfo)
+      this._markelsidx = markels(root, this.marktype);
+      document.documentElement.removeChild(dummyroot.node());
+    }
+
+    async doWorkFlow(root, outer, isNested) {
+      let dummyroot = this.makeDummyRoot()
+
+      let queryTask = await taskGraph.addTask(
+        HOOK_PLACE.SELECT_QUERY, 
+        this, 
+        async () => {return await this.runQueryTask(root, outer, isNested)}, 
+        false)
+
+      let layoutTask = await taskGraph.addTask(
+        HOOK_PLACE.LAYOUT, 
+        this, 
+        async () => {
+          let rows = queryTask.getOutput()
+          let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
+          return channels
+        }, false)
+      
+      taskGraph.addDependency(layoutTask, queryTask, false)
+
+      let renderTask = await taskGraph.addTask(
+        HOOK_PLACE.RENDER, 
+        this, 
+        async () => {
+          let channels = layoutTask.getOutput()
+          let markInfo = this.runRenderTask(root, channels, outer, isNested)
+          return markInfo
+        }, false)
+      
+      taskGraph.addDependency(renderTask, layoutTask, false)
+
+      let cleanupTask = await taskGraph.addTask(
+          HOOK_PLACE.CREATE_MARKTABLE, 
+          this, 
+          async () => {
+            let markInfo = renderTask.getOutput()
+            await this.runCleanupTask(root, dummyroot, markInfo)
+          }, false)
+      
+      taskGraph.addDependency(cleanupTask, renderTask, false)
+    }
+
+    constructQuery(nest?) {
       let idCounter = 0
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
       let pathIDMap = new Map<FKConstraint[], number>()
       let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
-      let nestingPath = new Map<FKConstraint[], Boolean>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
 
 
@@ -681,7 +708,6 @@ export class Mark {
               idCounter++
 
               pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
-              nestingPath.set(possibleNewPath, false)
 
               /**
                * Create a path for each constraint and check if this new path is already present
@@ -731,8 +757,8 @@ export class Mark {
        * 
        * nest(va, vb, <some_key>)
        */
-      if (nest && crow) {
-        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.marktable, nest.fk)
+      if (nest) {
+        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.src, nest.fk)
         let pathInMap = null
 
         if (!possibleNewPath)
@@ -745,19 +771,14 @@ export class Mark {
           }
         }
 
-        possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
+        //possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
+        let nestQueryItem: QueryItem = {srcmark: nest.outerMark, source: nest.outerMark.src, columns: [{dataAttr: IDNAME, renameAs: `${IDNAME}_parent`}], constraint: nest.fk}
 
         if (!pathInMap) {
-          pathQueryItemMap.set(possibleNewPath, new Set()) /* empty set because this is a nest, no attributes are being selected */
-          nestingPath.set(possibleNewPath, true)
+          pathQueryItemMap.set(possibleNewPath, new Set([nestQueryItem])) /* empty set because this is a nest, no attributes are being selected */
         } else {
           let queryItemSet = pathQueryItemMap.get(pathInMap)
-
-          pathQueryItemMap.delete(pathInMap)
-          nestingPath.delete(pathInMap)
-
-          pathQueryItemMap.set(possibleNewPath, queryItemSet)
-          nestingPath.set(possibleNewPath, true)
+          queryItemSet.add(nestQueryItem)
         }
       }
 
@@ -836,13 +857,8 @@ export class Mark {
           else {
             renameT2 = this.src.internalname
           }
-
-          if (nestingPath.get(path) && i == path.length - 1)
-            query = query.where(eq(column(renameT1, X[0]), literal(Y[0])))
-          else {
-            for (let i = 0; i < X.length; i++)
-              query = query.where(eq(column(renameT1, X[i]), column(renameT2, Y[i])))
-          }
+          for (let i = 0; i < X.length; i++)
+            query = query.where(eq(column(renameT1, X[i]), column(renameT2, Y[i])))
         }
 
         for (let queryItem of queryItemSet) {
@@ -1045,7 +1061,7 @@ export class Mark {
      * 
      * Look into mosaic and see how they do scales
      */
-    async doLayout(channels, crow, dummyroot) {
+    doLayout(channels, crow, dummyroot) {
       if (Object.keys(this.layouts).length == 0) {
         return channels
       }
@@ -1459,7 +1475,6 @@ export class Mark {
           }
 
           if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
-            console.log("key that was parsed", key)
             let numValue = parseFloat(value)
             markInfo[i][key] = numValue
           }

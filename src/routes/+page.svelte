@@ -10,6 +10,7 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
+    import { taskGraph } from "../viz/task_graph/task_graph";
 
 
     let innerWidth = 10000;
@@ -17,6 +18,7 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
+    let graphSvg = null;
     let inspector = null;
 
     onMount(async () => {
@@ -57,6 +59,10 @@
             {
                 name: "hrdata",
                 url: "/HRDataset_v14.csv"
+            },
+            {
+                name: "heart_disease_csv",
+                url: "/clean_heart_disease.csv"
             }]
         });
         db_up = await (async function dbGoLive(duckdb) {
@@ -109,6 +115,7 @@
             SELECT date, province, avg_temp FROM Weather;
             `
         )
+        taskGraph.clear()
         })(duckdb);
 
 
@@ -122,6 +129,26 @@
         let canvas
 
         if (0) {
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let habits = c.rect("Exercise_Habits", {...sq("Exercise_Habits")("x", "y"), fill: "none", stroke: "black"})
+            let habitsLabel = c.text("Exercise_Habits", {x: habits.get("Exercise_Habits", "x"), y: habits.get("Exercise_Habits", "y"), text: "Exercise_Habits"})
+            
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "BMI", r: "Blood_Pressure", fill: "Status"})
+
+            c.nest(info, habits)
+        }
+        if (1) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
@@ -362,7 +389,7 @@
             let vlink2 = c.link("genus", {x1: vfamily.get(["morder", "family"], ["x"]), y1: vfamily.get(["morder", "family"], ["y"]), x2: vgenus.get(["morder", "family", "genus"], ["x"]), y2: vgenus.get(["morder", "family", "genus"], ["y"]) })
         }
 
-        if (1) { /* hr_layout example BROKEN */
+        if (0) { /* hr_layout example  */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -371,7 +398,7 @@
             window.db = db;
 
             await db.normalize("hrdata", ['DeptID'], "departments")
-            let rect1 = c.rect("departments", { ...eqX("DeptID")(), stroke:"grey", fill:"none" })
+            let rect1 = c.rect("departments", { ...eqX()(), stroke:"grey", fill:"none" })
             let bar1 = c.bar("hrdata", { x: 'Salary', y: 'EmpSatisfaction', fill:'red' })
             c.nest(bar1, rect1)
         }
@@ -483,7 +510,7 @@
 
             let VA = c.dot("airports", {x: "latitude", y: "longitude"})
             let VT = c.link("routes", {x1: VA.get("ORIGIN", ['x']), y1: VA.get("ORIGIN", ['y']), x2: VA.get("DEST", ['x']), y2: VA.get("DEST", ['y'])})
-            let vtext_origin = c.text("airports", {x: "latitude", y: "longitude", text: "airport", fill: "red"})
+            let vtext_origin = c.text("airports", {x: VA.get("airport", "x"), y: VA.get("airport", "y"), text: "airport", fill: "red"})
         }
 
         if (0) { // nesting experiment
@@ -564,8 +591,9 @@
 
 
         }
-
         (await canvas.render({ document, svg }));
+        taskGraph.visualize(graphSvg)
+        await taskGraph.execute()
 
         /*
         c1: T -1-n- S
@@ -607,6 +635,11 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={svg}/>
+            </div>
+        </div>
+        <div class="col">
+            <div bind:this={rootelement}>
+                <svg bind:this={graphSvg}/>
             </div>
         </div>
     </div>

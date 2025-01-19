@@ -1,3 +1,7 @@
+import dagre from "@dagrejs/dagre"
+import * as OPlot from "@observablehq/plot";
+import { creator, select } from "d3";
+
 type TaskFunc = (...args: any[]) => Promise<any>
 
 export enum HOOK_PLACE {
@@ -17,7 +21,7 @@ enum STATES {
 class Task {
     name: string
     output: any
-    incoming: any[]
+    incoming: Task[]
     outgoing: Task[]
     func: TaskFunc
     state: STATES
@@ -45,31 +49,29 @@ class Task {
 
     async run() {
         if (this.state === STATES.RUNNING || this.state === STATES.COMPLETE)
-            throw new Error("Task already running or completed!")
+            return Promise.resolve()
 
-        // // Wait for all dependencies to be completed
-        // let inputs = []
-        // for (let i = 0; i < this.incoming.length; i++) {
-        //     /**
-        //      * We always assume that dependencies are already computed
-        //      */
-        //     if (this.incoming[i] instanceof Task)
-        //         inputs.push(this.incoming[i].output)
-        //     else
-        //         inputs.push(this.incoming[i])
-        // }
+        let allIncomingComplete = (this.incoming.length == 0 || !this.incoming.some(task => task.state != STATES.COMPLETE))
+
+        if (!allIncomingComplete)
+            return Promise.resolve()
 
         try {
+            console.log("running task", this.name)
             this.state = STATES.RUNNING
             this.output = await this.func();
             this.state = STATES.COMPLETE;
+            for (let i = 0; i < this.outgoing.length; i++) {
+                await this.outgoing[i].run()
+            }
 
             /**
              * TODO: Implement breakpoint code at some point
              */
 
-            return this.output;
+            //return this.output;
         } catch (error) {
+            console.error("error", error)
             this.state = STATES.FAILED
             throw new Error(`Task ${this.name} failed.`);
         }
@@ -90,39 +92,40 @@ class Task {
     getOutput() {
         return this.output
     }
+
+    isComplete() {
+        return this.state == STATES.COMPLETE
+    }
 }
 
 export class TaskGraph {
     running: boolean
-    marks: Map<any, Set<Task>>
+    markToTasksMap: Map<any, Task[]>
     markDependency: Map<any, Set<any>>
+    tasksSorted: boolean
 
 
 
     constructor(running: boolean) {
         this.running = running
-        this.marks = new Map<any, Set<Task>>()
+        this.markToTasksMap = new Map<any, Task[]>()
         this.markDependency = new Map<any, Set<any>>()
+        this.tasksSorted = false
     }
 
     generateNewTaskName(hook_place: HOOK_PLACE, mark, taskName) {
-        let taskSet = this.marks.get(mark)
+        let tasks = this.markToTasksMap.get(mark)
 
         let counter = 0
         let newPossibleName = `${taskName}_${counter}`
 
         while (true) {
             newPossibleName = `${taskName}_${counter}`
-            let availableName = true
+            let foundName = tasks.some(task => task.name == newPossibleName)
 
-
-            for (let task of taskSet.values()) {
-                if (task.name == newPossibleName) {
-                    availableName = false
-                }
-            }
-            if (availableName)
+            if (!foundName)
                 break
+
             counter++
         }
         return newPossibleName
@@ -138,7 +141,7 @@ export class TaskGraph {
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
                 task = new Task(taskName, func, breakpoint)
-                this.marks.get(mark).add(task)
+                this.markToTasksMap.get(mark).push(task)
                 break
             }
             case HOOK_PLACE.LAYOUT: {
@@ -147,7 +150,7 @@ export class TaskGraph {
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
                 task = new Task(taskName, func, breakpoint)
-                this.marks.get(mark).add(task)
+                this.markToTasksMap.get(mark).push(task)
                 break
             }
             case HOOK_PLACE.RENDER: {
@@ -156,7 +159,7 @@ export class TaskGraph {
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
                 task = new Task(taskName, func, breakpoint)
-                this.marks.get(mark).add(task)
+                this.markToTasksMap.get(mark).push(task)
                 break
             }
             case HOOK_PLACE.CREATE_MARKTABLE: {
@@ -165,7 +168,7 @@ export class TaskGraph {
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
                 task = new Task(taskName, func, breakpoint)
-                this.marks.get(mark).add(task)
+                this.markToTasksMap.get(mark).push(task)
                 break
             }
             default: {
@@ -180,14 +183,14 @@ export class TaskGraph {
     }
 
     addMark(mark: any) {
-        if (!this.marks.has(mark)) {
+        if (!this.markToTasksMap.has(mark)) {
             this.markDependency.set(mark, new Set())
-            this.marks.set(mark, new Set<Task>())
+            this.markToTasksMap.set(mark, [])
         }
     }
 
     findMark(mark) {
-        for (let m of this.marks.keys()) {
+        for (let m of this.markToTasksMap.keys()) {
             if (m == mark)
                 return true
         }
@@ -195,16 +198,15 @@ export class TaskGraph {
     }
 
     findTask(task: Task | string) {
-        for (let [mark, taskSet] of this.marks.entries()) {
-            for (let t of taskSet.values()) {
-                if (task instanceof Task && t.name == task.name) {
-                    return true
-                } else if (typeof(task) == "string" && t.name == task){
-                    return true
-                }
+        for (let [mark, tasks] of this.markToTasksMap.entries()) {
+            for (let t of tasks) {
+                if (task instanceof Task && task.name == t.name)
+                    return t
+                if ((typeof(task) == "string") && t.name == task)
+                    return t
             }
         }
-        return false
+        return null
     }
 
     addDependency(dest: any, src: any, markDependency: boolean) {
@@ -229,104 +231,202 @@ export class TaskGraph {
     }
 
     topoSortMarks() {
-        let queue: any[] = []
-        let result: any[] = []
-        let indegree = new Map<any, number>()
-
-        for (let mark of this.markDependency.keys())
-            indegree.set(mark, 0)
-
         for (let [mark, dependentMarks] of this.markDependency.entries()) {
-            for (let m of dependentMarks.values())
-                indegree.set(m, indegree.get(m) + 1)
-        }
+            for (let m of dependentMarks.values()) {
+                /**
+                 * Add a dependency between the very last task of m and the very first task of m
+                 */
+                let srcTasks = this.markToTasksMap.get(mark)
+                let src = srcTasks[srcTasks.length - 1]
 
-        for (let [mark, count] of indegree.entries()){
-            if (count == 0)
-                queue.push(mark)
-        }
+                let destTasks = this.markToTasksMap.get(m)
+                let dest = destTasks[0]
 
-        while (queue.length != 0) {
-            let curr_mark = queue.shift()
-            result.push(curr_mark)
-
-            let neighbors = this.markDependency.get(curr_mark)
-
-            for (let n of neighbors) {
-                indegree.set(n, indegree.get(n) - 1)
-
-                if (indegree.get(n) == 0)
-                    queue.push(n)
+                this.addDependency(dest, src, false)
             }
         }
-
-        if (result.length != this.markDependency.size)
-            throw new Error("Cycle in graph!")
-
-        return result
+        this.tasksSorted = true
     }
 
+    // getLastTask(mark) {
+    //     let tasks = this.markToTasksMap.get(mark)
+    //     return tasks[tasks.length - 1]
+    // }
 
-    topoSortTasks() {
+
+    getStartingTasks() {
+        if (!this.tasksSorted)
+            this.topoSortMarks()
+
         let result: Task[] = []
 
-
-        let sortedMarks = this.topoSortMarks()
-        console.log("sortedMarks", sortedMarks)
-
-        for (let i = 0; i < sortedMarks.length; i++) {
-            let queue: Task[] = []
-            let indegree = new Map<Task, number>()
-            let taskSet = this.marks.get(sortedMarks[i])
-
-            for (let task of taskSet)
-                indegree.set(task, task.incoming.length)
-
-
-            for (let [task, count] of indegree.entries()){
-                if (count == 0)
-                    queue.push(task)
-            }
-
-            while (queue.length != 0) {
-                let curr_task = queue.shift()
-                result.push(curr_task)
-
-                let neighbors = curr_task.outgoing
-
-                for (let i = 0; i < neighbors.length; i++) {
-                    let nextPossibleTask = neighbors[i]
-
-                    indegree.set(nextPossibleTask, indegree.get(nextPossibleTask) - 1)
-
-                    if (indegree.get(nextPossibleTask) == 0)
-                        queue.push(nextPossibleTask)
-                }
+        for (let [mark, tasks] of this.markToTasksMap.entries()) {
+            for (let task of tasks) {
+                if (task.isComplete())
+                    continue
+                else if (task.incoming.length == 0)
+                    result.push(task)
+                else if (task.incoming.every((parent) => parent.isComplete()))
+                    result.push(task)
             }
 
         }
-        
-        console.log("result", result)
-        let totalTaskCount = [...this.marks.values()].reduce((sum, set) => sum + set.size, 0)
-
-        if (result.length != totalTaskCount)
-            throw new Error("Cycle in graph!")
 
         return result
     }
+
+    // async completeAllTasks(mark) {
+    //     let tasks = this.markToTasksMap.get(mark)
+    //     for (let i = 0; i < tasks.length; i++){
+    //         await tasks[i].run()
+    //     }
+    // }
 
     async execute() {
         if (!this.running)
             return Promise.resolve()
-        let sortedTasks = this.topoSortTasks()
-        for (let i = 0; i < sortedTasks.length; i++) {
-            await sortedTasks[i].run()
-        }
-        //sortedTasks.forEach(task => await task.run())
+        let startpoints = this.getStartingTasks()
+        console.log("startpoints", startpoints)
+
+        for (let i = 0; i < startpoints.length; i++)
+            await startpoints[i].run()
     }
 
-    visualize() {
+    visualize(svg) {
+        if (!this.tasksSorted)
+            this.topoSortMarks()
 
+        let g = new dagre.graphlib.Graph()
+
+        g.setGraph({})
+
+        g.setDefaultEdgeLabel(function() { return {}; });
+
+        let visited = new Set<Task>()
+
+        for (let [mark, tasks] of this.markToTasksMap.entries()) {
+            tasks.forEach(task => {
+                if (!visited.has(task)) {
+                    visited.add(task)
+                    g.setNode(task.name, {label: task.name, width: 100, height: 100})
+                    for (let outgoing of task.outgoing) {
+                        g.setEdge(task.name, outgoing.name)
+                    }
+                }
+            })
+        }
+
+        dagre.layout(g);
+
+        const graphWidth = g.graph().width
+        const graphHeight = g.graph().height
+        
+        const nodes = g.nodes().map(id => {
+            const node = g.node(id);
+            return { id, x: node.x, y: node.y};
+        });
+
+        const edges = g.edges().map(edge => {
+            const source = g.node(edge.v);
+            const target = g.node(edge.w);
+            return {
+            x1: source.x, y1: source.y,
+            x2: target.x, y2: target.y
+            };
+        });
+
+        console.log("nodes", nodes)
+        console.log("edges", edges)
+
+        const labels = g.nodes().map(id => {
+            const node = g.node(id)
+            return {text: id, x: node.x, y: node.y}
+        })
+        
+        let graph = OPlot.plot( {
+            marks: [
+                OPlot.dot(nodes, {x: "x", y: "y", r: 20, ariaLabel: "id"}),
+                OPlot.arrow(edges, {x1: "x1", y1: "y1", x2: "x2", y2: "y2"}),
+                OPlot.text(labels, {text: "text", x: "x", y: "y"})
+            ]
+        })
+
+        select(graph)
+            .selectAll(`g[aria-label='y-axis tick']`)
+            .style("visibility", "hidden");
+
+        select(graph)
+            .selectAll(`g[aria-label='y-axis tick label']`)
+            .style("visibility", "hidden");
+
+        select(graph)
+            .selectAll(`g[aria-label='x-axis tick']`)
+            .style("visibility", "hidden");
+              
+        select(graph)
+                .selectAll(`g[aria-label='x-axis tick label']`)
+                .style("visibility", "hidden");
+        
+        const canvasWidth = 1200
+        const canvasHeight = 800
+
+        select(graph)
+            .attr("width", canvasWidth)
+            .attr("height", canvasHeight)
+
+        let node = select(svg)
+
+        node.style("width", `${canvasWidth}px`)
+                .style("height", `${canvasHeight}px`);
+        
+        let graphCanvas = node.append("svg:g")
+                .classed("graphCanvas", true);
+
+        const tooltip = document.createElement("div")
+        tooltip.style.position = "absolute";
+        tooltip.style.background = "white";
+        tooltip.style.border = "1px solid black";
+        tooltip.style.borderRadius = "5px";
+        tooltip.style.padding = "5px";
+        tooltip.style.boxShadow = "0 2px 5px rgba(0, 0, 0, 0.2)";
+        tooltip.style.display = "none";
+        tooltip.style.pointerEvents = "none";
+        document.body.appendChild(tooltip)
+
+        graph.querySelectorAll("circle")
+            .forEach(circle => {
+                let correspondingTask = this.findTask(circle.getAttribute("aria-label"))
+
+                const cx = parseFloat(circle.getAttribute("cx"))
+                const cy = parseFloat(circle.getAttribute("cy"))
+
+
+                circle.style.pointerEvents = "all"
+
+                circle.addEventListener("mouseover", function() {
+                    tooltip.style.display = "block";
+                    tooltip.innerHTML = `<strong>Output:</strong> ${JSON.stringify(correspondingTask.output)}`;
+
+                    const svg = circle.ownerSVGElement;
+
+                    const point = svg.createSVGPoint();
+                    point.x = parseFloat(circle.getAttribute("cx"));
+                    point.y = parseFloat(circle.getAttribute("cy"));
+
+                    const screenPoint = point.matrixTransform(svg.getScreenCTM());
+
+                    tooltip.style.left = `${screenPoint.x + 10}px`;
+                    tooltip.style.top = `${screenPoint.y}px`;
+
+                    circle.style.stroke = "red"
+                })
+                circle.addEventListener("mouseout", function() {
+                    tooltip.style.display = "none"
+                    circle.style.stroke = "black"
+                })
+            });
+        
+        (graphCanvas.node() as HTMLElement).appendChild(graph);
     }
 
     getTaskInput(task: Task) {
@@ -344,8 +444,9 @@ export class TaskGraph {
     }
 
     clear() {
-        this.marks.clear()
+        this.markToTasksMap.clear()
         this.markDependency.clear()
+        this.tasksSorted = false
     }
 }
 
