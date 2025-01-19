@@ -128,7 +128,28 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //Multiple Table Execise_Habits
+
+        if (0) { //Single Table 
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
+
+            await db.loadFromConnection()
+            //loads all tables and constraints from duck db
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+            
+            let info = c.dot("heart_disease_csv", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Age", fill: "Status"})
+        }
+        if (0) { //Multiple Table Execise_Habits 1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
@@ -149,11 +170,11 @@
             let habits = c.rect("Exercise_Habits", {...sq("Exercise_Habits")("x", "y"), fill: "none", stroke: "black"})
             let habitsLabel = c.text("Exercise_Habits", {x: habits.get("Exercise_Habits", "x"), y: habits.get("Exercise_Habits", "y"), text: "Exercise_Habits"})
             
-            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Age", fill: "Status"})
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Status", fill: "Age"})
 
             c.nest(info, habits)
         }
-        if (1) { //Multiple Table Habits Nested in Alcohol
+        if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
@@ -182,27 +203,33 @@
             c.nest(info, habits)
         }
 
-        if (0) { //Single Table
-            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+        if (1) { //Catagorical Scatter Plots
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
             await db.loadFromConnection()
             //loads all tables and constraints from duck db
 
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            let c = new Canvas(db, {width: 1800, height: 1000}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
-            await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            await c.hier("heart_disease", ["Alcohol_Consumption", "Exercise_Habits", "Gender"])
             //Excercise_Habits("HAB")
             //Gender (HAB, GEN, ...)
             //hierarchy ~= normalization
             //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
+            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
+
+            //let habitsLabel = c.text("Alcohol_Consumption", {x: habits.get("Alcohol_Consumption", "x"), y: habits.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
             
-            let info = c.dot("heart_disease_csv", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Status", fill: "Age"})
+            let info = c.dot("Gender", {x: "Gender", y: "Age", r: "Status", fill: "BMI"})
 
-
+            c.nest(habits, alcohol)
+            c.nest(info, habits)
         }
 
 
