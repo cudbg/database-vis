@@ -128,7 +128,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) {
+        if (0) { //Multiple Table Execise_Habits
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
@@ -153,11 +153,60 @@
 
             c.nest(info, habits)
         }
-
-        if (1) {
-            await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
+        if (1) { //Multiple Table Habits Nested in Alcohol
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
-            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
+
+            await db.loadFromConnection()
+            //loads all tables and constraints from duck db
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease", ["Alcohol_Consumption", "Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
+            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
+
+            //let habitsLabel = c.text("Alcohol_Consumption", {x: habits.get("Alcohol_Consumption", "x"), y: habits.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
+            
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Age", r: "Status", fill: "Cholesterol_Level"})
+
+            c.nest(habits, alcohol)
+            c.nest(info, habits)
+        }
+
+        if (0) { //Single Table
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
+
+            await db.loadFromConnection()
+            //loads all tables and constraints from duck db
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+            
+            let info = c.dot("heart_disease_csv", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Status", fill: "Age"})
+
+
+        }
+
+
+        if (0) { //catagorical
             
             await db.loadFromConnection()
 
@@ -168,17 +217,64 @@
             window.c = c;
             window.db = db;
 
-            const o = {x: {domain: [0,60]}}
-            let Gender = c.dot("heart_disease_Gender", {y : "Gender", x: 10, fill: "Status"},o)
-            let Family_Heart_Disease = c.dot("heart_disease_Family_Heart_Disease", {y : "Family_Heart_Disease", x: 20, fill: "Status"},o)
-            let Alcohol_Consumption = c.dot("heart_disease_Alcohol_Consumption", {y : "Alcohol_Consumption", x: 30, fill: "Status"},o)
-            let Exercise_Habits = c.dot("heart_disease_Exercise_Habits", {y : "Exercise_Habits", x: 40, fill: "Status"},o)
-            let Stress_Level = c.dot("heart_disease_Stress_Level", {y : "Stress_Level", x: 50, fill: "Status"},o)
-            let Age = c.dot("heart_disease_Age", {y : "Age", x: 60, fill: "Status"},o)
+            await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
 
-            //let VT1 = c.link("heart_disease_fact", {x1: Gender.get("Gender", ['x']), y1: Gender.get("Gender", ['y']), x2: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y2: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), stroke: "Status"})
-            //let VT2 = c.link("heart_disease_fact", {x1: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y1: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), x2: Alcohol_Consumption.get("Alcohol_Consumption", ['x']), y2: Alcohol_Consumption.get("Alcohol_Consumption", ['y']), Stroke: "Status"})
+            const o = {x: {domain: [0,60]}}
+            const radius = 1000000000000
+            let Gender = c.dot("heart_disease_Gender", {y : "Gender", x: 10, fill: "Status", r: 10000000},o)
+            let Family_Heart_Disease = c.dot("heart_disease_Family_Heart_Disease", {y : "Family_Heart_Disease", x: 20, fill: "Status", r: radius},o)
+            let Alcohol_Consumption = c.dot("heart_disease_Alcohol_Consumption", {y : "Alcohol_Consumption", x: 30, fill: "Status", r: radius},o)
+            let Exercise_Habits = c.dot("heart_disease_Exercise_Habits", {y : "Exercise_Habits", x: 40, fill: "Status", r: radius},o)
+            let Stress_Level = c.dot("heart_disease_Stress_Level", {y : "Stress_Level", x: 50, fill: "Status", r: radius},o)
+            let Age = c.dot("heart_disease_Age", {y : "Age", x: 60, fill: "Status", r: radius},o)
+
+            let VT1 = c.link("heart_disease_fact", {x1: Gender.get("Gender", ['x']), y1: Gender.get("Gender", ['y']), x2: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y2: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), stroke: "Status"})
+            let VT2 = c.link("heart_disease_fact", {x1: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y1: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), x2: Alcohol_Consumption.get("Alcohol_Consumption", ['x']), y2: Alcohol_Consumption.get("Alcohol_Consumption", ['y']), stroke: "Status"})
+            let VT3 = c.link("heart_disease_fact", {x1: Alcohol_Consumption.get("Alcohol_Consumption", ['x']), y1: Alcohol_Consumption.get("Alcohol_Consumption", ['y']), x2: Exercise_Habits.get("Exercise_Habits", ['x']), y2: Exercise_Habits.get("Exercise_Habits", ['y']), stroke: "Status"})
+            let VT4 = c.link("heart_disease_fact", {x1: Exercise_Habits.get("Exercise_Habits", ['x']), y1: Exercise_Habits.get("Exercise_Habits", ['y']), x2: Stress_Level.get("Stress_Level", ['x']), y2: Stress_Level.get("Stress_Level", ['y']),  stroke: "Status"})
+            let VT5 = c.link("heart_disease_fact", {x1: Stress_Level.get("Stress_Level", ['x']), y1: Stress_Level.get("Stress_Level", ['y']), x2: Age.get("Age", ['x']), y2: Age.get("Age", ['y']),  stroke: "Status"})
+            
         }
+
+        if (0) { //nominal
+          
+          await db.loadFromConnection()
+
+
+                      //loads all tables and constraints from duck db
+
+
+          let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+          canvas = c
+          window.c = c;
+          window.db = db;
+
+
+          await db.normalize("heart_disease_csv", ["BMI", "Cholesterol_Level", "Sleep_Hours", "Triglyceride_Level", "Fasting_Blood_Sugar", "Status", "Age"], "heart_disease")
+          //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values.
+          await db.normalizeMany("heart_disease", ["BMI", "Cholesterol_Level", "Sleep_Hours", "Triglyceride_Level", "Fasting_Blood_Sugar", "Status", "Age"].map((a) => [a]))
+
+
+          const o = {x: {domain: [0,60]}}
+          const radius = 1000000000000
+          let BMI = c.dot("heart_disease_BMI", {y : "BMI", x: 10, fill: "Status", r: radius},o)
+          let Cholesterol_Level = c.dot("heart_disease_Cholesterol_Level", {y : "Cholesterol_Level", x: 20, fill: "Status", r: radius},o)
+          let Sleep_Hours = c.dot("heart_disease_Sleep_Hours", {y : "Sleep_Hours", x: 30, fill: "Status", r: radius},o)
+          let Triglyceride_Level = c.dot("heart_disease_Triglyceride_Level", {y : "Triglyceride_Level", x: 40, fill: "Status", r: radius},o)
+          let Fasting_Blood_Sugar = c.dot("heart_disease_Fasting_Blood_Sugar", {y : "Fasting_Blood_Sugar", x: 50, fill: "Status", r: radius},o)
+          let Age = c.dot("heart_disease_Age", {y : "Age", x: 60, fill: "Status", r: radius},o)
+
+
+          let VT1 = c.link("heart_disease_fact", {x1: BMI.get("BMI", ['x']), y1: BMI.get("BMI", ['y']), x2: Cholesterol_Level.get("Cholesterol_Level", ['x']), y2: Cholesterol_Level.get("Cholesterol_Level", ['y']), stroke: "Status"})
+          let VT2 = c.link("heart_disease_fact", {x1: Cholesterol_Level.get("Cholesterol_Level", ['x']), y1: Cholesterol_Level.get("Cholesterol_Level", ['y']), x2: Sleep_Hours.get("Sleep_Hours", ['x']), y2: Sleep_Hours.get("Sleep_Hours", ['y']), stroke: "Status"})
+          let VT3 = c.link("heart_disease_fact", {x1: Sleep_Hours.get("Sleep_Hours", ['x']), y1: Sleep_Hours.get("Sleep_Hours", ['y']), x2: Triglyceride_Level.get("Triglyceride_Level", ['x']), y2: Triglyceride_Level.get("Triglyceride_Level", ['y']), stroke: "Status"})
+          let VT4 = c.link("heart_disease_fact", {x1: Triglyceride_Level.get("Triglyceride_Level", ['x']), y1: Triglyceride_Level.get("Triglyceride_Level", ['y']), x2: Fasting_Blood_Sugar.get("Fasting_Blood_Sugar", ['x']), y2: Fasting_Blood_Sugar.get("Fasting_Blood_Sugar", ['y']),  stroke: "Status"})
+          let VT5 = c.link("heart_disease_fact", {x1: Fasting_Blood_Sugar.get("Fasting_Blood_Sugar", ['x']), y1: Fasting_Blood_Sugar.get("Fasting_Blood_Sugar", ['y']), x2: Age.get("Age", ['x']), y2: Age.get("Age", ['y']),  stroke: "Status"})
+         
+      }
+
 
         if (0) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
