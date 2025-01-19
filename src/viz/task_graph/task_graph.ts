@@ -216,8 +216,6 @@ export class TaskGraph {
             this.markDependency.get(src).add(dest)
 
         } else {
-            console.log("src", src)
-            console.log("dest", dest)
             if (!this.findTask(dest))
                 throw new Error("No such destination task")
     

@@ -59,6 +59,10 @@
             {
                 name: "hrdata",
                 url: "/HRDataset_v14.csv"
+            },
+            {
+                name: "heart_disease_csv",
+                url: "/clean_heart_disease.csv"
             }]
         });
         db_up = await (async function dbGoLive(duckdb) {
@@ -125,6 +129,26 @@
         let canvas
 
         if (0) {
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let habits = c.rect("Exercise_Habits", {...sq("Exercise_Habits")("x", "y"), fill: "none", stroke: "black"})
+            let habitsLabel = c.text("Exercise_Habits", {x: habits.get("Exercise_Habits", "x"), y: habits.get("Exercise_Habits", "y"), text: "Exercise_Habits"})
+            
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "BMI", r: "Blood_Pressure", fill: "Status"})
+
+            c.nest(info, habits)
+        }
+        if (1) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}
@@ -476,7 +500,7 @@
             c.nest(rect2, rect1)
         }
 
-        if (1) { /* airport nodelink */
+        if (0) { /* airport nodelink */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})

@@ -174,6 +174,10 @@ export class Canvas implements IMark {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
+    console.log("innerTable", innerTable)
+    console.log("outerTable", outerTable)
+
+    console.log("all constraints", this.db.constraints)
     let path = this.db.getFkPath(innerTable, outerTable)
 
     if (!path)
@@ -498,14 +502,20 @@ export class Canvas implements IMark {
     return this.node.node();
   }
 
-  async hier(tablename: string, attrHierarchy: string []) {
+  async hier(tablename: string, attrHierarchy: string[]) {
     let newTableNames = attrHierarchy.slice()
     let currTable = this.db.table(tablename)
     let prevTable = null
     let prevKeys = null
+    let rest = currTable.schema.except([...attrHierarchy, IDNAME]).attrs
+    console.log("rest hier", rest)
 
     for (let i = 0; i < attrHierarchy.length; i++) {
       let currAttrs = attrHierarchy.slice(0, i + 1)
+      if (i == attrHierarchy.length - 1) {
+        currAttrs = currAttrs.concat(rest)
+      }
+      
       let select = currTable.schema.pick(currAttrs).asObject()
       let newTable = await currTable.distinctproject(select, newTableNames[i])
       newTable.keys(IDNAME)
