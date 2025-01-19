@@ -62,7 +62,7 @@
             },
             {
                 name: "heart_disease_csv",
-                url: "/clean_heart_disease.csv"
+                url: "/clean_heart_disease_NAMED.csv"
             }]
         });
         db_up = await (async function dbGoLive(duckdb) {
@@ -130,8 +130,10 @@
 
         if (0) {
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
             await db.loadFromConnection()
+            //loads all tables and constraints from duck db
 
             let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
             canvas = c
@@ -139,16 +141,46 @@
             window.db = db;
 
             await c.hier("heart_disease", ["Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
             //await db.normalize("Gender", ["Gender"], "gender_only", "info")
 
             let habits = c.rect("Exercise_Habits", {...sq("Exercise_Habits")("x", "y"), fill: "none", stroke: "black"})
             let habitsLabel = c.text("Exercise_Habits", {x: habits.get("Exercise_Habits", "x"), y: habits.get("Exercise_Habits", "y"), text: "Exercise_Habits"})
             
-            let info = c.dot("Gender", {x: "Blood_Pressure", y: "BMI", r: "Blood_Pressure", fill: "Status"})
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Age", fill: "Status"})
 
             c.nest(info, habits)
         }
+
         if (1) {
+            await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
+            
+            await db.loadFromConnection()
+
+                        //loads all tables and constraints from duck db
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            const o = {x: {domain: [0,60]}}
+            let Gender = c.dot("heart_disease_Gender", {y : "Gender", x: 10, fill: "Status"},o)
+            let Family_Heart_Disease = c.dot("heart_disease_Family_Heart_Disease", {y : "Family_Heart_Disease", x: 20, fill: "Status"},o)
+            let Alcohol_Consumption = c.dot("heart_disease_Alcohol_Consumption", {y : "Alcohol_Consumption", x: 30, fill: "Status"},o)
+            let Exercise_Habits = c.dot("heart_disease_Exercise_Habits", {y : "Exercise_Habits", x: 40, fill: "Status"},o)
+            let Stress_Level = c.dot("heart_disease_Stress_Level", {y : "Stress_Level", x: 50, fill: "Status"},o)
+            let Age = c.dot("heart_disease_Age", {y : "Age", x: 60, fill: "Status"},o)
+
+            //let VT1 = c.link("heart_disease_fact", {x1: Gender.get("Gender", ['x']), y1: Gender.get("Gender", ['y']), x2: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y2: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), stroke: "Status"})
+            //let VT2 = c.link("heart_disease_fact", {x1: Family_Heart_Disease.get("Family_Heart_Disease", ['x']), y1: Family_Heart_Disease.get("Family_Heart_Disease", ['y']), x2: Alcohol_Consumption.get("Alcohol_Consumption", ['x']), y2: Alcohol_Consumption.get("Alcohol_Consumption", ['y']), Stroke: "Status"})
+        }
+
+        if (0) {
             let tables = {t1: "TimeProvince", t2: "Weather"}
             let selectCols = {TimeProvince: ["date", "province", "confirmed"], Weather: ["avg_temp"]}
             let joinKeys = {date: "date", province: "province"}

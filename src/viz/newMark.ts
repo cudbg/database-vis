@@ -385,6 +385,8 @@ export class Mark {
         return {othermark, constraint, othervattr, callback}
       }
 
+      console.log("all constraints", this.c.db.constraints)
+
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
         if (!(constraint instanceof FKConstraint))
           continue
@@ -394,6 +396,8 @@ export class Mark {
          * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
          */
         let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
+        console.log("check", validFkConstraint)
+        console.log("curr con", constraint)
 
         if (validFkConstraint) {
           /**
@@ -404,6 +408,7 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
+          console.log("path",path)
 
           if (!path)
             throw new Error("No possible path!")
