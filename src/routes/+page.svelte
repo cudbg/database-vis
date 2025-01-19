@@ -222,14 +222,17 @@
             //await db.normalize("Gender", ["Gender"], "gender_only", "info")
 
             let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
-            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
+            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", y: 0, fill: "none", stroke: "black"})
 
-            //let habitsLabel = c.text("Alcohol_Consumption", {x: habits.get("Alcohol_Consumption", "x"), y: habits.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
+            let alcoholLabel = c.text("Alcohol_Consumption", {x: alcohol.get("Alcohol_Consumption", "x"), y: alcohol.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
+            //let habitsLabel = c.text("Exercise_Habits", {x: habits.get("Exercise_Habits", "x"), y: habits.get("Exercise_Habits", "y"), text: "Exercise_Habits"})
+
             
             let info = c.dot("Gender", {x: "Gender", y: "Age", r: "Status", fill: "BMI"})
 
             c.nest(habits, alcohol)
             c.nest(info, habits)
+            //c.nest(habitsLabel, alcohol)
         }
 
 
