@@ -907,7 +907,7 @@ export class Mark {
         return []
       }
 
-      let channels = {
+      let channels: {[key: string]: any[]} = {
         [IDNAME]: [...data[IDNAME]]
       };
 
@@ -1001,6 +1001,14 @@ export class Mark {
             channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
           }
         }
+      }
+
+      if ("strokeWidth" in channels) {
+        let strokeWidths = channels["strokeWidth"]
+        let minimumWidth = Math.min(...strokeWidths)
+        let result = strokeWidths.map((width) => (width/minimumWidth) * 10)
+
+        channels["strokeWidth"] = result
       }
       return channels;
     }
@@ -1294,6 +1302,7 @@ export class Mark {
      */
     getMarkInfoNormal(mark, data, crow) {
       let markInfo = []
+      let marktype = this.marktype
       
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -1317,8 +1326,30 @@ export class Mark {
                 continue
               else if (attrName == `data_${IDNAME}`)
                 markAttributes[IDNAME] = parseInt(attrValue);
-              else
+              else if (attrName == "d" && marktype == "link") {
+                const regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                const match = attrValue.match(regex)
+
+                if (match) {
+                  let x1 = parseFloat(match[1])
+                  let y1 = parseFloat(match[2])
+                  let x2 = parseFloat(match[3])
+                  let y2 = parseFloat(match[4])
+
+                  markAttributes["x1"] = x1
+                  markAttributes["x2"] = x2
+                  markAttributes["y1"] = y1
+                  markAttributes["y2"] = y2
+                } else {
+                  /**
+                   * Should never end up here
+                   */
+                  throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                }
+              } else {
+                attrName = attrName.replace(/-/g, "_")
                 markAttributes[attrName] = attrValue;
+              }
           }
           markInfo.push(markAttributes)
       })
