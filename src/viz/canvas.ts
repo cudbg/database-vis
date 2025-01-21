@@ -1,6 +1,6 @@
 import * as R from "ramda";
 import { creator, select } from "d3";
-import { Query, sql, agg, and, eq, column } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, column, count } from "@uwdata/mosaic-sql";
 import type { Database } from "./db";
 import { createView, IDNAME, Table } from "./table";
 import { Cardinality, FKConstraint } from "./constraint";
@@ -12,6 +12,7 @@ import { oplotUtils } from "./plotUtils/oplotUtils";
 import { RefMark } from "./ref";
 import { Scale, ScaleObject } from "./newScale";
 import { taskGraph } from "./task_graph/task_graph";
+import { idexpr } from "./id";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -529,6 +530,59 @@ export class Canvas implements IMark {
     }
     console.log("all constraints", this.db.constraints)
     return newTableNames
+  }
+
+  async createCountTable(tablename: string, groupBy: string|string[]) {
+    let t = this.db.table(tablename)
+
+    if (!t)
+      throw new Error(`No such table ${tablename}`)
+
+    groupBy = groupBy instanceof Array ? groupBy : [groupBy]
+    let groupByObj = {}
+    let newTableName = ""
+
+    groupBy.forEach((col) => {
+      groupByObj[col] = col
+      newTableName += `${col}_`
+    })
+
+    newTableName += "count"
+
+    let query = new Query()
+    query = query.select({
+      count: count(),
+      [IDNAME]: idexpr,
+      ...groupByObj
+    })
+    
+    query = query.groupby(groupBy)
+    query = query.from(tablename)
+
+    let newTable = await this.db.fromSql(query, newTableName)
+
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+    newTable.keys(groupBy)
+
+    for (const [cname, constraint] of Object.entries(this.db.constraints)) {
+      if (constraint.t2.internalname == tablename) {
+        if (constraint.Y.every(col => groupBy.includes(col))) {
+          let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newTable, Y: constraint.Y})
+          this.db.addConstraint(c)
+        }
+      } else if (constraint.t1.internalname == tablename) {
+        if (constraint.X.every(col => groupBy.includes(col))) {
+          let c = new FKConstraint({t1: newTable, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
+          this.db.addConstraint(c)
+        }
+      }
+    }
+
+    let c = new FKConstraint({t1: newTable, X: groupBy, t2: t, Y: groupBy})
+    this.db.addConstraint(c)
+
+    return newTableName
   }
 
 }

@@ -396,8 +396,6 @@ export class Mark {
          * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
          */
         let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
-        console.log("check", validFkConstraint)
-        console.log("curr con", constraint)
 
         if (validFkConstraint) {
           /**
