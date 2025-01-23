@@ -527,16 +527,10 @@ export class Mark {
         return channelObj
 
       } else {
-        console.log("rows runLayoutTask", rows)
-
         this.pickupReferences(rows)
 
         let cols = this.rowsToCols(rows)
-        console.log("cols runLayoutTask", cols)
-
-
         let channels = this.applychannels(cols)
-        console.log("channels runLayoutTask", channels)
   
         channels = this.doLayout(channels, outer, dummyroot)
   
@@ -969,8 +963,6 @@ export class Mark {
                     if (visualAttr == "x1" 
                       || visualAttr == "x2" 
                       || visualAttr == "x") {
-                        console.log("visualAttr", visualAttr)
-                        console.log("obj", obj)
                         arr = arr.map(elem => elem + obj.data_xoffset)
                       }
                     else if (visualAttr == "y1" 
@@ -1642,12 +1634,10 @@ export class Mark {
     }
 
     pickupReferences(rows) {
-      console.log("rows pickupref", rows)
       for (let i = 0; i < this.channels.length; i++) {
         let {mark, visualAttr, isGet} = this.channels[i]
 
         if (isGet) {
-          console.log("isGet visualAttr", visualAttr)
           let ref = `${visualAttr}_ref`
           /**
            * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
@@ -1662,8 +1652,6 @@ export class Mark {
           }
         }
       }
-
-      console.log("referencedMarks", this.referencedMarks)
     }
 
 

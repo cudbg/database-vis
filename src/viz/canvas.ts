@@ -650,9 +650,6 @@ export class Canvas implements IMark {
       };
     });
 
-    console.log("nodes erdiagram", nodes)
-    console.log("edges erdiagram", edges)
-
     return Promise.resolve()
   }
 }
