@@ -11,7 +11,7 @@ import * as Plot from "@observablehq/plot";
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { RefMark } from "./ref";
 import { Scale, ScaleObject } from "./newScale";
-import { taskGraph } from "./task_graph/task_graph";
+import { TaskGraph } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
@@ -63,6 +63,7 @@ export class Canvas implements IMark {
 
   node;
   private _parent;
+  taskGraph: taskGraph
 
 
   constructor(db, options?, plotConfig?) {
@@ -85,6 +86,8 @@ export class Canvas implements IMark {
       height = 600
     } = options;
     this.options = { ...options, x, y, width, height }
+
+    this.taskGraph = new TaskGraph(false)
   }
 
   async init() { 
@@ -500,6 +503,7 @@ export class Canvas implements IMark {
       let node = await m.render(context);
      (g.node() as HTMLElement).appendChild(node);
     }
+    await this.taskGraph.execute()
     return this.node.node();
   }
 
@@ -583,6 +587,10 @@ export class Canvas implements IMark {
     this.db.addConstraint(c)
 
     return newTableName
+  }
+
+  async erDiagram() {
+
   }
 
 }

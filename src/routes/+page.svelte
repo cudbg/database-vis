@@ -10,7 +10,6 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
-    import { taskGraph } from "../viz/task_graph/task_graph";
 
 
     let innerWidth = 10000;
@@ -115,7 +114,6 @@
             SELECT date, province, avg_temp FROM Weather;
             `
         )
-        taskGraph.clear()
         })(duckdb);
 
 
@@ -736,6 +734,28 @@
 
         }
 
+        /**
+         * API:
+         * (create marks ...)
+         * marks have been rendered and then we do layout
+         * Plan:
+         * finish rendering all marks first (tables, attributes, fkeys)
+         * program sees a call to erDiagram with given marks and runs layout on them
+         * Drop marktable for marks used in er diagram and recreate them with new mark
+         * 
+         * new task needed to do this new functionality. possibley called composite task (because it is composed of different marks)
+         * 
+         * 
+         * Need to shift call to render inside taskGraph.execute()
+         * taskGraph object should not be global but re-constructed on refresh
+         * svgs that reference other svgs should in general contain ids of their references. 
+         * 
+         * 
+         * 
+         * Proposed api:
+         * c.erDiagram(tables, columns, fkeys) //use this at the end of the if block
+         * 
+        */
         if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
@@ -785,8 +805,6 @@
 
         }
         (await canvas.render({ document, svg }));
-        taskGraph.visualize(graphSvg)
-        await taskGraph.execute()
 
         /*
         c1: T -1-n- S

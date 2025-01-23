@@ -15,7 +15,7 @@ import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
 import { Scale, ScaleObject } from "./newScale";
-import { HOOK_PLACE, taskGraph } from "./task_graph/task_graph";
+import { HOOK_PLACE } from "./task_graph/task_graph";
 
 /**
  * Used in QueryItem
@@ -235,7 +235,7 @@ export class Mark {
         this.innerToOuter = null
         this.idVisualAttrMap = new Map<number, Set<string>>()
 
-        taskGraph.addMark(this)
+        this.c.taskGraph.addMark(this)
         this.init()
     }
 
@@ -273,7 +273,7 @@ export class Mark {
               this._scales.y = {type: "identity"}
             
             this.c.registerRefMark(othermark, this)
-            taskGraph.addDependency(this, othermark, true)
+            this.c.taskGraph.addDependency(this, othermark, true)
           }
           else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
@@ -594,13 +594,13 @@ export class Mark {
     async doWorkFlow(root, outer, isNested) {
       let dummyroot = this.makeDummyRoot()
 
-      let queryTask = await taskGraph.addTask(
+      let queryTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.SELECT_QUERY, 
         this, 
         async () => {return await this.runQueryTask(root, outer, isNested)}, 
         false)
 
-      let layoutTask = await taskGraph.addTask(
+      let layoutTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.LAYOUT, 
         this, 
         async () => {
@@ -609,9 +609,9 @@ export class Mark {
           return channels
         }, false)
       
-      taskGraph.addDependency(layoutTask, queryTask, false)
+      this.c.taskGraph.addDependency(layoutTask, queryTask, false)
 
-      let renderTask = await taskGraph.addTask(
+      let renderTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.RENDER, 
         this, 
         async () => {
@@ -620,9 +620,9 @@ export class Mark {
           return markInfo
         }, false)
       
-      taskGraph.addDependency(renderTask, layoutTask, false)
+      this.c.taskGraph.addDependency(renderTask, layoutTask, false)
 
-      let cleanupTask = await taskGraph.addTask(
+      let cleanupTask = await this.c.taskGraph.addTask(
           HOOK_PLACE.CREATE_MARKTABLE, 
           this, 
           async () => {
@@ -630,7 +630,7 @@ export class Mark {
             await this.runCleanupTask(root, dummyroot, markInfo)
           }, false)
       
-      taskGraph.addDependency(cleanupTask, renderTask, false)
+      this.c.taskGraph.addDependency(cleanupTask, renderTask, false)
     }
 
     constructQuery(nest?) {

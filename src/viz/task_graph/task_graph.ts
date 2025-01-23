@@ -449,5 +449,3 @@ export class TaskGraph {
         this.tasksSorted = false
     }
 }
-
-export let taskGraph = new TaskGraph(true)
