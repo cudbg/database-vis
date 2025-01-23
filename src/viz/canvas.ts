@@ -476,7 +476,7 @@ export class Canvas implements IMark {
   async render(context) {
     context.document ??= document;
     let svg = context.svg;
-    this.node = svg? select(svg) : null;;
+    this.node = svg? select(svg) : null;
     let g = null;
     if (svg == null && this._parent == null) {
       this.node = select(
@@ -503,6 +503,7 @@ export class Canvas implements IMark {
       let node = await m.render(context);
      (g.node() as HTMLElement).appendChild(node);
     }
+    this.taskGraph.visualize(context.graphSvg)
     await this.taskGraph.execute()
     return this.node.node();
   }

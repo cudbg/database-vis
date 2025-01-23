@@ -804,7 +804,7 @@
 
 
         }
-        (await canvas.render({ document, svg }));
+        (await canvas.render({ document, svg, graphSvg }));
 
         /*
         c1: T -1-n- S
