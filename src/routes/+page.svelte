@@ -745,9 +745,13 @@
                     (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
                     
             `)
-            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
+            // await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
+            // await db.conn.exec(`INSERT INTO fkeys VALUES
+            //         (2, 'coursenum', 0, 'coursenum')`)
+
+            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, tid2 int, FOREIGN KEY(tid1) references tables(tid), FOREIGN KEY(tid2) references tables(tid))`)
             await db.conn.exec(`INSERT INTO fkeys VALUES
-                    (2, 'coursenum', 0, 'coursenum')`)
+                    (2, 0)`)
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -755,7 +759,7 @@
             window.c = c;
             window.db = db;
 
-            let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
+            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
             let vcolname= c.text("columns", {
                                             y: 'ordinal_position',
                                             text: "colname",
@@ -774,10 +778,10 @@
             c.nest(vtype, vtables, "tid")
 
             let vfkeys = c.link("fkeys", {
-                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
-                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
-                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
-                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
+                                    x1: vtables.get(["tid1"], ['x']), 
+                                    y1: vtables.get(["tid1"], ['y']), 
+                                    x2: vtables.get(["tid2"], ['x']), 
+                                    y2: vtables.get(["tid2"], ['y'])})
             
             await c.erDiagram(vtables, vfkeys)
         }

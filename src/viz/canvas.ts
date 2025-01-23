@@ -608,10 +608,8 @@ export class Canvas implements IMark {
   async runERDiagramTask(tablesMark: Mark, fkeysMark: Mark) {
     console.log("trigger erDiagram")
     let tablesMarkInfo = tablesMark.markInfoCache
-    let fkeysMarkInfo = fkeysMark.markInfoCache
 
     console.log("tablesMarkInfo", tablesMarkInfo)
-    console.log("fkeysMarkInfo", fkeysMarkInfo)
 
     console.log(tablesMarkInfo.size)
 
@@ -624,7 +622,16 @@ export class Canvas implements IMark {
     for (let [id, markInfo] of tablesMarkInfo.entries())
       g.setNode(id.toString(), {label: id.toString(), width: markInfo.width, height: markInfo.height, shape: "rect"})
 
-
+    /**
+     * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
+     * AND
+     * x1 == y1 AND x2 == y2. MASSIVE ASSUMPTION MADE HERE
+     */
+    for (let [key, value] of fkeysMark.referencedMarks) {
+      let {x1_ref, x2_ref, y1_ref, y2_ref} = value
+      g.setEdge(x1_ref.toString(), x2_ref.toString())
+    
+    }
 
     dagre.layout(g)
 
@@ -633,7 +640,18 @@ export class Canvas implements IMark {
       return { id, x: node.x, y: node.y};
     });
 
+
+    const edges = g.edges().map(edge => {
+      const source = g.node(edge.v);
+      const target = g.node(edge.w);
+      return {
+      x1: source.x, y1: source.y,
+      x2: target.x, y2: target.y
+      };
+    });
+
     console.log("nodes erdiagram", nodes)
+    console.log("edges erdiagram", edges)
 
     return Promise.resolve()
   }

@@ -190,7 +190,12 @@ export class Mark {
     outermark: Mark;
     innerToOuter: Map<number, number>;
     level: number;
-    idVisualAttrMap: Map<number, Set<string>>;
+    idVisualAttrMap: Map<number, Set<string>>; /* for handling level differences between marks */
+
+    /**
+     * Other mark + visual attr of this mark + other id -> bag of ids for this mark
+     */
+    referencedMarks: Map<number, {}>;
 
     
     /**
@@ -234,6 +239,7 @@ export class Mark {
         this.markInfoCache = new Map<number, {}>()
         this.innerToOuter = null
         this.idVisualAttrMap = new Map<number, Set<string>>()
+        this.referencedMarks = new Map<number, {}>()
 
         this.c.taskGraph.addMark(this)
         this.init()
@@ -506,7 +512,9 @@ export class Mark {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
-  
+
+          this.pickupReferences(children)
+
           let cols = this.rowsToCols(children)
           let channels = this.applychannels(cols)
   
@@ -519,8 +527,16 @@ export class Mark {
         return channelObj
 
       } else {
+        console.log("rows runLayoutTask", rows)
+
+        this.pickupReferences(rows)
+
         let cols = this.rowsToCols(rows)
+        console.log("cols runLayoutTask", cols)
+
+
         let channels = this.applychannels(cols)
+        console.log("channels runLayoutTask", channels)
   
         channels = this.doLayout(channels, outer, dummyroot)
   
@@ -600,7 +616,6 @@ export class Mark {
         async () => {
           let query = queryTask.getOutput()
           let rows = await this.c.db.conn.exec(query)
-          console.log("rows", rows)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
@@ -926,7 +941,6 @@ export class Mark {
             arr = this.handleCallback(currItem, data)
 
           if (mark.level != this.level){
-            console.log("triggered level diff")
             if (visualAttr == "x1" 
               || visualAttr == "x2" 
               || visualAttr == "x"
@@ -955,6 +969,8 @@ export class Mark {
                     if (visualAttr == "x1" 
                       || visualAttr == "x2" 
                       || visualAttr == "x") {
+                        console.log("visualAttr", visualAttr)
+                        console.log("obj", obj)
                         arr = arr.map(elem => elem + obj.data_xoffset)
                       }
                     else if (visualAttr == "y1" 
@@ -1156,7 +1172,6 @@ export class Mark {
     }
 
     setXTranslate(mark, data) {
-      console.log("setXTranslate")
       let thisref = this
 
       maybeselection(mark)
@@ -1198,7 +1213,6 @@ export class Mark {
     }
 
      setYTranslate(mark, data) {
-      console.log("setYTranslate")
       let thisref = this
 
       maybeselection(mark)
@@ -1522,6 +1536,8 @@ export class Mark {
          */
 
         let obj = {}
+        let data_xoffset = markInfo[i]["data_xoffset"]
+        let data_yoffset = markInfo[i]["data_yoffset"]
 
         if (this.marktype == "link") {
           let x1 = markInfo[i]["x1"]
@@ -1533,11 +1549,11 @@ export class Mark {
         } else {
           let x = markInfo[i]["x"]
           let y = markInfo[i]["y"]
-          //let data_xoffset = markInfo[i]["data_xoffset"]
-          //let data_yoffset = markInfo[i]["data_yoffset"]
-          //let obj = {x,y,data_xoffset, data_yoffset}
           obj = {x,y}
         }
+        obj["data_xoffset"] = data_xoffset
+        obj["data_yoffset"] = data_yoffset
+
         if (markInfo[i]["width"])
           obj["width"] = markInfo[i]["width"]
 
@@ -1552,7 +1568,6 @@ export class Mark {
          */
         delete markInfo[i]["data_xoffset"]
         delete markInfo[i]["data_yoffset"]
-
       }
     }
 
@@ -1584,18 +1599,6 @@ export class Mark {
         if (k == IDNAME) {
           columnNames.push(`${k} int primary key`)
         } else {
-
-          /*
-          turns cx, x1 into x, cy, y1 into y etc.
-          We don't want to insert a cx column into the marktable
-          Eg.
-          because some other mark way want to get x attribute from this mark
-          and we want that other mark to find x attribute
-          */
-          let aliasObj = this.mark.alias2scale
-          if (Object.keys(aliasObj).includes(k)) {
-            k = aliasObj[k] 
-          }
 
           if (isNaN(Number(v))) {
             columnNames.push(`${k} string`)
@@ -1636,6 +1639,31 @@ export class Mark {
         values.push(rowValues);
       }
       return values
+    }
+
+    pickupReferences(rows) {
+      console.log("rows pickupref", rows)
+      for (let i = 0; i < this.channels.length; i++) {
+        let {mark, visualAttr, isGet} = this.channels[i]
+
+        if (isGet) {
+          console.log("isGet visualAttr", visualAttr)
+          let ref = `${visualAttr}_ref`
+          /**
+           * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
+           */
+          for (let i = 0; i < rows.length; i++) {
+            if (this.referencedMarks.has(rows[i][IDNAME])) {
+              let obj = this.referencedMarks.get(rows[i][IDNAME])
+              obj[ref] = rows[i][ref]
+            } else {
+              this.referencedMarks.set(rows[i][IDNAME], {[ref]: rows[i][ref]})
+            }
+          }
+        }
+      }
+
+      console.log("referencedMarks", this.referencedMarks)
     }
 
 
