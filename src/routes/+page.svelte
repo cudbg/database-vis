@@ -779,7 +779,7 @@
                                     x2: vcolname.get(["tid2", "col2"], ['x']), 
                                     y2: vcolname.get(["tid2", "col2"], ['y'])})
             
-            await c.erDiagram(vtables, vcolname, vfkeys)
+            await c.erDiagram(vtables, vfkeys)
         }
         (await canvas.render({ document, svg, graphSvg }));
 

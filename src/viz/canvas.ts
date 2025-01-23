@@ -64,7 +64,7 @@ export class Canvas implements IMark {
 
   node;
   private _parent;
-  taskGraph: taskGraph
+  taskGraph: TaskGraph
 
 
   constructor(db, options?, plotConfig?) {
@@ -88,7 +88,7 @@ export class Canvas implements IMark {
     } = options;
     this.options = { ...options, x, y, width, height }
 
-    this.taskGraph = new TaskGraph(false)
+    this.taskGraph = new TaskGraph(true)
   }
 
   async init() { 
@@ -504,8 +504,9 @@ export class Canvas implements IMark {
       let node = await m.render(context);
      (g.node() as HTMLElement).appendChild(node);
     }
-    this.taskGraph.visualize(context.graphSvg)
+    
     await this.taskGraph.execute()
+    this.taskGraph.visualize(context.graphSvg)
     return this.node.node();
   }
 
@@ -591,34 +592,48 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
-    this.taskGraph.addMark("erdiagram")
-    this.taskGraph.addDependency("erdiagram", tablesMark, true)
-    this.taskGraph.addDependency("erdiagram", attributesMark, true)
-    this.taskGraph.addDependency("erdiagram", fkeysMark, true)
+  async erDiagram(tablesMark: Mark, fkeysMark: Mark) {
+    let placeholder = "erdiagram"
+    this.taskGraph.addMark(placeholder)
+    this.taskGraph.addDependency(placeholder, tablesMark, true)
+    this.taskGraph.addDependency(placeholder, fkeysMark, true)
 
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
-        "erdiagram", 
-        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark)}, 
+        placeholder, 
+        async () => {return await this.runERDiagramTask(tablesMark, fkeysMark)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+  async runERDiagramTask(tablesMark: Mark, fkeysMark: Mark) {
     console.log("trigger erDiagram")
     let tablesMarkInfo = tablesMark.markInfoCache
-    let attributesMarkInfo = attributesMark.markInfoCache
     let fkeysMarkInfo = fkeysMark.markInfoCache
 
     console.log("tablesMarkInfo", tablesMarkInfo)
-    console.log("attributesMarkInfo", attributesMarkInfo)
     console.log("fkeysMarkInfo", fkeysMarkInfo)
+
+    console.log(tablesMarkInfo.size)
 
     let g = new dagre.graphlib.Graph()
     
     g.setGraph({})
 
     g.setDefaultEdgeLabel(function() { return {}; });
+
+    for (let [id, markInfo] of tablesMarkInfo.entries())
+      g.setNode(id.toString(), {label: id.toString(), width: markInfo.width, height: markInfo.height, shape: "rect"})
+
+
+
+    dagre.layout(g)
+
+    const nodes = g.nodes().map(id => {
+      const node = g.node(id);
+      return { id, x: node.x, y: node.y};
+    });
+
+    console.log("nodes erdiagram", nodes)
 
     return Promise.resolve()
   }

@@ -173,6 +173,9 @@ export class TaskGraph {
                 break
             }
             case HOOK_PLACE.COMPOSITE: {
+                /**
+                 * in this case mark is just a string like er diagram
+                 */
                 let taskName = "COMPOSITE"
                 // if (this.findTask(taskName))
                 //     taskName = this.generateNewTaskName(hook_place, mark, taskName)

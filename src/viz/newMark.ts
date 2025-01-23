@@ -600,6 +600,7 @@ export class Mark {
         async () => {
           let query = queryTask.getOutput()
           let rows = await this.c.db.conn.exec(query)
+          console.log("rows", rows)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
@@ -866,6 +867,11 @@ export class Mark {
             let {dataAttr, renameAs} = columnObj
             let tableName = tableRenameMap.get(source.internalname)
             query = query.select({[renameAs]: column(tableName, dataAttr)})
+
+            /**
+             * Experimental feature
+             */
+            query = query.select({[`${renameAs}_ref`]: column(tableName, IDNAME)})
           }
         }
         pathCounter++
@@ -1494,13 +1500,16 @@ export class Mark {
            * because some other mark may want to get x attribute from this mark
            * and we want that other mark to find x attribute
            */
-          let aliasObj = this.mark.alias2scale
-          if (Object.keys(aliasObj).includes(key)) {
-            
-            delete markInfo[i][key]
+          if (key == "cx") {
+            markInfo[i]["x"] = value
+            key = "x"
+            delete markInfo[i]["cx"]
+          }
 
-            key = aliasObj[key]
-            markInfo[i][key] = value
+          if (key == "cy") {
+            markInfo[i]["y"] = value
+            key = "y"
+            delete markInfo[i]["y"]
           }
 
           if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
@@ -1508,16 +1517,27 @@ export class Mark {
             markInfo[i][key] = numValue
           }
         }
-
-        /**
+         /**
          * Populate markInfoCache here so that other marks can reference it if needed
          */
-        let x = markInfo[i]["x"]
-        let y = markInfo[i]["y"]
-        let data_xoffset = markInfo[i]["data_xoffset"]
-        let data_yoffset = markInfo[i]["data_yoffset"]
-        
-        let obj = {x,y,data_xoffset, data_yoffset}
+
+        let obj = {}
+
+        if (this.marktype == "link") {
+          let x1 = markInfo[i]["x1"]
+          let x2 = markInfo[i]["x2"]
+          let y1 = markInfo[i]["y1"]
+          let y2 = markInfo[i]["y2"]
+
+          obj = {x1, y1, x2, y2}
+        } else {
+          let x = markInfo[i]["x"]
+          let y = markInfo[i]["y"]
+          //let data_xoffset = markInfo[i]["data_xoffset"]
+          //let data_yoffset = markInfo[i]["data_yoffset"]
+          //let obj = {x,y,data_xoffset, data_yoffset}
+          obj = {x,y}
+        }
         if (markInfo[i]["width"])
           obj["width"] = markInfo[i]["width"]
 
