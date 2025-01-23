@@ -5,10 +5,11 @@ import { creator, select } from "d3";
 type TaskFunc = (...args: any[]) => Promise<any>
 
 export enum HOOK_PLACE {
-    SELECT_QUERY,
+    QUERY,
     LAYOUT,
     RENDER,
-    CREATE_MARKTABLE
+    CREATE_MARKTABLE,
+    COMPOSITE
 }
 
 enum STATES {
@@ -135,8 +136,8 @@ export class TaskGraph {
         let task: Task = null
 
         switch (hook_place) {
-            case HOOK_PLACE.SELECT_QUERY: {
-                let taskName = `select_${mark.marktype}${mark.id}`
+            case HOOK_PLACE.QUERY: {
+                let taskName = `query_${mark.marktype}${mark.id}`
                 if (this.findTask(taskName))
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
@@ -163,9 +164,18 @@ export class TaskGraph {
                 break
             }
             case HOOK_PLACE.CREATE_MARKTABLE: {
-                let taskName = `create_${mark.marktype}${mark.id}`
+                let taskName = `marktable_${mark.marktype}${mark.id}`
                 if (this.findTask(taskName))
                     taskName = this.generateNewTaskName(hook_place, mark, taskName)
+
+                task = new Task(taskName, func, breakpoint)
+                this.markToTasksMap.get(mark).push(task)
+                break
+            }
+            case HOOK_PLACE.COMPOSITE: {
+                let taskName = "COMPOSITE"
+                // if (this.findTask(taskName))
+                //     taskName = this.generateNewTaskName(hook_place, mark, taskName)
 
                 task = new Task(taskName, func, breakpoint)
                 this.markToTasksMap.get(mark).push(task)

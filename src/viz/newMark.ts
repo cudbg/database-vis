@@ -385,8 +385,6 @@ export class Mark {
         return {othermark, constraint, othervattr, callback}
       }
 
-      console.log("all constraints", this.c.db.constraints)
-
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
         if (!(constraint instanceof FKConstraint))
           continue
@@ -406,8 +404,6 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
-          console.log("path",path)
-
           if (!path)
             throw new Error("No possible path!")
           
@@ -488,15 +484,13 @@ export class Mark {
         this.layouts[rl.id].add(rl.vattrs)
     }
 
-    async runQueryTask(root, outer, isNested) {
+    async runQueryTask(outer, isNested) {
       let query
       if (isNested)
         query = this.constructQuery(outer)
       else
         query = this.constructQuery()
-      let rows = await this.c.db.conn.exec(query)
-      console.log("query output", rows)
-      return rows
+      return query
     }
 
     runLayoutTask(rows, outer, dummyroot, isNested) {
@@ -595,16 +589,17 @@ export class Mark {
       let dummyroot = this.makeDummyRoot()
 
       let queryTask = await this.c.taskGraph.addTask(
-        HOOK_PLACE.SELECT_QUERY, 
+        HOOK_PLACE.QUERY, 
         this, 
-        async () => {return await this.runQueryTask(root, outer, isNested)}, 
+        async () => {return await this.runQueryTask(outer, isNested)}, 
         false)
 
       let layoutTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.LAYOUT, 
         this, 
         async () => {
-          let rows = queryTask.getOutput()
+          let query = queryTask.getOutput()
+          let rows = await this.c.db.conn.exec(query)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)

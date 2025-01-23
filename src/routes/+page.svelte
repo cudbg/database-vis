@@ -233,7 +233,7 @@
             c.nest(habitsLabel, alcohol)
         }
 
-        if (1) { //catagorical
+        if (0) { //catagorical
             
             await db.loadFromConnection()
 
@@ -734,29 +734,7 @@
 
         }
 
-        /**
-         * API:
-         * (create marks ...)
-         * marks have been rendered and then we do layout
-         * Plan:
-         * finish rendering all marks first (tables, attributes, fkeys)
-         * program sees a call to erDiagram with given marks and runs layout on them
-         * Drop marktable for marks used in er diagram and recreate them with new mark
-         * 
-         * new task needed to do this new functionality. possibley called composite task (because it is composed of different marks)
-         * 
-         * 
-         * Need to shift call to render inside taskGraph.execute()
-         * taskGraph object should not be global but re-constructed on refresh
-         * svgs that reference other svgs should in general contain ids of their references. 
-         * 
-         * 
-         * 
-         * Proposed api:
-         * c.erDiagram(tables, columns, fkeys) //use this at the end of the if block
-         * 
-        */
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -795,14 +773,13 @@
             c.nest(vcolname, vtables, "tid")
             c.nest(vtype, vtables, "tid")
 
-            let VT = c.link("fkeys", {
+            let vfkeys = c.link("fkeys", {
                                     x1: vcolname.get(["tid1", "col1"], ['x']), 
                                     y1: vcolname.get(["tid1", "col1"], ['y']), 
                                     x2: vcolname.get(["tid2", "col2"], ['x']), 
                                     y2: vcolname.get(["tid2", "col2"], ['y'])})
-
-
-
+            
+            await c.erDiagram(vtables, vcolname, vfkeys)
         }
         (await canvas.render({ document, svg, graphSvg }));
 

@@ -11,8 +11,9 @@ import * as Plot from "@observablehq/plot";
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { RefMark } from "./ref";
 import { Scale, ScaleObject } from "./newScale";
-import { TaskGraph } from "./task_graph/task_graph";
+import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
+import dagre from "@dagrejs/dagre"
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -171,7 +172,7 @@ export class Canvas implements IMark {
     }
     else
       this.nestWithoutPredicate(innerMark, outerMark)
-    taskGraph.addDependency(innerMark, outerMark, true)
+    this.taskGraph.addDependency(innerMark, outerMark, true)
   }
 
   nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
@@ -590,10 +591,37 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram() {
+  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+    this.taskGraph.addMark("erdiagram")
+    this.taskGraph.addDependency("erdiagram", tablesMark, true)
+    this.taskGraph.addDependency("erdiagram", attributesMark, true)
+    this.taskGraph.addDependency("erdiagram", fkeysMark, true)
 
+    let erDiagram = await this.taskGraph.addTask(
+        HOOK_PLACE.COMPOSITE, 
+        "erdiagram", 
+        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark)}, 
+        false)
   }
 
+  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+    console.log("trigger erDiagram")
+    let tablesMarkInfo = tablesMark.markInfoCache
+    let attributesMarkInfo = attributesMark.markInfoCache
+    let fkeysMarkInfo = fkeysMark.markInfoCache
+
+    console.log("tablesMarkInfo", tablesMarkInfo)
+    console.log("attributesMarkInfo", attributesMarkInfo)
+    console.log("fkeysMarkInfo", fkeysMarkInfo)
+
+    let g = new dagre.graphlib.Graph()
+    
+    g.setGraph({})
+
+    g.setDefaultEdgeLabel(function() { return {}; });
+
+    return Promise.resolve()
+  }
 }
 
 for (const mtype of R.keys(marksbytype(Canvas.plotConfig))) {
