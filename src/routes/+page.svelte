@@ -144,12 +144,12 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { 
+        if (0) { //parallel coordinates with the new heart dataset
             await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -160,9 +160,6 @@
             let t2Name = await c.createCountTable("heart_fact", ["thalach", "cp"])
             let t3Name = await c.createCountTable("heart_fact", ["cp", "target"])
 
-
-            console.log("t1Name", t1Name)
-
             const o = {x: {domain: [0,50]}}
 
             let exang = c.dot("heart_exang", {y : "exang", x: 10},o)
@@ -170,10 +167,32 @@
             let cp = c.dot("heart_cp", {y : "cp", x: 30},o)
             let target = c.dot("heart_target", {y : "target", x: 40},o)
 
-            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: thalach.get("thalach", ['x']), y2: thalach.get("thalach", ['y']), strokeWidth: "count", stroke: "count"})
-            let VT2 = c.link(t2Name, {x1: thalach.get("thalach", ['x']), y1: thalach.get("thalach", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), strokeWidth: "count", stroke: "count"})
-            let VT3 = c.link(t3Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), strokeWidth: "count", stroke: "count"})
+            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: thalach.get("thalach", ['x']), y2: thalach.get("thalach", ['y']), stroke: "count"})
+            let VT2 = c.link(t2Name, {x1: thalach.get("thalach", ['x']), y1: thalach.get("thalach", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), stroke: "count"})
+            let VT3 = c.link(t3Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), stroke: "count"})
+        }
 
+        if (1) { //hierarchical nesting on heart disease status and chest pain
+            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+
+            await c.hier("heart", ["target", "cp"])
+
+            let target = c.rect("target", {...sq("target")("x", "y"), fill: "none", stroke: "black"})
+
+            let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
+
+            let targetLabel = c.text("target", {x: target.get("target", "x"), y: target.get("target", "y"), text: {cols: "target", func: (d) => d.target == "0" ? "NA" : "Present"}})
+
+
+            c.nest(cp, target)
         }
         
 
