@@ -42,6 +42,7 @@ function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
  */
 interface RawChannelItem {
   mark: Mark
+  src: Table
   visualAttr: string
   constraint: FKConstraint /* will be null if there are no clauses ie. normal mapping like x: "a" */
   /**
@@ -117,7 +118,9 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     }
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
-    columns = [{dataAttr: item.dataAttr[0], renameAs: item.dataAttr[0]}]
+     item.dataAttr.forEach(dattr => {
+      columns.push({dataAttr: dattr, renameAs: dattr})
+     })
   }
   return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint}
 
@@ -254,7 +257,8 @@ export class Mark {
           let isGet = false
           let refLayout = null
           let callback = null
-          let rawChannelItem: RawChannelItem = {mark, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
+          let src = this.src
+          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
@@ -288,6 +292,17 @@ export class Mark {
 
               if (dattr.scale.callback)
                 rawChannelItem.callback = dattr.scale.callback
+          } else if (dattr instanceof Object && "cols" in dattr) {
+            if (!("func" in dattr))
+              throw new Error("Error in initialization: Give me a callback function!")
+
+            if (!(dattr.func instanceof Function))
+              throw new Error("Error initialization: This has to be a callback function!")
+
+            let {cols, func} = dattr
+
+            rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
+            rawChannelItem.callback = func
           }
           this.channels.push(rawChannelItem)
       }
@@ -610,6 +625,7 @@ export class Mark {
         async () => {
           let query = queryTask.getOutput()
           let rows = await this.c.db.conn.exec(query)
+          console.log("rows", rows)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
@@ -1034,17 +1050,13 @@ export class Mark {
      * @returns 
      */
     handleCallback(channelItem: RawChannelItem, data) {
+      console.log("jumped to handleCallback", data)
+      console.log("channelItem", channelItem)
       let foundStr = false
       let resArr = []
-      let {callback, dataAttr} = channelItem
+      let {src, callback, dataAttr} = channelItem
 
       let datalen = data[dataAttr[0]].length
-
-      /**
-       * args is a 2D array. Each array within args corresponds to a visual attribute
-       * ie. if the callback is over ["x", "w"], then args has 2 arrays, one for x and one for w
-       */
-      let args = dataAttr.map(attr => data[attr])
 
       /**
        * For the number of datapoints available
@@ -1055,17 +1067,22 @@ export class Mark {
        *    store the result of the callback function in res
        */
       for (let i = 0; i < datalen; i++) {
-        let currArgs = args.map(arr => arr[i])
-        for (let j = 0; j < currArgs.length; j++) {
-          if (typeof currArgs[j] == "string") { //em or px case
-            foundStr = true
+        let obj = {}
+        dataAttr.forEach((attr) => {
+          let attrIndex = src.schema.attrs.indexOf(attr)
+
+          if (attrIndex == -1)
+            throw new Error(`Error in handleCallback: Could not find attribute ${attr} in ${src.internalname}`)
+  
+          let attrType = src.schema.types[attrIndex]
+  
+          if (attrType == "num") {
+            obj[attr] = parseFloat(data[attr][i])
+          } else {
+            obj[attr] = data[attr][i]
           }
-        }
-        currArgs = currArgs.map(elem => parseFloat(elem))
-        resArr.push(callback(...currArgs))
-      }
-      if (foundStr) {
-        resArr = resArr.map(elem => elem + "em") //hardcoded. need to handle both em and px case
+        })
+        resArr.push(callback(obj))
       }
       return resArr
     }

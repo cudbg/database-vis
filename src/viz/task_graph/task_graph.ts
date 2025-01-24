@@ -348,9 +348,6 @@ export class TaskGraph {
             };
         });
 
-        console.log("nodes", nodes)
-        console.log("edges", edges)
-
         const labels = g.nodes().map(id => {
             const node = g.node(id)
             return {text: id, x: node.x, y: node.y}

@@ -615,12 +615,13 @@ export class Canvas implements IMark {
 
     let g = new dagre.graphlib.Graph()
     
-    g.setGraph({})
+    g.setGraph({compound: true})
 
     g.setDefaultEdgeLabel(function() { return {}; });
 
     for (let [id, markInfo] of tablesMarkInfo.entries())
       g.setNode(id.toString(), {label: id.toString(), width: markInfo.width, height: markInfo.height, shape: "rect"})
+
 
     /**
      * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
@@ -630,7 +631,6 @@ export class Canvas implements IMark {
     for (let [key, value] of fkeysMark.referencedMarks) {
       let {x1_ref, x2_ref, y1_ref, y2_ref} = value
       g.setEdge(x1_ref.toString(), x2_ref.toString())
-    
     }
 
     dagre.layout(g)
@@ -649,6 +649,9 @@ export class Canvas implements IMark {
       x2: target.x, y2: target.y
       };
     });
+
+    console.log("nodes", nodes)
+    console.log("edges", edges)
 
     return Promise.resolve()
   }
