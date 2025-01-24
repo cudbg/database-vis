@@ -14,6 +14,7 @@ import { Scale, ScaleObject } from "./newScale";
 import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
+import * as OPlot from "@observablehq/plot";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -592,36 +593,45 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, fkeysMark: Mark) {
+  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
     let placeholder = "erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
+    this.taskGraph.addDependency(placeholder, attributesMark, true)
     this.taskGraph.addDependency(placeholder, fkeysMark, true)
 
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, fkeysMark)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark, svg)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, fkeysMark: Mark) {
+  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
     console.log("trigger erDiagram")
     let tablesMarkInfo = tablesMark.markInfoCache
+    let attributesMarkInfo = attributesMark.markInfoCache
 
-    console.log("tablesMarkInfo", tablesMarkInfo)
+    console.log("attributesMarkInfo", attributesMarkInfo)
 
-    console.log(tablesMarkInfo.size)
-
-    let g = new dagre.graphlib.Graph()
+    let g = new dagre.graphlib.Graph({compound: true})
     
-    g.setGraph({compound: true})
+    g.setGraph({})
 
     g.setDefaultEdgeLabel(function() { return {}; });
 
-    for (let [id, markInfo] of tablesMarkInfo.entries())
-      g.setNode(id.toString(), {label: id.toString(), width: markInfo.width, height: markInfo.height, shape: "rect"})
+    for (let [id, markInfo] of tablesMarkInfo.entries()) {
+      let label = `${tablesMark.marktype}_${id}`
+      g.setNode(label, {label: label, width: markInfo.width, height: markInfo.height, shape: "rect"})
+    }
 
+    for (let [id, markInfo] of attributesMarkInfo.entries()) {
+      let label = `${attributesMark.marktype}_${id}`
+      g.setNode(label, {label: label, shape: "rect"})
+      
+      let parentId = attributesMark.innerToOuter.get(id)
+      g.setParent(label, `${tablesMark.marktype}_${parentId}`)
+    }
 
     /**
      * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
@@ -630,28 +640,88 @@ export class Canvas implements IMark {
      */
     for (let [key, value] of fkeysMark.referencedMarks) {
       let {x1_ref, x2_ref, y1_ref, y2_ref} = value
-      g.setEdge(x1_ref.toString(), x2_ref.toString())
+      g.setEdge(`${attributesMark.marktype}_${x1_ref.toString()}`, `${attributesMark.marktype}_${x2_ref.toString()}`)
     }
 
     dagre.layout(g)
 
-    const nodes = g.nodes().map(id => {
-      const node = g.node(id);
-      return { id, x: node.x, y: node.y};
+
+    let entities = []
+    let attributes = []
+
+    g.nodes().forEach(id => {
+      if (id.includes(`${tablesMark.marktype}`)) {
+        const rect = g.node(id);
+        entities.push({ id, x: rect.x, y: rect.y})
+      } else {
+        const text = g.node(id);
+        let match = id.match(/^text_(\d+)$/)
+        if (!match) {
+          //Should never end up here
+          throw new Error("Error in erDiagram: Could not parse id of texts!")
+        }
+
+        let parsedId = parseInt(match[1], 10)
+
+        attributes.push({ id, x: text.x, y: text.y, text: parsedId})
+      }
     });
 
 
-    const edges = g.edges().map(edge => {
+    let edges = g.edges().map(edge => {
       const source = g.node(edge.v);
       const target = g.node(edge.w);
       return {
-      x1: source.x, y1: source.y,
-      x2: target.x, y2: target.y
-      };
+        x1: source.x, y1: source.y,
+        x2: target.x, y2: target.y
+        };
     });
 
-    console.log("nodes", nodes)
+    console.log("entities", entities)
+    console.log("attributes", attributes)
     console.log("edges", edges)
+
+    let erDiagram = OPlot.plot({
+                marks: [
+                    OPlot.rect(entities, {x: "x", y: "y", fill: "none", stroke: "black"}),
+                    OPlot.link(edges, {x1: "x1", y1: "y1", x2: "x2", y2: "y2"}),
+                    OPlot.text(attributes, {text: "text", x: "x", y: "y"})
+                ]
+    })
+    
+    select(erDiagram)
+        .selectAll(`g[aria-label='y-axis tick']`)
+        .style("visibility", "hidden");
+
+    select(erDiagram)
+        .selectAll(`g[aria-label='y-axis tick label']`)
+        .style("visibility", "hidden");
+
+    select(erDiagram)
+        .selectAll(`g[aria-label='x-axis tick']`)
+        .style("visibility", "hidden");
+          
+    select(erDiagram)
+            .selectAll(`g[aria-label='x-axis tick label']`)
+            .style("visibility", "hidden");
+    
+    const canvasWidth = 1200
+    const canvasHeight = 800
+
+    select(erDiagram)
+        .attr("width", canvasWidth)
+        .attr("height", canvasHeight)
+
+    let node = select(svg)
+
+    node.style("width", `${canvasWidth}px`)
+            .style("height", `${canvasHeight}px`);
+    
+    let testCanvas = node.append("svg:g")
+            .classed("testCanvas", true);
+
+    
+    (testCanvas.node() as HTMLElement).appendChild(erDiagram);
 
     return Promise.resolve()
   }
