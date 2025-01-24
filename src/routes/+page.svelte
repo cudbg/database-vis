@@ -63,7 +63,12 @@
             {
                 name: "heart_disease_csv",
                 url: "/clean_heart_disease_NAMED.csv"
-            }]
+            },
+            {
+                name: "heart_csv",
+                url: "/heart.csv"
+            }
+        ]
         });
         db_up = await (async function dbGoLive(duckdb) {
         await duckdb.init()
@@ -139,6 +144,38 @@
         await db.loadFromConnection();
         let canvas
 
+        if (1) { 
+            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target"].map((a) => [a]))
+
+            let t1Name = await c.createCountTable("heart_fact", ["exang", "thalach"])
+            let t2Name = await c.createCountTable("heart_fact", ["thalach", "cp"])
+            let t3Name = await c.createCountTable("heart_fact", ["cp", "target"])
+
+
+            console.log("t1Name", t1Name)
+
+            const o = {x: {domain: [0,50]}}
+
+            let exang = c.dot("heart_exang", {y : "exang", x: 10},o)
+            let thalach = c.dot("heart_thalach", {y : "thalach", x: 20},o)
+            let cp = c.dot("heart_cp", {y : "cp", x: 30},o)
+            let target = c.dot("heart_target", {y : "target", x: 40},o)
+
+            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: thalach.get("thalach", ['x']), y2: thalach.get("thalach", ['y']), strokeWidth: "count", stroke: "count"})
+            let VT2 = c.link(t2Name, {x1: thalach.get("thalach", ['x']), y1: thalach.get("thalach", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), strokeWidth: "count", stroke: "count"})
+            let VT3 = c.link(t3Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), strokeWidth: "count", stroke: "count"})
+
+        }
+        
 
         if (0) { //Single Table 
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
@@ -246,7 +283,7 @@
             c.nest(habitsLabel, alcohol)
         }
 
-        if (1) { //catagorical
+        if (0) { //catagorical
             
             await db.loadFromConnection()
 
