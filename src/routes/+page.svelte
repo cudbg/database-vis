@@ -115,6 +115,17 @@
             SELECT date, province, avg_temp FROM Weather;
             `
         )
+
+        await duckdb.exec(
+            `CREATE TABLE heart_disease (Gender string, Family_Heart_Disease bool, Alcohol_Consumption string, Exercise_Habits string, Stress_Level string, Age int)`
+        )
+        await duckdb.exec(
+            `INSERT INTO heart_disease (Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age)
+            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age
+            FROM heart_disease_csv
+            WHERE Status = true;`
+        )
+
         taskGraph.clear()
         })(duckdb);
 
@@ -246,7 +257,7 @@
             window.c = c;
             window.db = db;
 
-            await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
+            //await db.normalize("heart_disease_csv1", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age"].map((a) => [a]))
 
@@ -255,6 +266,12 @@
             let t3Name = await c.createCountTable("heart_disease_fact", ["Alcohol_Consumption", "Exercise_Habits"])
             let t4Name = await c.createCountTable("heart_disease_fact", ["Exercise_Habits", "Stress_Level"])
             let t5Name = await c.createCountTable("heart_disease_fact", ["Stress_Level", "Age"])
+
+            console.log("t1Name", t1Name)
+            console.log("t2Name", t2Name)
+            console.log("t3Name", t3Name)
+            console.log("t4Name", t4Name)
+            console.log("t5Name", t5Name)
 
             const o = {x: {domain: [0,60]}}
             let Gender = c.dot("heart_disease_Gender", {y : "Gender", x: 10, fill: "Status"},o)
