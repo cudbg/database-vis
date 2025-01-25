@@ -130,6 +130,12 @@
             FROM heart_disease_csv
             WHERE Status = true;`
         )
+        await duckdb.exec(
+            `CREATE TABLE heart as 
+            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal
+            FROM heart_csv
+            WHERE target = 1;`
+        )
 
         taskGraph.clear()
         })(duckdb);
@@ -145,6 +151,8 @@
         let canvas
 
         if (1) { //parallel coordinates with the new heart dataset
+
+            
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
@@ -152,7 +160,7 @@
             window.c = c;
             window.db = db;
             
-            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
+            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
 
             
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
@@ -176,13 +184,13 @@
             let ca = c.dot("heart_ca", {y : "ca", x: 70},o)
             let thal = c.dot("heart_thal", {y : "thal", x: 80},o)
 
-            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT2 = c.link(t2Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT3 = c.link(t3Name, {x1: target.get("target", ['x']), y1: target.get("target", ['y']), x2: sex.get("sex", ['x']), y2: sex.get("sex", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT4 = c.link(t4Name, {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: fbs.get("fbs", ['x']), y2: fbs.get("fbs", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT5 = c.link(t5Name, {x1: fbs.get("fbs", ['x']), y1: fbs.get("fbs", ['y']), x2: slope.get("slope", ['x']), y2: slope.get("slope", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT6 = c.link(t6Name, {x1: slope.get("slope", ['x']), y1: slope.get("slope", ['y']), x2: ca.get("ca", ['x']), y2: ca.get("ca", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
-            let VT7 = c.link(t7Name, {x1: ca.get("ca", ['x']), y1: ca.get("ca", ['y']), x2: thal.get("thal", ['x']), y2: thal.get("thal", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), stroke: "count"}, {curve: "monotone-x"})
+            let VT2 = c.link(t2Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), stroke: "count"}, {curve: "monotone-x"})
+            let VT3 = c.link(t3Name, {x1: target.get("target", ['x']), y1: target.get("target", ['y']), x2: sex.get("sex", ['x']), y2: sex.get("sex", ['y']),stroke: "count"}, {curve: "monotone-y"})
+            let VT4 = c.link(t4Name, {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: fbs.get("fbs", ['x']), y2: fbs.get("fbs", ['y']),stroke: "count"}, {curve: "monotone-y"})
+            let VT5 = c.link(t5Name, {x1: fbs.get("fbs", ['x']), y1: fbs.get("fbs", ['y']), x2: slope.get("slope", ['x']), y2: slope.get("slope", ['y']),stroke: "count"}, {curve: "monotone-y"})
+            let VT6 = c.link(t6Name, {x1: slope.get("slope", ['x']), y1: slope.get("slope", ['y']), x2: ca.get("ca", ['x']), y2: ca.get("ca", ['y']),stroke: "count"}, {curve: "monotone-y"})
+            let VT7 = c.link(t7Name, {x1: ca.get("ca", ['x']), y1: ca.get("ca", ['y']), x2: thal.get("thal", ['x']), y2: thal.get("thal", ['y']),stroke: "count"}, {curve: "monotone-y"})
         }
 
         if (0) { //hierarchical nesting on heart disease status and chest pain
