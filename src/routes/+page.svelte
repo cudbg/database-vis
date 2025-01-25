@@ -144,35 +144,48 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //parallel coordinates with the new heart dataset
-            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
-
+        if (1) { //parallel coordinates with the new heart dataset
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
+            
+            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
 
-            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target"].map((a) => [a]))
+            
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
 
-            let t1Name = await c.createCountTable("heart_fact", ["exang", "thalach"])
-            let t2Name = await c.createCountTable("heart_fact", ["thalach", "cp"])
-            let t3Name = await c.createCountTable("heart_fact", ["cp", "target"])
+            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
+            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
+            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
+            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
+            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
+            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
+            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
 
-            const o = {x: {domain: [0,50]}}
+            const o = {x: {domain: [0,80]}}
 
             let exang = c.dot("heart_exang", {y : "exang", x: 10},o)
-            let thalach = c.dot("heart_thalach", {y : "thalach", x: 20},o)
-            let cp = c.dot("heart_cp", {y : "cp", x: 30},o)
-            let target = c.dot("heart_target", {y : "target", x: 40},o)
+            let cp = c.dot("heart_cp", {y : "cp", x: 20},o)
+            let target = c.dot("heart_target", {y : "target", x: 30},o)
+            let sex = c.dot("heart_sex", {y : "sex", x: 40},o)
+            let fbs = c.dot("heart_fbs", {y : "fbs", x: 50},o)
+            let slope = c.dot("heart_slope", {y : "slope", x: 60},o)
+            let ca = c.dot("heart_ca", {y : "ca", x: 70},o)
+            let thal = c.dot("heart_thal", {y : "thal", x: 80},o)
 
-            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: thalach.get("thalach", ['x']), y2: thalach.get("thalach", ['y']), stroke: "count"})
-            let VT2 = c.link(t2Name, {x1: thalach.get("thalach", ['x']), y1: thalach.get("thalach", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), stroke: "count"})
-            let VT3 = c.link(t3Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), stroke: "count"})
+            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT2 = c.link(t2Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT3 = c.link(t3Name, {x1: target.get("target", ['x']), y1: target.get("target", ['y']), x2: sex.get("sex", ['x']), y2: sex.get("sex", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT4 = c.link(t4Name, {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: fbs.get("fbs", ['x']), y2: fbs.get("fbs", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT5 = c.link(t5Name, {x1: fbs.get("fbs", ['x']), y1: fbs.get("fbs", ['y']), x2: slope.get("slope", ['x']), y2: slope.get("slope", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT6 = c.link(t6Name, {x1: slope.get("slope", ['x']), y1: slope.get("slope", ['y']), x2: ca.get("ca", ['x']), y2: ca.get("ca", ['y']),strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
+            let VT7 = c.link(t7Name, {x1: ca.get("ca", ['x']), y1: ca.get("ca", ['y']), x2: thal.get("thal", ['x']), y2: thal.get("thal", ['y']), strokeWidth: {cols: "count", func: (d) => Math.log(d.count)}})
         }
 
-        if (1) { //hierarchical nesting on heart disease status and chest pain
+        if (0) { //hierarchical nesting on heart disease status and chest pain
             await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
 
             await db.loadFromConnection()
@@ -354,7 +367,7 @@
             canvas = c
             window.c = c;
             window.db = db;
-
+h 
             await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
