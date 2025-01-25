@@ -1138,6 +1138,8 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+      } else if (this.marktype == "link" && ("curve" in this.options)) {
+        this.setCurve(mark)
       }
       
       let markInfo = this.getMarkInfo(mark, data, crow)
@@ -1196,7 +1198,7 @@ export class Mark {
       })
     }
 
-     setYTranslate(mark, data) {
+    setYTranslate(mark, data) {
       console.log("setYTranslate")
       let thisref = this
 
@@ -1233,6 +1235,50 @@ export class Mark {
                 let {x,y} = thisref.getTransformInfo(el)
                 el.attr("transform", `translate(${x}, ${ycoord})`)
                 break
+              }
+          }
+      })
+    }
+
+    setCurve(mark) {
+      console.log("setYTranslate")
+      let thisref = this
+
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll("*")
+        .each(function (d, i) {
+          let el = d3.select(this);
+          let elAttrs = el.node().attributes;
+
+          for (let j = 0; j < elAttrs.length; j++) {
+              let attrName = elAttrs[j].name;
+              let attrValue = elAttrs[j].value;
+
+              if (attrName == "d") {
+                const regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                const match = attrValue.match(regex)
+
+                if (match) {
+                  let x1 = parseFloat(match[1])
+                  let y1 = parseFloat(match[2])
+                  let x2 = parseFloat(match[3])
+                  let y2 = parseFloat(match[4])
+
+                  //let {p1x, p1y} = calculateQuadraticBezierControlPoint(x1, y1, x2, y2)
+                  //let {p1x, p1y, p2x, p2y} = calculateCubicBezierControlPoints(x1, y1, x2, y2)
+                  let {p1x, p1y, p2x, p2y} = curveFunction(x1, y1, x2, y2)
+
+
+                  let curvedPath = `M${x1},${y1} C ${p1x},${p1y}, ${p2x},${p2y}, ${x2},${y2}`
+
+                  el.attr("d", `${curvedPath}`)
+                } else {
+                  /**
+                   * Should never end up here
+                   */
+                  throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                }
               }
           }
       })
@@ -1303,6 +1349,7 @@ export class Mark {
     getMarkInfoNormal(mark, data, crow) {
       let markInfo = []
       let marktype = this.marktype
+      let thisref = this
       
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -1327,7 +1374,13 @@ export class Mark {
               else if (attrName == `data_${IDNAME}`)
                 markAttributes[IDNAME] = parseInt(attrValue);
               else if (attrName == "d" && marktype == "link") {
-                const regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                let regex
+                if ("curve" in thisref.options) {
+                  regex = /M([-\d.]+),([-\d.]+)\s+C\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+)/
+                  //regex = /M([-\d.]+),([-\d.]+)\s+Q([-\d.]+),([-\d.]+)\s+([-\d.]+),([-\d.]+)/
+                } else {
+                  regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                }
                 const match = attrValue.match(regex)
 
                 if (match) {
@@ -1672,4 +1725,73 @@ export class Mark {
       }
       return res
     }
+}
+
+function curveFunction(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+) {
+  let p1x = (x2-x1)/2
+  let p2x = p1x
+  let p1y = y1
+  let p2y = y2
+
+  return {p1x, p1y, p2x, p2y}
+}
+
+function calculateCubicBezierControlPoints(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+  offsetFactor: number = 1
+): { p1x: number, p1y: number, p2x: number, p2y: number } {
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  const perpendicularDx = -dy;
+  const perpendicularDy = dx;
+
+  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
+  const normalizedPerpendicularDx = perpendicularDx / length;
+  const normalizedPerpendicularDy = perpendicularDy / length;
+
+  const p1x = midX + offsetFactor * 2 * normalizedPerpendicularDx;
+  const p1y = midY + offsetFactor * 2 * normalizedPerpendicularDy;
+
+
+  const p2x = midX + offsetFactor * 2 * -normalizedPerpendicularDx;
+  const p2y = midY + offsetFactor * 2 * -normalizedPerpendicularDy;
+
+  return { p1x, p1y, p2x, p2y };
+}
+
+function calculateQuadraticBezierControlPoint(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+  offsetFactor: number = 0.7
+): { p1x: number, p1y: number } {
+  // Calculate the midpoint between x1, y1 and x2, y2
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  // Calculate a perpendicular direction (rotate by 90 degrees)
+  const perpendicularDx = -dy;
+  const perpendicularDy = dx;
+
+  // Normalize this perpendicular vector
+  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
+  const normPerpendicularDx = perpendicularDx / length;
+  const normPerpendicularDy = perpendicularDy / length;
+
+  // Place the control point off-center by offsetFactor
+  const midpointX = (x1 + x2) / 2;
+  const midpointY = (y1 + y2) / 2;
+
+  // Apply the perpendicular offset
+  const p1x = midpointX + offsetFactor * normPerpendicularDx;
+  const p1y = midpointY + offsetFactor * normPerpendicularDy;
+
+  return { p1x, p1y };
 }

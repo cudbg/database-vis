@@ -34,12 +34,10 @@ export class oplotUtils {
         line: {
           klass: OPlot.lineY,
 
-          x: ['x1', 'x2', 'x3'],
+          x: ['x1', 'x2'],
           y: ['y1', 'y2'],
           shortcuts: {
             start: ['x1', 'y1'],
-            middle1: ['x3','y1'],
-            middle2: ['x3','y2'],
             end: ['x2', 'y2']
           }
         },
