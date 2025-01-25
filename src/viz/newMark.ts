@@ -1731,7 +1731,7 @@ function curveFunction(
   x1: number, y1: number, 
   x2: number, y2: number, 
 ) {
-  let p1x = (x2-x1)/2
+  let p1x = x1+(x2-x1)/2
   let p2x = p1x
   let p1y = y1
   let p2y = y2
