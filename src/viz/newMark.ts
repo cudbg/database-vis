@@ -251,7 +251,6 @@ export class Mark {
     init() {
       for (const [va,dattr] of Object.entries(this.mappings)) {
           let mark = this
-          let src = this.src
           let visualAttr = va
           let constraint = null
           let dataAttr = [dattr]
