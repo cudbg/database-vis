@@ -63,7 +63,12 @@
             {
                 name: "heart_disease_csv",
                 url: "/clean_heart_disease_NAMED.csv"
-            }]
+            },
+            {
+                name: "heart_csv",
+                url: "/heart.csv"
+            }
+        ]
         });
         db_up = await (async function dbGoLive(duckdb) {
         await duckdb.init()
@@ -115,6 +120,23 @@
             SELECT date, province, avg_temp FROM Weather;
             `
         )
+
+        await duckdb.exec(
+            `CREATE TABLE heart_disease (Gender string, Family_Heart_Disease bool, Alcohol_Consumption string, Exercise_Habits string, Stress_Level string, Age int)`
+        )
+        await duckdb.exec(
+            `INSERT INTO heart_disease (Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age)
+            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age
+            FROM heart_disease_csv
+            WHERE Status = true;`
+        )
+        await duckdb.exec(
+            `CREATE TABLE heart as 
+            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal
+            FROM heart_csv
+            WHERE target = 1;`
+        )
+
         })(duckdb);
 
 
@@ -127,6 +149,84 @@
         await db.loadFromConnection();
         let canvas
 
+        if (1) { //parallel coordinates with the new heart dataset
+
+            
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+            
+            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
+
+            
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
+
+            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
+            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
+            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
+            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
+            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
+            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
+            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
+
+            const o = {x: {domain: [0,80]}}
+
+            let exang = c.dot("heart_exang", {y : "exang", x: 10},o)
+            let cp = c.dot("heart_cp", {y : "cp", x: 20},o)
+            let target = c.dot("heart_target", {y : "target", x: 30},o)
+            let sex = c.dot("heart_sex", {y : "sex", x: 40},o)
+            let fbs = c.dot("heart_fbs", {y : "fbs", x: 50},o)
+            let slope = c.dot("heart_slope", {y : "slope", x: 60},o)
+            let ca = c.dot("heart_ca", {y : "ca", x: 70},o)
+            let thal = c.dot("heart_thal", {y : "thal", x: 80},o)
+
+            const e = {fontSize: {domain: [0,80]}}
+
+
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y", (d) => d.y -= 10), text: "exang", fontSize: 40})
+            let Label2 = c.text("heart_cp", {x: cp.get("cp", "x"), y: cp.get("cp", "y"), text: "cp", fontSize: 40})
+            let Label3 = c.text("heart_target", {x: target.get("target", "x"), y: target.get("target", "y"), text: "target"})
+            let Label4 = c.text("heart_sex", {x: sex.get("sex", "x"), y: sex.get("sex", "y"), text: "sex"})
+            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", "x"), y: fbs.get("fbs", "y"), text: "fbs"})
+            let Label6 = c.text("heart_slope", {x: slope.get("slope", "x"), y: slope.get("slope", "y"), text: "slope"})
+            let Label7 = c.text("heart_ca", {x: ca.get("ca", "x"), y: ca.get("ca", "y"), text: "ca"})
+            let Label8 = c.text("heart_thal", {x: thal.get("thal", "x"), y: thal.get("thal", "y"), text: "thal"})
+
+            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), stroke: "count"}, {curve: true})
+            let VT2 = c.link(t2Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), stroke: "count"}, {curve: true})
+            let VT3 = c.link(t3Name, {x1: target.get("target", ['x']), y1: target.get("target", ['y']), x2: sex.get("sex", ['x']), y2: sex.get("sex", ['y']),stroke: "count"}, {curve: true})
+            let VT4 = c.link(t4Name, {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: fbs.get("fbs", ['x']), y2: fbs.get("fbs", ['y']),stroke: "count"}, {curve: true})
+            let VT5 = c.link(t5Name, {x1: fbs.get("fbs", ['x']), y1: fbs.get("fbs", ['y']), x2: slope.get("slope", ['x']), y2: slope.get("slope", ['y']),stroke: "count"}, {curve: true})
+            let VT6 = c.link(t6Name, {x1: slope.get("slope", ['x']), y1: slope.get("slope", ['y']), x2: ca.get("ca", ['x']), y2: ca.get("ca", ['y']),stroke: "count"}, {curve: true})
+            let VT7 = c.link(t7Name, {x1: ca.get("ca", ['x']), y1: ca.get("ca", ['y']), x2: thal.get("thal", ['x']), y2: thal.get("thal", ['y']),stroke: "count"}, {curve: true})
+        }
+
+        if (0) { //hierarchical nesting on heart disease status and chest pain
+            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+
+            await c.hier("heart", ["target", "cp"])
+
+            let target = c.rect("target", {...sq("target")("x", "y"), fill: "none", stroke: "black"})
+
+            let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
+
+            let targetLabel = c.text("target", {x: target.get("target", "x"), y: target.get("target", "y"), text: {cols: "target", func: (d) => d.target == "0" ? "NA" : "Present"}})
+
+
+            c.nest(cp, target)
+        }
+        
 
         if (0) { //Single Table 
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
@@ -245,7 +345,7 @@
             window.c = c;
             window.db = db;
 
-            await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
+            //await db.normalize("heart_disease_csv1", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age"].map((a) => [a]))
 
@@ -254,6 +354,12 @@
             let t3Name = await c.createCountTable("heart_disease_fact", ["Alcohol_Consumption", "Exercise_Habits"])
             let t4Name = await c.createCountTable("heart_disease_fact", ["Exercise_Habits", "Stress_Level"])
             let t5Name = await c.createCountTable("heart_disease_fact", ["Stress_Level", "Age"])
+
+            console.log("t1Name", t1Name)
+            console.log("t2Name", t2Name)
+            console.log("t3Name", t3Name)
+            console.log("t4Name", t4Name)
+            console.log("t5Name", t5Name)
 
             const o = {x: {domain: [0,60]}}
             let Gender = c.dot("heart_disease_Gender", {y : "Gender", x: 10, fill: "Status"},o)
@@ -280,7 +386,7 @@
             canvas = c
             window.c = c;
             window.db = db;
-
+h 
             await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
