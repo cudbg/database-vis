@@ -1025,17 +1025,13 @@ export class Mark {
      * @returns 
      */
     handleCallback(channelItem: RawChannelItem, data) {
+      console.log("jumped to handleCallback", data)
+      console.log("channelItem", channelItem)
       let foundStr = false
       let resArr = []
-      let {callback, dataAttr} = channelItem
+      let {src, callback, dataAttr} = channelItem
 
       let datalen = data[dataAttr[0]].length
-
-      /**
-       * args is a 2D array. Each array within args corresponds to a visual attribute
-       * ie. if the callback is over ["x", "w"], then args has 2 arrays, one for x and one for w
-       */
-      let args = dataAttr.map(attr => data[attr])
 
       /**
        * For the number of datapoints available
@@ -1046,17 +1042,22 @@ export class Mark {
        *    store the result of the callback function in res
        */
       for (let i = 0; i < datalen; i++) {
-        let currArgs = args.map(arr => arr[i])
-        for (let j = 0; j < currArgs.length; j++) {
-          if (typeof currArgs[j] == "string") { //em or px case
-            foundStr = true
+        let obj = {}
+        dataAttr.forEach((attr) => {
+          let attrIndex = src.schema.attrs.indexOf(attr)
+
+          if (attrIndex == -1)
+            throw new Error(`Error in handleCallback: Could not find attribute ${attr} in ${src.internalname}`)
+  
+          let attrType = src.schema.types[attrIndex]
+  
+          if (attrType == "num") {
+            obj[attr] = parseFloat(data[attr][i])
+          } else {
+            obj[attr] = data[attr][i]
           }
-        }
-        currArgs = currArgs.map(elem => parseFloat(elem))
-        resArr.push(callback(...currArgs))
-      }
-      if (foundStr) {
-        resArr = resArr.map(elem => elem + "em") //hardcoded. need to handle both em and px case
+        })
+        resArr.push(callback(obj))
       }
       return resArr
     }
