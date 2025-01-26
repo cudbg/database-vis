@@ -261,6 +261,7 @@ export class Mark {
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
             let {othermark, constraint, othervattr, callback} = this.processGet(dattr)
             rawChannelItem.mark = othermark
+            //rawChannelItem.src = othermark.marktable //very suspect line
             rawChannelItem.constraint = constraint
             rawChannelItem.dataAttr = othervattr
             rawChannelItem.callback = callback
@@ -1042,7 +1043,9 @@ export class Mark {
       console.log("channelItem", channelItem)
       let foundStr = false
       let resArr = []
-      let {src, callback, dataAttr} = channelItem
+      let {mark, callback, dataAttr} = channelItem
+
+      let src = mark == this ? this.src : mark.marktable
 
       let datalen = data[dataAttr[0]].length
 

@@ -187,7 +187,7 @@
             const e = {fontSize: {domain: [0,80]}}
 
 
-            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y"), text: "exang", fontSize: 40})
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y", (d) => d.y -= 10), text: "exang", fontSize: 40})
             let Label2 = c.text("heart_cp", {x: cp.get("cp", "x"), y: cp.get("cp", "y"), text: "cp", fontSize: 40})
             let Label3 = c.text("heart_target", {x: target.get("target", "x"), y: target.get("target", "y"), text: "target"})
             let Label4 = c.text("heart_sex", {x: sex.get("sex", "x"), y: sex.get("sex", "y"), text: "sex"})
