@@ -10,7 +10,6 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
-    import { taskGraph } from "../viz/task_graph/task_graph";
 
 
     let innerWidth = 10000;
@@ -18,6 +17,7 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
+    let testSvg = null;
     let graphSvg = null;
     let inspector = null;
 
@@ -137,7 +137,6 @@
             WHERE target = 1;`
         )
 
-        taskGraph.clear()
         })(duckdb);
 
 
@@ -842,7 +841,7 @@ h
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
 
@@ -856,6 +855,10 @@ h
             await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
             await db.conn.exec(`INSERT INTO fkeys VALUES
                     (2, 'coursenum', 0, 'coursenum')`)
+
+            // await db.conn.exec(`CREATE TABLE fkeys (tid1 int, tid2 int, FOREIGN KEY(tid1) references tables(tid), FOREIGN KEY(tid2) references tables(tid))`)
+            // await db.conn.exec(`INSERT INTO fkeys VALUES
+            //         (2, 0)`)
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -863,36 +866,32 @@ h
             window.c = c;
             window.db = db;
 
-            let vtables = c.rect("tables", { x: 'tid', fill:'white', stroke:'black'})
-            let vcolname= c.text("columns", {
+            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vattributes= c.text("columns", {
                                             y: 'ordinal_position',
-                                            text: "colname",
-                                            //'text-decoration': (d) => d.is_key? 'underline': 'none',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            'text-decoration': {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
                                             x: 0
                             })
-            function adjustPos(x) {
-                return x + 50
-            }
-            let vtype = c.text("columns", {
-                                            x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
-                                            y: "ordinal_position",
-                                            text: "type"
-                                        })
-            c.nest(vcolname, vtables, "tid")
-            c.nest(vtype, vtables, "tid")
+            // function adjustPos(x) {
+            //     return x + 50
+            // }
+            // let vtype = c.text("columns", {
+            //                                 x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
+            //                                 y: "ordinal_position",
+            //                                 text: "type"
+            //                             })
+            c.nest(vattributes, vtables, "tid")
+            //c.nest(vtype, vtables, "tid")
 
-            let VT = c.link("fkeys", {
-                                    x1: vcolname.get(["tid1", "col1"], ['x']), 
-                                    y1: vcolname.get(["tid1", "col1"], ['y']), 
-                                    x2: vcolname.get(["tid2", "col2"], ['x']), 
-                                    y2: vcolname.get(["tid2", "col2"], ['y'])})
-
-
-
+            let vfkeys = c.link("fkeys", {
+                                    x1: vattributes.get(["tid1", "col1"], ['x']), 
+                                    y1: vattributes.get(["tid1", "col1"], ['y']), 
+                                    x2: vattributes.get(["tid2", "col2"], ['x']), 
+                                    y2: vattributes.get(["tid2", "col2"], ['y'])})
+            await c.erDiagram(vtables, vattributes, vfkeys, testSvg)
         }
-        (await canvas.render({ document, svg }));
-        taskGraph.visualize(graphSvg)
-        await taskGraph.execute()
+        (await canvas.render({ document, svg, graphSvg }));
 
         /*
         c1: T -1-n- S
@@ -939,6 +938,11 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={graphSvg}/>
+            </div>
+        </div>
+        <div class="col">
+            <div bind:this={rootelement}>
+                <svg bind:this={testSvg}/>
             </div>
         </div>
     </div>

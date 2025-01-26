@@ -15,7 +15,7 @@ import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
 import { Scale, ScaleObject } from "./newScale";
-import { HOOK_PLACE, taskGraph } from "./task_graph/task_graph";
+import { HOOK_PLACE } from "./task_graph/task_graph";
 
 /**
  * Used in QueryItem
@@ -118,7 +118,9 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     }
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
-    columns = [{dataAttr: item.dataAttr[0], renameAs: item.dataAttr[0]}]
+     item.dataAttr.forEach(dattr => {
+      columns.push({dataAttr: dattr, renameAs: dattr})
+     })
   }
   return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint}
 
@@ -191,7 +193,12 @@ export class Mark {
     outermark: Mark;
     innerToOuter: Map<number, number>;
     level: number;
-    idVisualAttrMap: Map<number, Set<string>>;
+    idVisualAttrMap: Map<number, Set<string>>; /* for handling level differences between marks */
+
+    /**
+     * Other mark + visual attr of this mark + other id -> bag of ids for this mark
+     */
+    referencedMarks: Map<number, {}>;
 
     
     /**
@@ -235,8 +242,9 @@ export class Mark {
         this.markInfoCache = new Map<number, {}>()
         this.innerToOuter = null
         this.idVisualAttrMap = new Map<number, Set<string>>()
+        this.referencedMarks = new Map<number, {}>()
 
-        taskGraph.addMark(this)
+        this.c.taskGraph.addMark(this)
         this.init()
     }
 
@@ -250,6 +258,8 @@ export class Mark {
           let isGet = false
           let refLayout = null
           let callback = null
+          let src = this.src
+
           let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
 
           if (dattr instanceof RefLayout) {
@@ -276,7 +286,7 @@ export class Mark {
               this._scales.y = {type: "identity"}
             
             this.c.registerRefMark(othermark, this)
-            taskGraph.addDependency(this, othermark, true)
+            this.c.taskGraph.addDependency(this, othermark, true)
           }
           else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
@@ -399,8 +409,6 @@ export class Mark {
         return {othermark, constraint, othervattr, callback}
       }
 
-      console.log("all constraints", this.c.db.constraints)
-
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
         if (!(constraint instanceof FKConstraint))
           continue
@@ -420,8 +428,6 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
-          console.log("path",path)
-
           if (!path)
             throw new Error("No possible path!")
           
@@ -502,15 +508,13 @@ export class Mark {
         this.layouts[rl.id].add(rl.vattrs)
     }
 
-    async runQueryTask(root, outer, isNested) {
+    async runQueryTask(outer, isNested) {
       let query
       if (isNested)
         query = this.constructQuery(outer)
       else
         query = this.constructQuery()
-      let rows = await this.c.db.conn.exec(query)
-      console.log("query output", rows)
-      return rows
+      return query
     }
 
     runLayoutTask(rows, outer, dummyroot, isNested) {
@@ -526,7 +530,9 @@ export class Mark {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
-  
+
+          this.pickupReferences(children)
+
           let cols = this.rowsToCols(children)
           let channels = this.applychannels(cols)
   
@@ -539,6 +545,8 @@ export class Mark {
         return channelObj
 
       } else {
+        this.pickupReferences(rows)
+
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
   
@@ -608,24 +616,26 @@ export class Mark {
     async doWorkFlow(root, outer, isNested) {
       let dummyroot = this.makeDummyRoot()
 
-      let queryTask = await taskGraph.addTask(
-        HOOK_PLACE.SELECT_QUERY, 
+      let queryTask = await this.c.taskGraph.addTask(
+        HOOK_PLACE.QUERY, 
         this, 
-        async () => {return await this.runQueryTask(root, outer, isNested)}, 
+        async () => {return await this.runQueryTask(outer, isNested)}, 
         false)
 
-      let layoutTask = await taskGraph.addTask(
+      let layoutTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.LAYOUT, 
         this, 
         async () => {
-          let rows = queryTask.getOutput()
+          let query = queryTask.getOutput()
+          let rows = await this.c.db.conn.exec(query)
+          console.log("rows", rows)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
       
-      taskGraph.addDependency(layoutTask, queryTask, false)
+      this.c.taskGraph.addDependency(layoutTask, queryTask, false)
 
-      let renderTask = await taskGraph.addTask(
+      let renderTask = await this.c.taskGraph.addTask(
         HOOK_PLACE.RENDER, 
         this, 
         async () => {
@@ -634,9 +644,9 @@ export class Mark {
           return markInfo
         }, false)
       
-      taskGraph.addDependency(renderTask, layoutTask, false)
+      this.c.taskGraph.addDependency(renderTask, layoutTask, false)
 
-      let cleanupTask = await taskGraph.addTask(
+      let cleanupTask = await this.c.taskGraph.addTask(
           HOOK_PLACE.CREATE_MARKTABLE, 
           this, 
           async () => {
@@ -644,7 +654,7 @@ export class Mark {
             await this.runCleanupTask(root, dummyroot, markInfo)
           }, false)
       
-      taskGraph.addDependency(cleanupTask, renderTask, false)
+      this.c.taskGraph.addDependency(cleanupTask, renderTask, false)
     }
 
     constructQuery(nest?) {
@@ -885,6 +895,11 @@ export class Mark {
             let {dataAttr, renameAs} = columnObj
             let tableName = tableRenameMap.get(source.internalname)
             query = query.select({[renameAs]: column(tableName, dataAttr)})
+
+            /**
+             * Experimental feature
+             */
+            query = query.select({[`${renameAs}_ref`]: column(tableName, IDNAME)})
           }
         }
         pathCounter++
@@ -939,7 +954,6 @@ export class Mark {
             arr = this.handleCallback(currItem, data)
 
           if (mark.level != this.level){
-            console.log("triggered level diff")
             if (visualAttr == "x1" 
               || visualAttr == "x2" 
               || visualAttr == "x"
@@ -1043,9 +1057,11 @@ export class Mark {
       console.log("channelItem", channelItem)
       let foundStr = false
       let resArr = []
+
       let {mark, callback, dataAttr} = channelItem
 
       let src = mark == this ? this.src : mark.marktable
+
 
       let datalen = data[dataAttr[0]].length
 
@@ -1174,7 +1190,6 @@ export class Mark {
     }
 
     setXTranslate(mark, data) {
-      console.log("setXTranslate")
       let thisref = this
 
       maybeselection(mark)
@@ -1215,8 +1230,8 @@ export class Mark {
       })
     }
 
-    setYTranslate(mark, data) {
-      console.log("setYTranslate")
+     setYTranslate(mark, data) {
+
       let thisref = this
 
       maybeselection(mark)
@@ -1571,13 +1586,16 @@ export class Mark {
            * because some other mark may want to get x attribute from this mark
            * and we want that other mark to find x attribute
            */
-          let aliasObj = this.mark.alias2scale
-          if (Object.keys(aliasObj).includes(key)) {
-            
-            delete markInfo[i][key]
+          if (key == "cx") {
+            markInfo[i]["x"] = value
+            key = "x"
+            delete markInfo[i]["cx"]
+          }
 
-            key = aliasObj[key]
-            markInfo[i][key] = value
+          if (key == "cy") {
+            markInfo[i]["y"] = value
+            key = "y"
+            delete markInfo[i]["y"]
           }
 
           if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
@@ -1585,16 +1603,29 @@ export class Mark {
             markInfo[i][key] = numValue
           }
         }
-
-        /**
+         /**
          * Populate markInfoCache here so that other marks can reference it if needed
          */
-        let x = markInfo[i]["x"]
-        let y = markInfo[i]["y"]
+
+        let obj = {}
         let data_xoffset = markInfo[i]["data_xoffset"]
         let data_yoffset = markInfo[i]["data_yoffset"]
-        
-        let obj = {x,y,data_xoffset, data_yoffset}
+
+        if (this.marktype == "link") {
+          let x1 = markInfo[i]["x1"]
+          let x2 = markInfo[i]["x2"]
+          let y1 = markInfo[i]["y1"]
+          let y2 = markInfo[i]["y2"]
+
+          obj = {x1, y1, x2, y2}
+        } else {
+          let x = markInfo[i]["x"]
+          let y = markInfo[i]["y"]
+          obj = {x,y}
+        }
+        obj["data_xoffset"] = data_xoffset
+        obj["data_yoffset"] = data_yoffset
+
         if (markInfo[i]["width"])
           obj["width"] = markInfo[i]["width"]
 
@@ -1609,7 +1640,6 @@ export class Mark {
          */
         delete markInfo[i]["data_xoffset"]
         delete markInfo[i]["data_yoffset"]
-
       }
     }
 
@@ -1641,18 +1671,6 @@ export class Mark {
         if (k == IDNAME) {
           columnNames.push(`${k} int primary key`)
         } else {
-
-          /*
-          turns cx, x1 into x, cy, y1 into y etc.
-          We don't want to insert a cx column into the marktable
-          Eg.
-          because some other mark way want to get x attribute from this mark
-          and we want that other mark to find x attribute
-          */
-          let aliasObj = this.mark.alias2scale
-          if (Object.keys(aliasObj).includes(k)) {
-            k = aliasObj[k] 
-          }
 
           if (isNaN(Number(v))) {
             columnNames.push(`${k} string`)
@@ -1693,6 +1711,27 @@ export class Mark {
         values.push(rowValues);
       }
       return values
+    }
+
+    pickupReferences(rows) {
+      for (let i = 0; i < this.channels.length; i++) {
+        let {mark, visualAttr, isGet} = this.channels[i]
+
+        if (isGet) {
+          let ref = `${visualAttr}_ref`
+          /**
+           * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
+           */
+          for (let i = 0; i < rows.length; i++) {
+            if (this.referencedMarks.has(rows[i][IDNAME])) {
+              let obj = this.referencedMarks.get(rows[i][IDNAME])
+              obj[ref] = rows[i][ref]
+            } else {
+              this.referencedMarks.set(rows[i][IDNAME], {[ref]: rows[i][ref]})
+            }
+          }
+        }
+      }
     }
 
 
