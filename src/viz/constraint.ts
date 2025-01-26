@@ -75,9 +75,7 @@ export class FKConstraint extends Constraint {
     super()
 
     let xkey = t1.isKey(X)
-    console.log("testingJan6", xkey, X)
     let ykey = t2.isKey(Y)
-    console.log("testingJan6", ykey, Y)
     if (!xkey && ykey) {
       [xkey, t1, X, ykey, t2, Y] = [ykey, t2, Y, xkey, t1, X];
     } 
