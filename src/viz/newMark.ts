@@ -42,6 +42,7 @@ function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
  */
 interface RawChannelItem {
   mark: Mark
+  src: Table
   visualAttr: string
   constraint: FKConstraint /* will be null if there are no clauses ie. normal mapping like x: "a" */
   /**
@@ -242,13 +243,14 @@ export class Mark {
     init() {
       for (const [va,dattr] of Object.entries(this.mappings)) {
           let mark = this
+          let src = this.src
           let visualAttr = va
           let constraint = null
           let dataAttr = [dattr]
           let isGet = false
           let refLayout = null
           let callback = null
-          let rawChannelItem: RawChannelItem = {mark, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
+          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
@@ -282,6 +284,17 @@ export class Mark {
 
               if (dattr.scale.callback)
                 rawChannelItem.callback = dattr.scale.callback
+          } else if (dattr instanceof Object && "cols" in dattr) {
+            if (!("func" in dattr))
+              throw new Error("Error in initialization: Give me a callback function!")
+
+            if (!(dattr.func instanceof Function))
+              throw new Error("Error initialization: This has to be a callback function!")
+
+            let {cols, func} = dattr
+
+            rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
+            rawChannelItem.callback = func
           }
           this.channels.push(rawChannelItem)
       }
