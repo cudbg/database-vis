@@ -1329,9 +1329,11 @@ export class Mark {
                 let {x,y} = thisref.getTransformInfo(el)
                 markAttributes["x"] = x
                 markAttributes["y"] = y
-              } else if (attrName == `data_${IDNAME}`)
+              } else if (attrName == `data_${IDNAME}`) {
                 markAttributes[IDNAME] = parseInt(attrValue);
-              else
+              } else if (attrName == "font-size") {
+                markAttributes["fontSize"] = attrValue
+              } else
                 markAttributes[attrName] = attrValue
           }
           markInfo.push(markAttributes)
