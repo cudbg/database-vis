@@ -181,14 +181,16 @@
             let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100, height: 100})
             let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100, height: 100})
 
-            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y", (d) => d.y -= 10), text: "exang", fontSize: 40})
-            let Label2 = c.text("heart_cp", {x: cp.get("cp", "x"), y: cp.get("cp", "y"), text: "cp", fontSize: 40})
-            let Label3 = c.text("heart_target", {x: target.get("target", "x"), y: target.get("target", "y"), text: "target"})
-            let Label4 = c.text("heart_sex", {x: sex.get("sex", "x"), y: sex.get("sex", "y"), text: "sex"})
-            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", "x"), y: fbs.get("fbs", "y"), text: "fbs"})
-            let Label6 = c.text("heart_slope", {x: slope.get("slope", "x"), y: slope.get("slope", "y"), text: "slope"})
-            let Label7 = c.text("heart_ca", {x: ca.get("ca", "x"), y: ca.get("ca", "y"), text: "ca"})
-            let Label8 = c.text("heart_thal", {x: thal.get("thal", "x"), y: thal.get("thal", "y"), text: "thal"})
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
+            let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
+            let Label3 = c.text("heart_target", {x: target.get("target", ["x","width"], (d) => d.x + (d.width)/2), text: "Status", fontSize: 20}, {textAnchor: "bottom"})
+            let Label4 = c.text("heart_sex", {x: sex.get("sex", ["x","width"], (d) => d.x + (d.width)/2), text: "Sex", fontSize: 20}, {textAnchor: "bottom"})
+            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", ["x","width"], (d) => d.x + (d.width)/2), text: "Fbs", fontSize: 20}, {textAnchor: "bottom"})
+            let Label6 = c.text("heart_slope", {x: slope.get("slope", ["x","width"], (d) => d.x + (d.width)/2), text: "Slope", fontSize: 20}, {textAnchor: "bottom"})
+            let Label7 = c.text("heart_ca", {x: ca.get("ca", ["x","width"], (d) => d.x + (d.width)/2), text: "Ca", fontSize: 20}, {textAnchor: "bottom"})
+            let Label8 = c.text("heart_thal", {x: thal.get("thal", ["x","width"], (d) => d.x + (d.width)/2), text: "Thal", fontSize: 20}, {textAnchor: "bottom"})
+
+
 
             let VT1 = c.link(t1Name, {
                                         x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
