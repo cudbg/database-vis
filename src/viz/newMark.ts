@@ -595,6 +595,8 @@ export class Mark {
 
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
+
+        select(root)
   
         root
           .append("g")
@@ -1172,6 +1174,8 @@ export class Mark {
         }
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
+      } else if (this.marktype == "square") {
+        this.setEqualWidthAndHeight(mark, data)
       }
       
       let markInfo = this.getMarkInfo(mark, data, crow)
@@ -1272,9 +1276,6 @@ export class Mark {
     }
 
     setCurve(mark) {
-      console.log("setYTranslate")
-      let thisref = this
-
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
@@ -1313,6 +1314,63 @@ export class Mark {
               }
           }
       })
+    }
+
+    /**
+     * Assumes thar you want to make a square mark
+     * @param mark svg element
+     * @param data {x: [...], y: [...]} <- data was passed to observable
+     */
+    setEqualWidthAndHeight(mark, data) {
+      let width = null
+      let height = null
+      let x = null /**probably need to shift this somewhere else */
+      let y = null /**probably need to shift this somewhere else */
+      let defaultLen = 100
+
+      if ("width" in data) {
+        width = data.width[0]
+      } else {
+        width = defaultLen
+      }
+
+      if ("height" in data) {
+        height = data.height[0]
+      } else {
+        height = defaultLen
+      }
+
+      if (("x" in this.mappings) && (typeof this.mappings.x === "number")) {
+        x = this.mappings.x
+      }
+
+      if (("y" in this.mappings) && (typeof this.mappings.y === "number")) {
+        y = this.mappings.y
+      }
+
+      if (width != height) {
+        width = defaultLen
+        height = defaultLen
+      }
+
+      console.log("width", width)
+      console.log("height", height)
+
+      let selection = maybeselection(mark)
+        .selectAll(`g[aria-label="rect"]`)
+        .selectAll("*")
+
+      selection
+        .attr("width", width)
+        .attr("height", height)
+      
+      if (x !== null) {
+        selection.attr("x", x)
+      }
+
+      if (y !== null) {
+        selection.attr("y", y)
+      }
     }
 
     /**
@@ -1372,7 +1430,7 @@ export class Mark {
       return markInfo
     }
 
-/**
+    /**
      * 
      * @param mark mark that was created in makemark
      * @param data has format {x: [...], y: [...], ...}
@@ -1383,18 +1441,16 @@ export class Mark {
       let markInfo = []
       let marktype = this.marktype
       let thisref = this
+      let ariaLabel = this.mark.aria == "square" ? "rect" : this.mark.aria
       
       maybeselection(mark)
-        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll(`g[aria-label='${ariaLabel}']`)
         .selectAll("*")
         .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
         .attr(`data_xoffset`, crow.x)  // TODO: this will not work for recursively nested data
         .attr(`data_yoffset`, crow.y)
         .each(function (d, i) {
-
           let el = d3.select(this);
-
-
           let elAttrs = el.node().attributes;
           let markAttributes = {};
 

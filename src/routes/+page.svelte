@@ -151,6 +151,109 @@
 
         if (1) { //parallel coordinates with the new heart dataset
 
+                
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
+
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
+
+            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
+            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
+            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
+            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
+            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
+            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
+            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
+
+            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100, height: 100})
+            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100, height: 100})
+            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100, height: 100})
+            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100, height: 100})
+            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
+            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
+            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100, height: 100})
+            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100, height: 100})
+
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y", (d) => d.y -= 10), text: "exang", fontSize: 40})
+            let Label2 = c.text("heart_cp", {x: cp.get("cp", "x"), y: cp.get("cp", "y"), text: "cp", fontSize: 40})
+            let Label3 = c.text("heart_target", {x: target.get("target", "x"), y: target.get("target", "y"), text: "target"})
+            let Label4 = c.text("heart_sex", {x: sex.get("sex", "x"), y: sex.get("sex", "y"), text: "sex"})
+            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", "x"), y: fbs.get("fbs", "y"), text: "fbs"})
+            let Label6 = c.text("heart_slope", {x: slope.get("slope", "x"), y: slope.get("slope", "y"), text: "slope"})
+            let Label7 = c.text("heart_ca", {x: ca.get("ca", "x"), y: ca.get("ca", "y"), text: "ca"})
+            let Label8 = c.text("heart_thal", {x: thal.get("thal", "x"), y: thal.get("thal", "y"), text: "thal"})
+
+            let VT1 = c.link(t1Name, {
+                                        x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
+                                        y1: exang.get("exang", ['y',"height"], (d) => d.y + (d.height)/2), 
+                                        x2: cp.get("cp", ['x']), 
+                                        y2: cp.get("cp", ['y']), 
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+
+            let VT2 = c.link(t2Name, {
+                                        x1: cp.get("cp", ['x', "width"], (d) => d.x + d.width), 
+                                        y1: cp.get("cp", ['y', "height"], (d) => d.y + (d.height)/2), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+            let VT3 = c.link(t3Name, {
+                                        x1: target.get("target", ['x',"width"], (d) => d.x + d.width),
+                                        y1: target.get("target", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: sex.get("sex", ['x']),
+                                        y2: sex.get("sex", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+            let VT4 = c.link(t4Name, {
+                                        x1: sex.get("sex", ['x', "width"], (d) => d.x + d.width),
+                                        y1: sex.get("sex", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: fbs.get("fbs", ['x']),
+                                        y2: fbs.get("fbs", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+
+            let VT5 = c.link(t5Name, {
+                                        x1: fbs.get("fbs", ['x', "width"], (d) => d.x + d.width),
+                                        y1: fbs.get("fbs", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: slope.get("slope", ['x']),
+                                        y2: slope.get("slope", ['y']),
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+            
+            let VT6 = c.link(t6Name, {
+                                        x1: slope.get("slope", ['x',"width"], (d) => d.x + d.width),
+                                        y1: slope.get("slope", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: ca.get("ca", ['x']),
+                                        y2: ca.get("ca", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+
+            let VT7 = c.link(t7Name, {
+                                        x1: ca.get("ca", ['x',"width"], (d) => d.x + d.width),
+                                        y1: ca.get("ca", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: thal.get("thal", ['x']),
+                                        y2: thal.get("thal", ['y']),
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+        }
+
+        if (0) { //parallel coordinates with the new heart dataset
+
             
             await db.loadFromConnection()
 
