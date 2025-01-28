@@ -122,19 +122,16 @@
         )
 
         await duckdb.exec(
-            `CREATE TABLE heart_disease (Gender string, Family_Heart_Disease bool, Alcohol_Consumption string, Exercise_Habits string, Stress_Level string, Age int)`
-        )
-        await duckdb.exec(
-            `INSERT INTO heart_disease (Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age)
-            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age
+            `CREATE TABLE heart_disease as
+            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
             FROM heart_disease_csv
-            WHERE Status = true;`
+            WHERE Status = false;`
         )
-        await duckdb.exec(
+        await duckdb.exec( //sql query here
             `CREATE TABLE heart as 
-            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal
+            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
             FROM heart_csv
-            WHERE target = 1;`
+            WHERE target = 0;`
         )
 
         })(duckdb);
@@ -154,55 +151,120 @@
             
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
             
-            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
 
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
+
+
+            //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+            //let tablename = "heart_disease"
             
-            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
 
-            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
-            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
-            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
-            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
-            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
-            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
-            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
+            let specificAttributes: String[] = ["age", "fbs", "exang", "thal", "cp","slope","ca","sex"];
+            let tablename = "heart"
+           
+            
+            
+            
+            var width = 10
+           let captionsize = 15;
+           let labelsize = 15;
+            
+            
 
-            const o = {x: {domain: [0,80]}}
-
-            let exang = c.dot("heart_exang", {y : "exang", x: 10},o)
-            let cp = c.dot("heart_cp", {y : "cp", x: 20},o)
-            let target = c.dot("heart_target", {y : "target", x: 30},o)
-            let sex = c.dot("heart_sex", {y : "sex", x: 40},o)
-            let fbs = c.dot("heart_fbs", {y : "fbs", x: 50},o)
-            let slope = c.dot("heart_slope", {y : "slope", x: 60},o)
-            let ca = c.dot("heart_ca", {y : "ca", x: 70},o)
-            let thal = c.dot("heart_thal", {y : "thal", x: 80},o)
-
-            const e = {fontSize: {domain: [0,80]}}
+            let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])
+           let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
+           let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
+           let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
+           let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
+           let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
+           let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
 
 
-            let Label1 = c.text("heart_exang", {x: exang.get("exang", "x"), y: exang.get("exang", "y", (d) => d.y -= 10), text: "exang", fontSize: 40})
-            let Label2 = c.text("heart_cp", {x: cp.get("cp", "x"), y: cp.get("cp", "y"), text: "cp", fontSize: 40})
-            let Label3 = c.text("heart_target", {x: target.get("target", "x"), y: target.get("target", "y"), text: "target"})
-            let Label4 = c.text("heart_sex", {x: sex.get("sex", "x"), y: sex.get("sex", "y"), text: "sex"})
-            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", "x"), y: fbs.get("fbs", "y"), text: "fbs"})
-            let Label6 = c.text("heart_slope", {x: slope.get("slope", "x"), y: slope.get("slope", "y"), text: "slope"})
-            let Label7 = c.text("heart_ca", {x: ca.get("ca", "x"), y: ca.get("ca", "y"), text: "ca"})
-            let Label8 = c.text("heart_thal", {x: thal.get("thal", "x"), y: thal.get("thal", "y"), text: "thal"})
+           const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
 
-            let VT1 = c.link(t1Name, {x1: exang.get("exang", ['x']), y1: exang.get("exang", ['y']), x2: cp.get("cp", ['x']), y2: cp.get("cp", ['y']), stroke: "count"}, {curve: true})
-            let VT2 = c.link(t2Name, {x1: cp.get("cp", ['x']), y1: cp.get("cp", ['y']), x2: target.get("target", ['x']), y2: target.get("target", ['y']), stroke: "count"}, {curve: true})
-            let VT3 = c.link(t3Name, {x1: target.get("target", ['x']), y1: target.get("target", ['y']), x2: sex.get("sex", ['x']), y2: sex.get("sex", ['y']),stroke: "count"}, {curve: true})
-            let VT4 = c.link(t4Name, {x1: sex.get("sex", ['x']), y1: sex.get("sex", ['y']), x2: fbs.get("fbs", ['x']), y2: fbs.get("fbs", ['y']),stroke: "count"}, {curve: true})
-            let VT5 = c.link(t5Name, {x1: fbs.get("fbs", ['x']), y1: fbs.get("fbs", ['y']), x2: slope.get("slope", ['x']), y2: slope.get("slope", ['y']),stroke: "count"}, {curve: true})
-            let VT6 = c.link(t6Name, {x1: slope.get("slope", ['x']), y1: slope.get("slope", ['y']), x2: ca.get("ca", ['x']), y2: ca.get("ca", ['y']),stroke: "count"}, {curve: true})
-            let VT7 = c.link(t7Name, {x1: ca.get("ca", ['x']), y1: ca.get("ca", ['y']), x2: thal.get("thal", ['x']), y2: thal.get("thal", ['y']),stroke: "count"}, {curve: true})
-        }
+
+
+
+           let exang = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10, r: 1},o)
+           let cp = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20, r: 10},o)
+           let target = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30, r: 10},o)
+           let sex = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40, r: 10},o)
+           let fbs = c.dot(tablename + "_" + specificAttributes[4], {y : specificAttributes[4], x: 50, r: 10},o)
+           let slope = c.dot(tablename + "_" + specificAttributes[5], {y : specificAttributes[5], x: 60, r: 10},o)
+           let ca = c.dot(tablename + "_" + specificAttributes[6], {y : specificAttributes[6], x: 70, r: 10},o)
+           let thal = c.dot(tablename + "_" + specificAttributes[7], {y : specificAttributes[7], x: 80, r: 10},o)
+
+           var modifyer = 1.6
+
+           let offset = width/7.2
+
+
+           let exang2 = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10 - offset, r: 1},o)
+           let cp2 = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20- offset, r: 10},o)
+           let target2 = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30- offset, r: 10},o)
+           let sex2 = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40- offset, r: 10},o)
+           let fbs2 = c.dot(tablename + "_" + specificAttributes[4], {y : specificAttributes[4], x: 50- offset, r: 10},o)
+           let slope2 = c.dot(tablename + "_" + specificAttributes[5], {y : specificAttributes[5], x: 60- offset, r: 10},o)
+           let ca2 = c.dot(tablename + "_" + specificAttributes[6], {y : specificAttributes[6], x: 70- offset, r: 10},o)
+           let thal2 = c.dot(tablename + "_" + specificAttributes[7], {y : specificAttributes[7], x: 80- offset, r: 10},o)
+
+
+
+          
+           const e = {fontSize: {domain: [0,80]}}
+
+
+          
+           //rect, x + width + height
+           /*
+           c.rect(“heart_exang”, {x: 10, y: specificAttributes[0]}, o)
+
+
+           c.link(t1Name, {x1: exang.get(specificAttributes[0], [‘x’]), y1: exang.get(specificAttributes[0], ['y']), x2: cp.get(specificAttributes[1], [‘x’,”width”], (d) => d.x + d.width), y2: cp.get(specificAttributes[1], ['y']), stroke: "count"}, {curve: true})
+           - compute two different points one of them is shifted
+           -
+           */
+
+
+          
+           let Caption1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[0].toUpperCase(), fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption2 = c.text(tablename + "_" + specificAttributes[1], {x: cp.get(specificAttributes[1], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[1].toUpperCase(), fontSize:captionsize}, {textAnchor: "bottom"})
+           let Caption3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[2].toUpperCase() , fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[3].toUpperCase() , fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[4].toUpperCase() , fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption6 = c.text(tablename + "_" + specificAttributes[5], {x: slope.get(specificAttributes[5], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[5].toUpperCase(), fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption7 = c.text(tablename + "_" + specificAttributes[6], {x: ca.get(specificAttributes[6], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[6].toUpperCase(), fontSize: captionsize}, {textAnchor: "bottom"})
+           let Caption8 = c.text(tablename + "_" + specificAttributes[7], {x: thal.get(specificAttributes[7], "x", (d) => d.x -= modifyer*width), y: 0, text: specificAttributes[7].toUpperCase(), fontSize: captionsize}, {textAnchor: "bottom"})
+
+
+
+
+           let Label1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], "x", (d) => d.x -= modifyer*width), y: exang.get(specificAttributes[0], "y"), text: specificAttributes[0], fontSize: labelsize})
+           let Label2 = c.text(tablename + "_" + specificAttributes[1], {x: cp.get(specificAttributes[1], "x", (d) => d.x -= modifyer*width), y: cp.get(specificAttributes[1], "y"), text: specificAttributes[1], fontSize: labelsize})
+           let Label3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], "x", (d) => d.x -= modifyer*width), y: target.get(specificAttributes[2], "y"), text: specificAttributes[2] , fontSize: labelsize})
+           let Label4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], "x", (d) => d.x -= modifyer*width), y: sex.get(specificAttributes[3], "y"), text: specificAttributes[3] , fontSize: labelsize})
+           let Label5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], "x", (d) => d.x -= modifyer*width), y: fbs.get(specificAttributes[4], "y"), text: specificAttributes[4] , fontSize: labelsize})
+           let Label6 = c.text(tablename + "_" + specificAttributes[5], {x: slope.get(specificAttributes[5], "x", (d) => d.x -= modifyer*width), y: slope.get(specificAttributes[5], "y"), text: specificAttributes[5], fontSize: labelsize})
+           let Label7 = c.text(tablename + "_" + specificAttributes[6], {x: ca.get(specificAttributes[6], "x", (d) => d.x -= modifyer*width), y: ca.get(specificAttributes[6], "y"), text: specificAttributes[6], fontSize: labelsize})
+           let Label8 = c.text(tablename + "_" + specificAttributes[7], {x: thal.get(specificAttributes[7], "x", (d) => d.x -= modifyer*width), y: thal.get(specificAttributes[7], "y"), text: specificAttributes[7], fontSize: labelsize})
+          
+
+
+           let VT1 = c.link(t1Name, {x1: exang.get(specificAttributes[0], ['x']), y1: exang.get(specificAttributes[0], ['y']), x2: cp.get(specificAttributes[1], ['x', 'r'], (d) => d.x - width*d.r), y2: cp.get(specificAttributes[1], ['y']), stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT2 = c.link(t2Name, {x1: cp.get(specificAttributes[1], ['x']), y1: cp.get(specificAttributes[1], ['y']), x2: target.get(specificAttributes[2], ['x', 'r'], (d) => d.x - width*d.r), y2: target.get(specificAttributes[2], ['y']), stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT3 = c.link(t3Name, {x1: target.get(specificAttributes[2], ['x']), y1: target.get(specificAttributes[2], ['y']), x2: sex.get(specificAttributes[3], ['x', 'r'], (d) => d.x - width*d.r), y2: sex.get(specificAttributes[3], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT4 = c.link(t4Name, {x1: sex.get(specificAttributes[3], ['x']), y1: sex.get(specificAttributes[3], ['y']), x2: fbs.get(specificAttributes[4], ['x', 'r'], (d) => d.x - width*d.r), y2: fbs.get(specificAttributes[4], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT5 = c.link(t5Name, {x1: fbs.get(specificAttributes[4], ['x']), y1: fbs.get(specificAttributes[4], ['y']), x2: slope.get(specificAttributes[5], ['x', 'r'], (d) => d.x - width*d.r), y2: slope.get(specificAttributes[5], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT6 = c.link(t6Name, {x1: slope.get(specificAttributes[5], ['x']), y1: slope.get(specificAttributes[5], ['y']), x2: ca.get(specificAttributes[6], ['x', 'r'], (d) => d.x - width*d.r), y2: ca.get(specificAttributes[6], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
+           let VT7 = c.link(t7Name, {x1: ca.get(specificAttributes[6], ['x']), y1: ca.get(specificAttributes[6], ['y']), x2: thal.get(specificAttributes[7], ['x', 'r'], (d) => d.x - width*d.r), y2: thal.get(specificAttributes[7], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
+       }
+
 
         if (0) { //hierarchical nesting on heart disease status and chest pain
             await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
