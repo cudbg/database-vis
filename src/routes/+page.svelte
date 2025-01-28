@@ -948,7 +948,7 @@ h
 
         if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'Linked')`)
+            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 
             await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
             await db.conn.exec(`INSERT INTO columns VALUES
@@ -993,7 +993,7 @@ h
 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 800, height: 500})
+            let c = new Canvas(db, {width: 800, height: 800})
             canvas = c
             window.c = c;
             window.db = db;

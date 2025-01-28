@@ -702,16 +702,19 @@ export class Canvas implements IMark {
      * Time to actually draw it out
      * We could use observable here...
      */
-    const canvasWidth = 1200
-    const canvasHeight = 800
+    // const canvasWidth = 1200
+    // const canvasHeight = 800
 
-    let canvas = select(svg)
+    // let canvas = select(svg)
 
-    canvas.
-    style("width", `${canvasWidth}px`)
-    .style("height", `${canvasHeight}px`);
+    // canvas.
+    // style("width", `${canvasWidth}px`)
+    // .style("height", `${canvasHeight}px`);
 
-    let inner = canvas.append("g")
+    console.log("this.node", this.node)
+    this.node.selectAll("*").remove()
+    
+    let inner = this.node.append("g")
     
     entities.forEach((entity) => {
       inner.append("rect")
@@ -762,9 +765,6 @@ export class Canvas implements IMark {
       .text(info.text)
 
     })
-
-    
-  
 
     return Promise.resolve()
   }
