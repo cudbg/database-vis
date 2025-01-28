@@ -593,7 +593,7 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
+  async erDiagram(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
     let placeholder = "erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
@@ -604,11 +604,11 @@ export class Canvas implements IMark {
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, labelsMark, attributesMark, fkeysMark, svg)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, labelsMark, attributesMark, fkeysMark)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
+  async runERDiagramTask(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
     let tablesMarkInfo = tablesMark.markInfoCache
     let attributesMarkInfo = attributesMark.markInfoCache
     let labelsMarkInfo = labelsMark.markInfoCache
@@ -698,22 +698,8 @@ export class Canvas implements IMark {
         };
     });
 
-    /**
-     * Time to actually draw it out
-     * We could use observable here...
-     */
-    // const canvasWidth = 1200
-    // const canvasHeight = 800
-
-    // let canvas = select(svg)
-
-    // canvas.
-    // style("width", `${canvasWidth}px`)
-    // .style("height", `${canvasHeight}px`);
-
-    console.log("this.node", this.node)
     this.node.selectAll("*").remove()
-    
+
     let inner = this.node.append("g")
     
     entities.forEach((entity) => {

@@ -17,7 +17,6 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
-    let testSvg = null;
     let graphSvg = null;
     let inspector = null;
 
@@ -1014,7 +1013,7 @@ h
                                     y1: vattributes.get(["tid1", "col1"], ['y']), 
                                     x2: vattributes.get(["tid2", "col2"], ['x']), 
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
-            await c.erDiagram(vtables, vlabels, vattributes, vfkeys, testSvg)
+            await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
         (await canvas.render({ document, svg, graphSvg }));
 
@@ -1063,11 +1062,6 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={graphSvg}/>
-            </div>
-        </div>
-        <div class="col">
-            <div bind:this={rootelement}>
-                <svg bind:this={testSvg}/>
             </div>
         </div>
     </div>
