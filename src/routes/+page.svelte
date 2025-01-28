@@ -17,7 +17,6 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
-    let testSvg = null;
     let graphSvg = null;
     let inspector = null;
 
@@ -146,7 +145,112 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) { //parallel coordinates with the new heart dataset
+
+                
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
+
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
+
+            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
+            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
+            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
+            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
+            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
+            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
+            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
+
+            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100, height: 100})
+            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100, height: 100})
+            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100, height: 100})
+            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100, height: 100})
+            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
+            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
+            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100, height: 100})
+            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100, height: 100})
+
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
+            let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
+            let Label3 = c.text("heart_target", {x: target.get("target", ["x","width"], (d) => d.x + (d.width)/2), text: "Status", fontSize: 20}, {textAnchor: "bottom"})
+            let Label4 = c.text("heart_sex", {x: sex.get("sex", ["x","width"], (d) => d.x + (d.width)/2), text: "Sex", fontSize: 20}, {textAnchor: "bottom"})
+            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", ["x","width"], (d) => d.x + (d.width)/2), text: "Fbs", fontSize: 20}, {textAnchor: "bottom"})
+            let Label6 = c.text("heart_slope", {x: slope.get("slope", ["x","width"], (d) => d.x + (d.width)/2), text: "Slope", fontSize: 20}, {textAnchor: "bottom"})
+            let Label7 = c.text("heart_ca", {x: ca.get("ca", ["x","width"], (d) => d.x + (d.width)/2), text: "Ca", fontSize: 20}, {textAnchor: "bottom"})
+            let Label8 = c.text("heart_thal", {x: thal.get("thal", ["x","width"], (d) => d.x + (d.width)/2), text: "Thal", fontSize: 20}, {textAnchor: "bottom"})
+
+
+
+            let VT1 = c.link(t1Name, {
+                                        x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
+                                        y1: exang.get("exang", ['y',"height"], (d) => d.y + (d.height)/2), 
+                                        x2: cp.get("cp", ['x']), 
+                                        y2: cp.get("cp", ['y']), 
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+
+            let VT2 = c.link(t2Name, {
+                                        x1: cp.get("cp", ['x', "width"], (d) => d.x + d.width), 
+                                        y1: cp.get("cp", ['y', "height"], (d) => d.y + (d.height)/2), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+            let VT3 = c.link(t3Name, {
+                                        x1: target.get("target", ['x',"width"], (d) => d.x + d.width),
+                                        y1: target.get("target", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: sex.get("sex", ['x']),
+                                        y2: sex.get("sex", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+            let VT4 = c.link(t4Name, {
+                                        x1: sex.get("sex", ['x', "width"], (d) => d.x + d.width),
+                                        y1: sex.get("sex", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: fbs.get("fbs", ['x']),
+                                        y2: fbs.get("fbs", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+
+            let VT5 = c.link(t5Name, {
+                                        x1: fbs.get("fbs", ['x', "width"], (d) => d.x + d.width),
+                                        y1: fbs.get("fbs", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: slope.get("slope", ['x']),
+                                        y2: slope.get("slope", ['y']),
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+            
+            let VT6 = c.link(t6Name, {
+                                        x1: slope.get("slope", ['x',"width"], (d) => d.x + d.width),
+                                        y1: slope.get("slope", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: ca.get("ca", ['x']),
+                                        y2: ca.get("ca", ['y']),
+                                        stroke: "count"
+                                    },
+                                    {curve: true})
+
+            let VT7 = c.link(t7Name, {
+                                        x1: ca.get("ca", ['x',"width"], (d) => d.x + d.width),
+                                        y1: ca.get("ca", ['y', "height"], (d) => d.y + (d.height)/2),
+                                        x2: thal.get("thal", ['x']),
+                                        y2: thal.get("thal", ['y']),
+                                        stroke: "count"
+                                    }, 
+                                    {curve: true})
+        }
+
+        if (0) { //parallel coordinates with the new heart dataset
 
             
             await db.loadFromConnection()
@@ -903,55 +1007,75 @@ h
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
+            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 
             await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
             await db.conn.exec(`INSERT INTO columns VALUES
-                    (0, 'coursenum', 1, 'int', 0), (0, 'coursename', 0, 'string', 1), (0, 'deptname', 0, 'string', 2),
-                    (1, 'semester', 1, 'string', 0), (1, 'year', 1, 'int', 1),
-                    (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
+                    (0, 'customerID', 1, 'int', 0),
+                    (0, 'name', 0, 'string', 1),
+                    (0, 'email', 0, 'string', 2),
+                    (0, 'country', 0, 'string', 3),
+
+                    (1, 'orderID', 1, 'int', 0), 
+                    (1, 'orderDate', 0, 'date', 1),
+                    (1, 'amount', 0, 'int', 2),
+
+                    (2, 'productID', 1, 'int', 0), 
+                    (2, 'name', 0, 'string', 1),
+                    (2, 'price', 0, 'string', 2),
+                    (2, 'category', 0, 'int', 3),
+
+                    (3, 'paymentID', 1, 'int', 0), 
+                    (3, 'paymentDate', 0, 'date', 1),
+                    (3, 'paymentMethod', 0, 'string', 2),
+
+                    (4, 'customerID', 1, 'int', 0), 
+                    (4, 'orderID', 1, 'int', 1),
+
+                    (5, 'orderID', 1, 'int', 0), 
+                    (5, 'productID', 1, 'int', 1),
+
+                    (6, 'orderID', 1, 'int', 0), 
+                    (6, 'paymentID', 1, 'int', 1),
                     
             `)
             await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
             await db.conn.exec(`INSERT INTO fkeys VALUES
-                    (2, 'coursenum', 0, 'coursenum')`)
+                    (4, 'customerID', 0, 'customerID'),
+                    (4, 'orderID', 1, 'orderID'),
+                    (5, 'orderID', 1, 'orderID'),
+                    (5, 'productID', 2, 'productID'),
+                    (6, 'orderID', 1, 'orderID'),
+                    (6, 'paymentID', 3, 'paymentID'),
+                    `
+                )
 
-            // await db.conn.exec(`CREATE TABLE fkeys (tid1 int, tid2 int, FOREIGN KEY(tid1) references tables(tid), FOREIGN KEY(tid2) references tables(tid))`)
-            // await db.conn.exec(`INSERT INTO fkeys VALUES
-            //         (2, 0)`)
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 800, height: 500})
+            let c = new Canvas(db, {width: 800, height: 800})
             canvas = c
             window.c = c;
             window.db = db;
 
             let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y"), text: "table_name"})
             let vattributes= c.text("columns", {
                                             y: 'ordinal_position',
                                             text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
                                             'text-decoration': {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
                                             x: 0
                             })
-            // function adjustPos(x) {
-            //     return x + 50
-            // }
-            // let vtype = c.text("columns", {
-            //                                 x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
-            //                                 y: "ordinal_position",
-            //                                 text: "type"
-            //                             })
+
             c.nest(vattributes, vtables, "tid")
-            //c.nest(vtype, vtables, "tid")
 
             let vfkeys = c.link("fkeys", {
                                     x1: vattributes.get(["tid1", "col1"], ['x']), 
                                     y1: vattributes.get(["tid1", "col1"], ['y']), 
                                     x2: vattributes.get(["tid2", "col2"], ['x']), 
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
-            await c.erDiagram(vtables, vattributes, vfkeys, testSvg)
+            await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
         (await canvas.render({ document, svg, graphSvg }));
 
@@ -1000,11 +1124,6 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={graphSvg}/>
-            </div>
-        </div>
-        <div class="col">
-            <div bind:this={rootelement}>
-                <svg bind:this={testSvg}/>
             </div>
         </div>
     </div>

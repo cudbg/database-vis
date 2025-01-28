@@ -56,6 +56,12 @@ export class oplotUtils {
           y: ['cy'],
           domprops: ['cx', 'cy']
         },
+        square: {
+          klass: OPlot.rect,
+          x: ['x1', 'x2'],
+          y: ['y1', 'y2'],
+          domprops: ['x', 'y', 'width', 'height']
+        },
         rect: {
           klass: OPlot.rect,
           x: ['x1', 'x2'],

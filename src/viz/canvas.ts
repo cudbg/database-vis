@@ -593,80 +593,101 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
+  async erDiagram(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
     let placeholder = "erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
     this.taskGraph.addDependency(placeholder, attributesMark, true)
+    this.taskGraph.addDependency(placeholder, labelsMark, true)
     this.taskGraph.addDependency(placeholder, fkeysMark, true)
 
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark, svg)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, labelsMark, attributesMark, fkeysMark)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
-    console.log("trigger erDiagram")
+  async runERDiagramTask(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
     let tablesMarkInfo = tablesMark.markInfoCache
     let attributesMarkInfo = attributesMark.markInfoCache
-
-    console.log("attributesMarkInfo", attributesMarkInfo)
+    let labelsMarkInfo = labelsMark.markInfoCache
+    console.log("labelsMarkInfo", labelsMarkInfo)
 
     let g = new dagre.graphlib.Graph({compound: true})
     
-    g.setGraph({})
+    g.setGraph({rankdir: "LR"})
 
     g.setDefaultEdgeLabel(function() { return {}; });
 
-    for (let [id, markInfo] of tablesMarkInfo.entries()) {
-      let label = `${tablesMark.marktype}_${id}`
-      g.setNode(label, {label: label, width: markInfo.width, height: markInfo.height, shape: "rect"})
-    }
+    /**
+     * First get number of attrbutes per table
+     */
+    let countMap = new Map<number, number>()
 
     for (let [id, markInfo] of attributesMarkInfo.entries()) {
-      let label = `${attributesMark.marktype}_${id}`
-      g.setNode(label, {label: label, shape: "rect"})
-      
       let parentId = attributesMark.innerToOuter.get(id)
-      g.setParent(label, `${tablesMark.marktype}_${parentId}`)
+      
+      if (!countMap.has(parentId)) {
+        countMap.set(parentId, 0)
+      }
+
+      countMap.set(parentId, countMap.get(parentId) + 1)
     }
+
+    /**
+     * Create dagre rectangle nodes for each table
+     */
+    let baseTableWidth = 200
+    let baseTableHeight = 40
+    let attributeHeight = 20
+
+    for (let [id, markInfo] of tablesMarkInfo.entries()) {
+      let attributeCount = 0
+      if (countMap.has(id))
+        attributeCount = countMap.get(id)
+
+
+      let height = attributeCount * attributeHeight + baseTableHeight
+      let label = `${tablesMark.marktype}_${id}`
+    
+      g.setNode(label, {label: label, width: baseTableWidth, height: height, shape: "rect"})
+    }
+
+
 
     /**
      * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
      * AND
      * x1 == y1 AND x2 == y2. MASSIVE ASSUMPTION MADE HERE
+     * x1_ref, x2_ref, etc. are mark ids (numbers)
      */
     for (let [key, value] of fkeysMark.referencedMarks) {
       let {x1_ref, x2_ref, y1_ref, y2_ref} = value
-      g.setEdge(`${attributesMark.marktype}_${x1_ref.toString()}`, `${attributesMark.marktype}_${x2_ref.toString()}`)
+      let leftAttributeId = x1_ref
+      let rightAttributeId = x2_ref
+      let leftEntityId = attributesMark.innerToOuter.get(leftAttributeId)
+      let rightEntityId = attributesMark.innerToOuter.get(rightAttributeId)
+
+      g.setEdge(`${tablesMark.marktype}_${leftEntityId.toString()}`, `${tablesMark.marktype}_${rightEntityId.toString()}`)
     }
 
     dagre.layout(g)
 
 
     let entities = []
-    let attributes = []
 
     g.nodes().forEach(id => {
-      if (id.includes(`${tablesMark.marktype}`)) {
-        const rect = g.node(id);
-        entities.push({ id, x: rect.x, y: rect.y})
-      } else {
-        const text = g.node(id);
-        let match = id.match(/^text_(\d+)$/)
+      const rect = g.node(id);
+        let match = id.match(/^rect_(\d+)$/)
         if (!match) {
           //Should never end up here
           throw new Error("Error in erDiagram: Could not parse id of texts!")
         }
 
         let parsedId = parseInt(match[1], 10)
-
-        attributes.push({ id, x: text.x, y: text.y, text: parsedId})
-      }
+        entities.push({ id: parsedId, x: rect.x, y: rect.y, width: rect.width, height: rect.height})
     });
-
 
     let edges = g.edges().map(edge => {
       const source = g.node(edge.v);
@@ -677,51 +698,59 @@ export class Canvas implements IMark {
         };
     });
 
-    console.log("entities", entities)
-    console.log("attributes", attributes)
-    console.log("edges", edges)
+    this.node.selectAll("*").remove()
 
-    let erDiagram = OPlot.plot({
-                marks: [
-                    OPlot.rect(entities, {x: "x", y: "y", fill: "none", stroke: "black"}),
-                    OPlot.link(edges, {x1: "x1", y1: "y1", x2: "x2", y2: "y2"}),
-                    OPlot.text(attributes, {text: "text", x: "x", y: "y"})
-                ]
+    let inner = this.node.append("g")
+    
+    entities.forEach((entity) => {
+      inner.append("rect")
+        .attr("x", entity.x)
+        .attr("y", entity.y)
+        .attr("width", baseTableWidth)
+        .attr("height", entity.height)
+        .style("fill", "none")
+        .style("stroke", "black")
     })
-    
-    select(erDiagram)
-        .selectAll(`g[aria-label='y-axis tick']`)
-        .style("visibility", "hidden");
 
-    select(erDiagram)
-        .selectAll(`g[aria-label='y-axis tick label']`)
-        .style("visibility", "hidden");
+    edges.forEach((edge) => {
+      inner.append("path")
+        .attr("d", `M${edge.x1},${edge.y1}L${edge.x2},${edge.y2}`)
+        .style("stroke", "black")
+    })
 
-    select(erDiagram)
-        .selectAll(`g[aria-label='x-axis tick']`)
-        .style("visibility", "hidden");
-          
-    select(erDiagram)
-            .selectAll(`g[aria-label='x-axis tick label']`)
-            .style("visibility", "hidden");
-    
-    const canvasWidth = 1200
-    const canvasHeight = 800
+    let rowCounts = new Map<number, number>()
 
-    select(erDiagram)
-        .attr("width", canvasWidth)
-        .attr("height", canvasHeight)
+    attributesMarkInfo.forEach((info, id) => {
+      let parentId = attributesMark.innerToOuter.get(id)
+      let parentInfo = entities.find((entity) => entity.id == parentId)
+      let currRowCount = 0
+      if (!rowCounts.has(parentId)) {
+        rowCounts.set(parentId, 1)
+      } else {
+        currRowCount = rowCounts.get(parentId)
+        rowCounts.set(parentId, rowCounts.get(parentId) + 1)
+      }
 
-    let node = select(svg)
+      inner.append("text")
+        .attr("x", parentInfo.x)
+        .attr("y", parentInfo.y + (currRowCount + 1)  * 20)
+        .text(info.text)
+    })
 
-    node.style("width", `${canvasWidth}px`)
-            .style("height", `${canvasHeight}px`);
-    
-    let testCanvas = node.append("svg:g")
-            .classed("testCanvas", true);
+    /**
+     * Assume for now that x and y always exist on label marks, are the same, and hold id of the table that this label is associated with
+     */
+    labelsMarkInfo.forEach((info, id) => {
+      let obj = labelsMark.referencedMarks.get(id)
 
-    
-    (testCanvas.node() as HTMLElement).appendChild(erDiagram);
+
+      let parentInfo = entities.find((entity) => entity.id == obj.x_ref)
+      inner.append("text")
+      .attr("x", parentInfo.x)
+      .attr("y", parentInfo.y)
+      .text(info.text)
+
+    })
 
     return Promise.resolve()
   }
