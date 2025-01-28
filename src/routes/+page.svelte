@@ -149,7 +149,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -946,20 +946,50 @@ h
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Courses'), (1, 'Terms'), (2, 'Offered')`)
+            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'Linked')`)
 
             await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
             await db.conn.exec(`INSERT INTO columns VALUES
-                    (0, 'coursenum', 1, 'int', 0), (0, 'coursename', 0, 'string', 1), (0, 'deptname', 0, 'string', 2),
-                    (1, 'semester', 1, 'string', 0), (1, 'year', 1, 'int', 1),
-                    (2, 'coursenum', 1, 'int', 0), (2, 'coursename', 1, 'string', 1), (2, 'deptname', 1, 'string', 2), (2, 'semester', 1, 'string', 3), (2, 'year', 1, 'int', 4)
+                    (0, 'customerID', 1, 'int', 0),
+                    (0, 'name', 0, 'string', 1),
+                    (0, 'email', 0, 'string', 2),
+                    (0, 'country', 0, 'string', 3),
+
+                    (1, 'orderID', 1, 'int', 0), 
+                    (1, 'orderDate', 0, 'date', 1),
+                    (1, 'amount', 0, 'int', 2),
+
+                    (2, 'productID', 1, 'int', 0), 
+                    (2, 'name', 0, 'string', 1),
+                    (2, 'price', 0, 'string', 2),
+                    (2, 'category', 0, 'int', 3),
+
+                    (3, 'paymentID', 1, 'int', 0), 
+                    (3, 'paymentDate', 0, 'date', 1),
+                    (3, 'paymentMethod', 0, 'string', 2),
+
+                    (4, 'customerID', 1, 'int', 0), 
+                    (4, 'orderID', 1, 'int', 1),
+
+                    (5, 'orderID', 1, 'int', 0), 
+                    (5, 'productID', 1, 'int', 1),
+
+                    (6, 'orderID', 1, 'int', 0), 
+                    (6, 'paymentID', 1, 'int', 1),
                     
             `)
             await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
             await db.conn.exec(`INSERT INTO fkeys VALUES
-                    (2, 'coursenum', 0, 'coursenum')`)
+                    (4, 'customerID', 0, 'customerID'),
+                    (4, 'orderID', 1, 'orderID'),
+                    (5, 'orderID', 1, 'orderID'),
+                    (5, 'productID', 2, 'productID'),
+                    (6, 'orderID', 1, 'orderID'),
+                    (6, 'paymentID', 3, 'paymentID'),
+                    `
+                )
 
             // await db.conn.exec(`CREATE TABLE fkeys (tid1 int, tid2 int, FOREIGN KEY(tid1) references tables(tid), FOREIGN KEY(tid2) references tables(tid))`)
             // await db.conn.exec(`INSERT INTO fkeys VALUES
@@ -972,6 +1002,7 @@ h
             window.db = db;
 
             let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y"), text: "table_name"})
             let vattributes= c.text("columns", {
                                             y: 'ordinal_position',
                                             text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},

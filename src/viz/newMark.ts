@@ -1407,6 +1407,8 @@ export class Mark {
           let el = d3.select(this);
           let elAttrs = el.node().attributes;
           let markAttributes = {};
+          let value = el.text()
+          markAttributes["text"] = value
 
           for (let j = 0; j < elAttrs.length; j++) {
               let attrName = elAttrs[j].name;
@@ -1632,6 +1634,7 @@ export class Mark {
     }
 
     prepareMarkInfo(markInfo) {
+      console.log("markInfo prepareMarkInfo", markInfo)
       for (let i = 0; i < markInfo.length; i++) {
         for (let [key,value] of Object.entries(markInfo[i])) {
           /**
@@ -1677,6 +1680,10 @@ export class Mark {
           let x = markInfo[i]["x"]
           let y = markInfo[i]["y"]
           obj = {x,y}
+        }
+
+        if (this.marktype == "text") {
+          obj["text"] = markInfo[i]["text"]
         }
         obj["data_xoffset"] = data_xoffset
         obj["data_yoffset"] = data_yoffset
