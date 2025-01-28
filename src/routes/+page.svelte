@@ -991,9 +991,6 @@ h
                     `
                 )
 
-            // await db.conn.exec(`CREATE TABLE fkeys (tid1 int, tid2 int, FOREIGN KEY(tid1) references tables(tid), FOREIGN KEY(tid2) references tables(tid))`)
-            // await db.conn.exec(`INSERT INTO fkeys VALUES
-            //         (2, 0)`)
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
@@ -1009,23 +1006,15 @@ h
                                             'text-decoration': {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
                                             x: 0
                             })
-            // function adjustPos(x) {
-            //     return x + 50
-            // }
-            // let vtype = c.text("columns", {
-            //                                 x: vcolname.get(["tid", "colname"], ["x"], adjustPos),
-            //                                 y: "ordinal_position",
-            //                                 text: "type"
-            //                             })
+
             c.nest(vattributes, vtables, "tid")
-            //c.nest(vtype, vtables, "tid")
 
             let vfkeys = c.link("fkeys", {
                                     x1: vattributes.get(["tid1", "col1"], ['x']), 
                                     y1: vattributes.get(["tid1", "col1"], ['y']), 
                                     x2: vattributes.get(["tid2", "col2"], ['x']), 
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
-            await c.erDiagram(vtables, vattributes, vfkeys, testSvg)
+            await c.erDiagram(vtables, vlabels, vattributes, vfkeys, testSvg)
         }
         (await canvas.render({ document, svg, graphSvg }));
 

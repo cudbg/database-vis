@@ -593,23 +593,26 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
+  async erDiagram(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
     let placeholder = "erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
     this.taskGraph.addDependency(placeholder, attributesMark, true)
+    this.taskGraph.addDependency(placeholder, labelsMark, true)
     this.taskGraph.addDependency(placeholder, fkeysMark, true)
 
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark, svg)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, labelsMark, attributesMark, fkeysMark, svg)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
+  async runERDiagramTask(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark, svg) {
     let tablesMarkInfo = tablesMark.markInfoCache
     let attributesMarkInfo = attributesMark.markInfoCache
+    let labelsMarkInfo = labelsMark.markInfoCache
+    console.log("labelsMarkInfo", labelsMarkInfo)
 
     let g = new dagre.graphlib.Graph({compound: true})
     
@@ -743,6 +746,21 @@ export class Canvas implements IMark {
         .attr("x", parentInfo.x)
         .attr("y", parentInfo.y + (currRowCount + 1)  * 20)
         .text(info.text)
+    })
+
+    /**
+     * Assume for now that x and y always exist on label marks, are the same, and hold id of the table that this label is associated with
+     */
+    labelsMarkInfo.forEach((info, id) => {
+      let obj = labelsMark.referencedMarks.get(id)
+
+
+      let parentInfo = entities.find((entity) => entity.id == obj.x_ref)
+      inner.append("text")
+      .attr("x", parentInfo.x)
+      .attr("y", parentInfo.y)
+      .text(info.text)
+
     })
 
     

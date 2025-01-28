@@ -1054,8 +1054,6 @@ export class Mark {
      * @returns 
      */
     handleCallback(channelItem: RawChannelItem, data) {
-      console.log("jumped to handleCallback", data)
-      console.log("channelItem", channelItem)
       let foundStr = false
       let resArr = []
 
@@ -1353,8 +1351,6 @@ export class Mark {
         height = defaultLen
       }
 
-      console.log("width", width)
-      console.log("height", height)
 
       let selection = maybeselection(mark)
         .selectAll(`g[aria-label="rect"]`)
@@ -1634,7 +1630,6 @@ export class Mark {
     }
 
     prepareMarkInfo(markInfo) {
-      console.log("markInfo prepareMarkInfo", markInfo)
       for (let i = 0; i < markInfo.length; i++) {
         for (let [key,value] of Object.entries(markInfo[i])) {
           /**
@@ -1794,6 +1789,7 @@ export class Mark {
           }
         }
       }
+      console.log("hello?", this.referencedMarks)
     }
 
 
