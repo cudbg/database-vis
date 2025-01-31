@@ -152,6 +152,13 @@ export class Canvas implements IMark {
     plotoptions ??= {}
     let srcTable = this.db.table(source)
     let canvas = findcanvas(this, srcTable);
+    if (marktype == "square") {
+      if (("width" in mapping ) && !("height" in mapping)) {
+        mapping.height = mapping.width
+      } else if (!("width" in mapping ) && ("height" in mapping)) {
+        mapping.width = mapping.height
+      }
+    }
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
     return mark;

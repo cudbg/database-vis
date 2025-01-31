@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -168,14 +168,14 @@
             let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
             let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
 
-            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100, height: 100})
-            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100, height: 100})
-            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100, height: 100})
-            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100, height: 100})
-            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
-            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
-            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100, height: 100})
-            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100, height: 100})
+            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100})
+            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100})
+            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100})
+            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100})
+            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100})
+            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100})
+            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100})
+            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100})
 
             let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
             let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
@@ -1007,7 +1007,7 @@ h
 
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 
