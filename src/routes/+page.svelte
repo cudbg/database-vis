@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -977,7 +977,7 @@ h
             let vtext_origin = c.text("airports", {x: VA.get("airport", "x"), y: VA.get("airport", "y"), text: "airport", fill: "red"})
         }
 
-        if (1) { // nesting experiment
+        if (0) { // nesting experiment
             await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
             await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
             await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
@@ -1076,6 +1076,37 @@ h
                                     x2: vattributes.get(["tid2", "col2"], ['x']), 
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
             await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
+        }
+
+        if (0) {
+            await db.conn.exec(`CREATE TABLE T (id int primary key, a int, b int)`)
+            await db.conn.exec(`CREATE TABLE S (id int primary key, c int, d int, FOREIGN KEY (c) REFERENCES T(id))`)
+
+            await db.conn.exec(`INSERT INTO T (id, a, b) VALUES 
+                    (1, 10, 100),
+                    (2, 20, 200),
+                    (3, 30, 300),
+                    (4, 40, 400),
+                    (5, 50, 500);
+                    `)
+            await db.conn.exec(`INSERT INTO S (id, c, d) VALUES 
+                    (1, 1, 1000),
+                    (2, 2, 2000),
+                    (3, 2, 3000),
+                    (4, 4, 4000),
+                    (5, 5, 5000);`)
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 800})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let texts = c.text("T", {x: 10, y: 0}, {textAnchor: "bottom"})
+
+            let dots = c.dot("S", {x: "d", y: texts.get("c", "a")})
+
         }
         (await canvas.render({ document, svg, graphSvg }));
 
