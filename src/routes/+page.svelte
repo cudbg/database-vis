@@ -192,7 +192,7 @@
                                         x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
                                         y1: exang.get("exang", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         x2: cp.get("cp", ['x']), 
-                                        y2: cp.get("cp", ['y']), 
+                                        y2: cp.get("cp", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         stroke: "count"
                                     }, 
                                     {curve: true})
@@ -201,7 +201,7 @@
                                         x1: cp.get("cp", ['x', "width"], (d) => d.x + d.width), 
                                         y1: cp.get("cp", ['y', "height"], (d) => d.y + (d.height)/2), 
                                         x2: target.get("target", ['x']), 
-                                        y2: target.get("target", ['y']), 
+                                        y2: target.get("target", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -209,7 +209,7 @@
                                         x1: target.get("target", ['x',"width"], (d) => d.x + d.width),
                                         y1: target.get("target", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: sex.get("sex", ['x']),
-                                        y2: sex.get("sex", ['y']),
+                                        y2: sex.get("sex", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -217,7 +217,7 @@
                                         x1: sex.get("sex", ['x', "width"], (d) => d.x + d.width),
                                         y1: sex.get("sex", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: fbs.get("fbs", ['x']),
-                                        y2: fbs.get("fbs", ['y']),
+                                        y2: fbs.get("fbs", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -226,7 +226,7 @@
                                         x1: fbs.get("fbs", ['x', "width"], (d) => d.x + d.width),
                                         y1: fbs.get("fbs", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: slope.get("slope", ['x']),
-                                        y2: slope.get("slope", ['y']),
+                                        y2: slope.get("slope", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     }, 
                                     {curve: true})
@@ -235,7 +235,7 @@
                                         x1: slope.get("slope", ['x',"width"], (d) => d.x + d.width),
                                         y1: slope.get("slope", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: ca.get("ca", ['x']),
-                                        y2: ca.get("ca", ['y']),
+                                        y2: ca.get("ca", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -244,7 +244,7 @@
                                         x1: ca.get("ca", ['x',"width"], (d) => d.x + d.width),
                                         y1: ca.get("ca", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: thal.get("thal", ['x']),
-                                        y2: thal.get("thal", ['y']),
+                                        y2: thal.get("thal", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     }, 
                                     {curve: true})

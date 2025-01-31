@@ -99,23 +99,9 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     }
   }
   else if (item.isGet) {
-    if (item.dataAttr.length > 1) {
-       /**
-        * more than 1 means we must select each column in dataAttr without any renaming
-        */
-      for (let i = 0; i < item.dataAttr.length; i++) {
-        columns.push({dataAttr: item.dataAttr[i], renameAs: item.dataAttr[i]})
-      }
-    } else {
-      /**
-       * Equal to 1 means we can and must rename each column when selecting
-       * We rename because the user may want to create a link ie.
-       * x1: va.get(null, ["x"]), y1: va.get(null, ["y"]), x2: vb.get(null, ["x"]), y2: vb.get(null, ["y"])
-       * However, the marktables for va and vy will have x and y columns, 
-       * we cannot select two different columns with the same name
-       */
-      columns = [{dataAttr: item.dataAttr[0], renameAs: item.visualAttr}]
-    }
+    item.dataAttr.forEach((attr) => {
+      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${attr}`})
+    })
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
      item.dataAttr.forEach(dattr => {
@@ -944,16 +930,21 @@ export class Mark {
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
         let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
+        let queryItem = toQueryItem(currItem)
+
 
         if (currItem.isGet) {
-          let arr = data[visualAttr]
+          let arr = data[queryItem.columns[0].renameAs]
           /**
            * If callback exists, then we run the callback function and assign the resulting array
            * from handlecallback to channels[visualAttr]
            */
           if (callback)
-            arr = this.handleCallback(currItem, data)
+            arr = this.handleCallback(currItem, queryItem, data)
 
+          /**
+           * BUGGY
+           */
           if (mark.level != this.level){
             if (visualAttr == "x1" 
               || visualAttr == "x2" 
@@ -1019,7 +1010,7 @@ export class Mark {
            */
           if (Object.keys(data).includes(dataAttr[0])) {
             if (callback)
-              channels[visualAttr] = this.handleCallback(currItem, data)
+              channels[visualAttr] = this.handleCallback(currItem,queryItem, data)
             else
               channels[visualAttr] = data[dataAttr[0]]
           } else {
@@ -1053,16 +1044,12 @@ export class Mark {
      *                As such, this function must filter for the required data attributes to run callback on
      * @returns 
      */
-    handleCallback(channelItem: RawChannelItem, data) {
-      let foundStr = false
+    handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, data) {
       let resArr = []
-
       let {mark, callback, dataAttr} = channelItem
-
+      let {columns} = queryItem
       let src = mark == this ? this.src : mark.marktable
-
-
-      let datalen = data[dataAttr[0]].length
+      let datalen = data[columns[0].renameAs].length
 
       /**
        * For the number of datapoints available
@@ -1074,20 +1061,21 @@ export class Mark {
        */
       for (let i = 0; i < datalen; i++) {
         let obj = {}
-        dataAttr.forEach((attr) => {
-          let attrIndex = src.schema.attrs.indexOf(attr)
+        columns.forEach((column) => {
+          let attrIndex = src.schema.attrs.indexOf(column.dataAttr)
 
           if (attrIndex == -1)
-            throw new Error(`Error in handleCallback: Could not find attribute ${attr} in ${src.internalname}`)
+            throw new Error(`Error in handleCallback: Could not find attribute ${column.dataAttr} in ${src.internalname}`)
   
           let attrType = src.schema.types[attrIndex]
   
           if (attrType == "num") {
-            obj[attr] = parseFloat(data[attr][i])
+            obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
           } else {
-            obj[attr] = data[attr][i]
+            obj[column.dataAttr] = data[column.renameAs][i]
           }
         })
+        console.log("obj", obj)
         resArr.push(callback(obj))
       }
       return resArr
@@ -1789,7 +1777,6 @@ export class Mark {
           }
         }
       }
-      console.log("hello?", this.referencedMarks)
     }
 
 
