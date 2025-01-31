@@ -100,7 +100,7 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   }
   else if (item.isGet) {
     item.dataAttr.forEach((attr) => {
-      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${attr}`})
+      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${item.visualAttr}_${attr}`})
     })
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
@@ -956,8 +956,14 @@ export class Mark {
 
 
                 for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
-                  if (visualAttrSet.has(visualAttr))
-                    idcounter = id
+                  visualAttrSet.forEach((attr) => {
+                    if (attr.includes(visualAttr)) {
+                      idcounter = id
+                    }
+                  })
+                  if (!idcounter) {
+                    throw new Error("Cannot find visualAttr in applychannels")
+                  }
                 }
 
                 let idcounterArr = data[`idcounter_${idcounter}`]
@@ -1075,7 +1081,6 @@ export class Mark {
             obj[column.dataAttr] = data[column.renameAs][i]
           }
         })
-        console.log("obj", obj)
         resArr.push(callback(obj))
       }
       return resArr
@@ -1761,22 +1766,24 @@ export class Mark {
     pickupReferences(rows) {
       for (let i = 0; i < this.channels.length; i++) {
         let {mark, visualAttr, isGet} = this.channels[i]
+        let queryItem = toQueryItem(this.channels[i])
 
         if (isGet) {
-          let ref = `${visualAttr}_ref`
+          let ref = `${queryItem.columns[0].renameAs}_ref`
           /**
            * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
            */
           for (let i = 0; i < rows.length; i++) {
             if (this.referencedMarks.has(rows[i][IDNAME])) {
               let obj = this.referencedMarks.get(rows[i][IDNAME])
-              obj[ref] = rows[i][ref]
+              obj[`${visualAttr}_ref`] = rows[i][ref]
             } else {
-              this.referencedMarks.set(rows[i][IDNAME], {[ref]: rows[i][ref]})
+              this.referencedMarks.set(rows[i][IDNAME], {[`${visualAttr}_ref`]: rows[i][ref]})
             }
           }
         }
       }
+      console.log("referencedMarks", this.referencedMarks)
     }
 
 

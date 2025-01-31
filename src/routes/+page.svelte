@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -977,7 +977,7 @@ h
             let vtext_origin = c.text("airports", {x: VA.get("airport", "x"), y: VA.get("airport", "y"), text: "airport", fill: "red"})
         }
 
-        if (0) { // nesting experiment
+        if (1) { // nesting experiment
             await db.conn.exec(`CREATE TABLE outerrects (a int primary key)`)
             await db.conn.exec(`CREATE TABLE innerrects (aid int, bid int, PRIMARY KEY (aid, bid), FOREIGN KEY (aid) REFERENCES outerrects (a))`)
             await db.conn.exec(`CREATE TABLE dots (aid int, bid int, c int, PRIMARY KEY (aid, bid, c), FOREIGN KEY (aid, bid) REFERENCES innerrects (aid, bid))`)
