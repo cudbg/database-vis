@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -168,14 +168,14 @@
             let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
             let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
 
-            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100, height: 100})
-            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100, height: 100})
-            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100, height: 100})
-            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100, height: 100})
-            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
-            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100, height: 100})
-            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100, height: 100})
-            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100, height: 100})
+            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100})
+            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100})
+            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100})
+            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100})
+            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100})
+            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100})
+            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100})
+            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100})
 
             let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
             let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
@@ -192,7 +192,7 @@
                                         x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
                                         y1: exang.get("exang", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         x2: cp.get("cp", ['x']), 
-                                        y2: cp.get("cp", ['y']), 
+                                        y2: cp.get("cp", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         stroke: "count"
                                     }, 
                                     {curve: true})
@@ -201,7 +201,7 @@
                                         x1: cp.get("cp", ['x', "width"], (d) => d.x + d.width), 
                                         y1: cp.get("cp", ['y', "height"], (d) => d.y + (d.height)/2), 
                                         x2: target.get("target", ['x']), 
-                                        y2: target.get("target", ['y']), 
+                                        y2: target.get("target", ['y',"height"], (d) => d.y + (d.height)/2), 
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -209,7 +209,7 @@
                                         x1: target.get("target", ['x',"width"], (d) => d.x + d.width),
                                         y1: target.get("target", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: sex.get("sex", ['x']),
-                                        y2: sex.get("sex", ['y']),
+                                        y2: sex.get("sex", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -217,7 +217,7 @@
                                         x1: sex.get("sex", ['x', "width"], (d) => d.x + d.width),
                                         y1: sex.get("sex", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: fbs.get("fbs", ['x']),
-                                        y2: fbs.get("fbs", ['y']),
+                                        y2: fbs.get("fbs", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -226,7 +226,7 @@
                                         x1: fbs.get("fbs", ['x', "width"], (d) => d.x + d.width),
                                         y1: fbs.get("fbs", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: slope.get("slope", ['x']),
-                                        y2: slope.get("slope", ['y']),
+                                        y2: slope.get("slope", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     }, 
                                     {curve: true})
@@ -235,7 +235,7 @@
                                         x1: slope.get("slope", ['x',"width"], (d) => d.x + d.width),
                                         y1: slope.get("slope", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: ca.get("ca", ['x']),
-                                        y2: ca.get("ca", ['y']),
+                                        y2: ca.get("ca", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     },
                                     {curve: true})
@@ -244,7 +244,7 @@
                                         x1: ca.get("ca", ['x',"width"], (d) => d.x + d.width),
                                         y1: ca.get("ca", ['y', "height"], (d) => d.y + (d.height)/2),
                                         x2: thal.get("thal", ['x']),
-                                        y2: thal.get("thal", ['y']),
+                                        y2: thal.get("thal", ['y',"height"], (d) => d.y + (d.height)/2),
                                         stroke: "count"
                                     }, 
                                     {curve: true})
@@ -1007,7 +1007,7 @@ h
 
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 
@@ -1076,6 +1076,37 @@ h
                                     x2: vattributes.get(["tid2", "col2"], ['x']), 
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
             await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
+        }
+
+        if (0) {
+            await db.conn.exec(`CREATE TABLE T (id int primary key, a int, b int)`)
+            await db.conn.exec(`CREATE TABLE S (id int primary key, c int, d int, FOREIGN KEY (c) REFERENCES T(id))`)
+
+            await db.conn.exec(`INSERT INTO T (id, a, b) VALUES 
+                    (1, 10, 100),
+                    (2, 20, 200),
+                    (3, 30, 300),
+                    (4, 40, 400),
+                    (5, 50, 500);
+                    `)
+            await db.conn.exec(`INSERT INTO S (id, c, d) VALUES 
+                    (1, 1, 1000),
+                    (2, 2, 2000),
+                    (3, 2, 3000),
+                    (4, 4, 4000),
+                    (5, 5, 5000);`)
+
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 800})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let texts = c.text("T", {x: 10, y: 0}, {textAnchor: "bottom"})
+
+            let dots = c.dot("S", {x: "d", y: texts.get("c", "a")})
+
         }
         (await canvas.render({ document, svg, graphSvg }));
 

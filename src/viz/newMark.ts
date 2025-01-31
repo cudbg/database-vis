@@ -57,6 +57,7 @@ interface RawChannelItem {
   isGet: boolean
   refLayout: RefLayout
   callback: Function
+  isVisualChannel: boolean
 }
 
 /**
@@ -86,8 +87,8 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   let columns:ColumnObj[] = []
 
   //setting source to select from
-  if (item.isGet) {
-    source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
+  if (item.isGet && item.isVisualChannel) {
+      source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
   } else {
     source = item.mark.src
   }
@@ -99,23 +100,9 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     }
   }
   else if (item.isGet) {
-    if (item.dataAttr.length > 1) {
-       /**
-        * more than 1 means we must select each column in dataAttr without any renaming
-        */
-      for (let i = 0; i < item.dataAttr.length; i++) {
-        columns.push({dataAttr: item.dataAttr[i], renameAs: item.dataAttr[i]})
-      }
-    } else {
-      /**
-       * Equal to 1 means we can and must rename each column when selecting
-       * We rename because the user may want to create a link ie.
-       * x1: va.get(null, ["x"]), y1: va.get(null, ["y"]), x2: vb.get(null, ["x"]), y2: vb.get(null, ["y"])
-       * However, the marktables for va and vy will have x and y columns, 
-       * we cannot select two different columns with the same name
-       */
-      columns = [{dataAttr: item.dataAttr[0], renameAs: item.visualAttr}]
-    }
+    item.dataAttr.forEach((attr) => {
+      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${item.visualAttr}_${attr}`})
+    })
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
      item.dataAttr.forEach(dattr => {
@@ -258,8 +245,9 @@ export class Mark {
           let refLayout = null
           let callback = null
           let src = this.src
+          let isVisualChannel = false
 
-          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback}
+          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
@@ -268,21 +256,24 @@ export class Mark {
               rawChannelItem.refLayout = dattr
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
-            let {othermark, constraint, othervattr, callback} = this.processGet(dattr)
+            let {othermark, constraint, othervattr, callback, isVisualChannel} = this.processGet(dattr)
             rawChannelItem.mark = othermark
-            //rawChannelItem.src = othermark.marktable //very suspect line
             rawChannelItem.constraint = constraint
             rawChannelItem.dataAttr = othervattr
             rawChannelItem.callback = callback
             rawChannelItem.isGet = true
+            rawChannelItem.isVisualChannel = isVisualChannel
 
-            /**
-             * Currently hard coding scales, need to fix!!!!!!
-             */
-            if (va == "x1" || va == "x2" || va == "x")
-              this._scales.x =  {type: "identity"}
-            else if (va == "y1" || va == "y2" || va == "y")
-              this._scales.y = {type: "identity"}
+            if (isVisualChannel) {
+              /**
+               * Currently hard coding scales, need to fix!!!!!!
+               */
+              if (va == "x1" || va == "x2" || va == "x")
+                this._scales.x =  {type: "identity"}
+              else if (va == "y1" || va == "y2" || va == "y")
+                this._scales.y = {type: "identity"}
+            }
+
             
             this.c.registerRefMark(othermark, this)
             this.c.taskGraph.addDependency(this, othermark, true)
@@ -323,21 +314,40 @@ export class Mark {
      * @returns 
      *                object with format {mark: this, filter: ..., vattr: ...}
      */
-    get(usrSearchkeys: String | String[], usrVattr: String | String[], callback?): {othermark, searchkeys, othervattr, callback} {
+    get(usrSearchkeys: String | String[], usrAttr: String | String[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
       let searchkeys = null
 
       if (usrSearchkeys)
         searchkeys = Array.isArray(usrSearchkeys) ? usrSearchkeys : [usrSearchkeys]
 
-      let othervattr = Array.isArray(usrVattr) ? usrVattr : [usrVattr]
+      let otherAttr = Array.isArray(usrAttr) ? usrAttr : [usrAttr]
   
-      for (let attr of othervattr) {
+      let valid = true
+      for (let attr of otherAttr) {
         if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present to this.mappings
-          throw new Error(`${attr} is not mapped in ${this.src.displayname}`)
+          valid = false
         }
       }
 
-      let obj = {othermark: this, searchkeys: searchkeys, othervattr: othervattr, callback: callback}
+      if (valid) {
+        let obj = {othermark: this, searchkeys: searchkeys, otherAttr, callback: callback, isVisualChannel: true}
+        return obj
+      }
+
+      /**
+       * Need to handle case where we want a data attribute and not a visual channel
+       */
+      valid = true
+
+      if (!otherAttr.every((attr) => this.src.schema.attrs.includes(attr))) {
+        valid = false
+      }
+
+      if (!valid) {
+        throw new Error(`Give me valid columns to get!`)
+      }
+
+      let obj = {othermark: this, searchkeys: searchkeys, otherAttr: otherAttr, callback: callback, isVisualChannel: false}
       return obj
     }
 
@@ -372,8 +382,9 @@ export class Mark {
     processGet(getObj) {
       let othermark = getObj.othermark
       let searchkeys = getObj.searchkeys
-      let othervattr = getObj.othervattr
+      let othervattr = getObj.otherAttr
       let callback = getObj.callback
+      let isVisualChannel = getObj.isVisualChannel
 
       /**
        * If both marks share the same source table, then skip checking and create a new FKConstraint
@@ -398,14 +409,14 @@ export class Mark {
           if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
             continue
 
-          return {othermark, constraint, othervattr, callback}
+          return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
 
         let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
 
         this.c.db.addConstraint(constraint)
         
-        return {othermark, constraint, othervattr, callback}
+        return {othermark, constraint, othervattr, callback, isVisualChannel}
       }
 
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
@@ -435,7 +446,7 @@ export class Mark {
               throw new Error("No possible path!")
           }
 
-          return {othermark, constraint, othervattr, callback}
+          return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
       }
 
@@ -944,16 +955,21 @@ export class Mark {
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
         let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
+        let queryItem = toQueryItem(currItem)
+
 
         if (currItem.isGet) {
-          let arr = data[visualAttr]
+          let arr = data[queryItem.columns[0].renameAs]
           /**
            * If callback exists, then we run the callback function and assign the resulting array
            * from handlecallback to channels[visualAttr]
            */
           if (callback)
-            arr = this.handleCallback(currItem, data)
+            arr = this.handleCallback(currItem, queryItem, data)
 
+          /**
+           * BUGGY
+           */
           if (mark.level != this.level){
             if (visualAttr == "x1" 
               || visualAttr == "x2" 
@@ -965,8 +981,14 @@ export class Mark {
 
 
                 for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
-                  if (visualAttrSet.has(visualAttr))
-                    idcounter = id
+                  visualAttrSet.forEach((attr) => {
+                    if (attr.includes(visualAttr)) {
+                      idcounter = id
+                    }
+                  })
+                  if (!idcounter) {
+                    throw new Error("Cannot find visualAttr in applychannels")
+                  }
                 }
 
                 let idcounterArr = data[`idcounter_${idcounter}`]
@@ -1019,7 +1041,7 @@ export class Mark {
            */
           if (Object.keys(data).includes(dataAttr[0])) {
             if (callback)
-              channels[visualAttr] = this.handleCallback(currItem, data)
+              channels[visualAttr] = this.handleCallback(currItem,queryItem, data)
             else
               channels[visualAttr] = data[dataAttr[0]]
           } else {
@@ -1053,16 +1075,12 @@ export class Mark {
      *                As such, this function must filter for the required data attributes to run callback on
      * @returns 
      */
-    handleCallback(channelItem: RawChannelItem, data) {
-      let foundStr = false
+    handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, data) {
       let resArr = []
-
       let {mark, callback, dataAttr} = channelItem
-
+      let {columns} = queryItem
       let src = mark == this ? this.src : mark.marktable
-
-
-      let datalen = data[dataAttr[0]].length
+      let datalen = data[columns[0].renameAs].length
 
       /**
        * For the number of datapoints available
@@ -1074,18 +1092,18 @@ export class Mark {
        */
       for (let i = 0; i < datalen; i++) {
         let obj = {}
-        dataAttr.forEach((attr) => {
-          let attrIndex = src.schema.attrs.indexOf(attr)
+        columns.forEach((column) => {
+          let attrIndex = src.schema.attrs.indexOf(column.dataAttr)
 
           if (attrIndex == -1)
-            throw new Error(`Error in handleCallback: Could not find attribute ${attr} in ${src.internalname}`)
+            throw new Error(`Error in handleCallback: Could not find attribute ${column.dataAttr} in ${src.internalname}`)
   
           let attrType = src.schema.types[attrIndex]
   
           if (attrType == "num") {
-            obj[attr] = parseFloat(data[attr][i])
+            obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
           } else {
-            obj[attr] = data[attr][i]
+            obj[column.dataAttr] = data[column.renameAs][i]
           }
         })
         resArr.push(callback(obj))
@@ -1773,23 +1791,24 @@ export class Mark {
     pickupReferences(rows) {
       for (let i = 0; i < this.channels.length; i++) {
         let {mark, visualAttr, isGet} = this.channels[i]
+        let queryItem = toQueryItem(this.channels[i])
 
         if (isGet) {
-          let ref = `${visualAttr}_ref`
+          let ref = `${queryItem.columns[0].renameAs}_ref`
           /**
            * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
            */
           for (let i = 0; i < rows.length; i++) {
             if (this.referencedMarks.has(rows[i][IDNAME])) {
               let obj = this.referencedMarks.get(rows[i][IDNAME])
-              obj[ref] = rows[i][ref]
+              obj[`${visualAttr}_ref`] = rows[i][ref]
             } else {
-              this.referencedMarks.set(rows[i][IDNAME], {[ref]: rows[i][ref]})
+              this.referencedMarks.set(rows[i][IDNAME], {[`${visualAttr}_ref`]: rows[i][ref]})
             }
           }
         }
       }
-      console.log("hello?", this.referencedMarks)
+      console.log("referencedMarks", this.referencedMarks)
     }
 
 
