@@ -120,18 +120,18 @@
             `
         )
 
-        await duckdb.exec(
-            `CREATE TABLE heart_disease as
-            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
-            FROM heart_disease_csv
-            WHERE Status = false;`
-        )
-        await duckdb.exec( //sql query here
-            `CREATE TABLE heart as 
-            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
-            FROM heart_csv
-            WHERE target = 0;`
-        )
+        // await duckdb.exec(
+        //     `CREATE TABLE heart_disease as
+        //     SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
+        //     FROM heart_disease_csv
+        //     WHERE Status = false;`
+        // )
+        // await duckdb.exec( //sql query here
+        //     `CREATE TABLE heart as 
+        //     Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
+        //     FROM heart_csv
+        //     WHERE target = 0;`
+        // )
 
         })(duckdb);
 
@@ -145,7 +145,28 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) {
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalizeMany("heart_csv", ["target","age"].map((a) => [a]), {dimnames: ["heart_target", "heart_age"], factname: "heart_fact"})
+
+            const dom = {x: {domain: [0,30]}}
+
+            let age = c.dot("heart_age", {x: 10, y: "age"}, dom)
+            age.bucket({col: "age", size: 4 })
+
+            let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
+
+
+
+        }
+
+        if (0) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -269,8 +290,6 @@
         }
 
         if (0) { //parallel coordinates with the new heart dataset
-
-            
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
@@ -294,21 +313,21 @@
             
             
             var width = 10
-           let captionsize = 15;
-           let labelsize = 15;
+            let captionsize = 15;
+            let labelsize = 15;
             
             
 
             let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])
-           let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
-           let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
-           let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
-           let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
-           let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
-           let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
+            let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
+            let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
+            let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
+            let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
+            let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
+            let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
 
 
-           const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
+            const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
 
 
 
@@ -457,7 +476,7 @@
 
             c.nest(info, habits)
         }
-        if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
+        if (1) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
@@ -570,7 +589,7 @@
             canvas = c
             window.c = c;
             window.db = db;
-h 
+
             await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
@@ -663,7 +682,7 @@ h
 
             let vrect = c.rect("TimeProvince2", {x: "province", y:0, fill: "white", stroke: "black"})
             let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
-            let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
+            //let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
             //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
         }
 

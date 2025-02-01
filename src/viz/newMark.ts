@@ -195,6 +195,7 @@ export class Mark {
      * Some filters to append onto the end of the SQL query when trying to get data
      */
     filters: any[]
+    buckets: any[]
 
     
     /**
@@ -240,6 +241,7 @@ export class Mark {
         this.idVisualAttrMap = new Map<number, Set<string>>()
         this.referencedMarks = new Map<number, {}>()
         this.filters = []
+        this.buckets = []
 
         this.c.taskGraph.addMark(this)
         this.init()
@@ -314,6 +316,11 @@ export class Mark {
           this.channels.push(rawChannelItem)
       }
     }
+
+    /**
+     * Use this function to filter over a column in the source table of this mark
+     * @param
+     */
     filter({operator, col, value}: {operator: string; col: string, value: string|number}) {
       if (!(Object.values(mgg.FilterOperators).includes(operator))) {
         throw new Error(`Unsupported operator: ${operator}`)
@@ -343,6 +350,10 @@ export class Mark {
           this.filters.push(neq(column(this.src.internalname, col), literal(value)))
           break
       }
+    }
+
+    bucket({col, size}: {col: string; size: number}) {
+      this.buckets.push({col, size})
     }
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
@@ -1269,7 +1280,7 @@ export class Mark {
       }
 
       if (this.marktype != "text" && this.marktype != "dot") {
-        this.setXY(mark, data)
+        this.setXY(mark, data, crow)
       }
     }
 
@@ -1436,12 +1447,20 @@ export class Mark {
 
     /**
      * This function takes care of setting x and y if the user has defined a constant for them
+     * This function also sets x and y only if the mark has not been passed through layout
      * @param mark 
      * @param data 
      */
-    setXY(mark, data) {
-      let x = null /**probably need to shift this somewhere else */
-      let y = null /**probably need to shift this somewhere else */
+    setXY(mark, data, crow) {
+      /**
+       * If this mark is going through some layout algorithm, we do not want to touch it
+       */
+      if (Object.keys(this.layouts).length > 0) {
+        return
+      }
+
+      let x = null
+      let y = null
 
       if (("x" in this.mappings) && (typeof this.mappings.x === "number")) {
         x = this.mappings.x
@@ -1463,6 +1482,73 @@ export class Mark {
         selection.attr("y", y)
       }
 
+      if (x !== null && y !== null)
+        return
+
+      /**
+       * TODO: Center along x-axis
+       */
+
+      /**
+       * Center along y-axis
+       */
+      console.log("setting")
+      let coords = []
+      selection
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let markAttributes = {id: 0, x: 0, y: 0, width: null, height: null }
+
+        markAttributes.id = data[IDNAME][i]
+        markAttributes.x = parseFloat(el.attr("x"))
+        markAttributes.y = parseFloat(el.attr("y"))
+
+        if (el.attr("width"))
+          markAttributes.width = el.attr("width")
+
+        if (el.attr("height"))
+          markAttributes.height = el.attr("height")
+
+        coords.push(markAttributes)
+      })
+
+      let grouped = new Map<number, any[]>()
+
+      coords.forEach(coord => {
+        if (!grouped.has(coord.x)) {
+          grouped.set(coord.x, [])
+        }
+        grouped.get(coord.x).push(coord)
+      })
+      console.log("crow", crow)
+      console.log("grouped", grouped)
+
+      let centeredPoints = []
+      grouped.forEach((group, x) => {
+        let minY = -1
+        let maxY = -1
+
+        group.forEach(coord => {
+          if (minY == -1) {
+            minY = coord.y
+          }
+          maxY = Math.max(maxY, coord.y + (coord.height ? coord.height : 0))
+          
+        })
+
+        let paddingTop = (crow.height - (maxY - minY))/2
+        console.log("paddingTop", paddingTop)
+        group.forEach(coord => {
+          centeredPoints.push({id: coord.id, x: coord.x, y: coord.y + paddingTop})
+        })
+      })
+
+      selection
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let newPoint = centeredPoints.find(p => p.id == data[IDNAME][i])
+        el.attr("y", newPoint.y)
+      })
     }
 
     /**
