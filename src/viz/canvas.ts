@@ -14,7 +14,6 @@ import { Scale, ScaleObject } from "./newScale";
 import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
-import * as OPlot from "@observablehq/plot";
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")

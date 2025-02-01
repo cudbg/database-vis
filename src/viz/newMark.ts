@@ -1,7 +1,7 @@
 import * as R from "ramda";
 import { creator, select } from "d3";
 import * as d3 from "d3";
-import { Query, sql, agg, and, eq, column, literal, loadObjects } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, neq, lt, gt, lte, gte, column, literal } from "@uwdata/mosaic-sql";
 import * as OPlot from "@observablehq/plot";
 
 import { IDNAME, Table, createView } from "./table";
@@ -16,6 +16,8 @@ import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
 import { Scale, ScaleObject } from "./newScale";
 import { HOOK_PLACE } from "./task_graph/task_graph";
+import { mgg } from "./uapi/mgg";
+
 
 /**
  * Used in QueryItem
@@ -187,6 +189,11 @@ export class Mark {
      */
     referencedMarks: Map<number, {}>;
 
+    /**
+     * Some filters to append onto the end of the SQL query when trying to get data
+     */
+    filters: any[]
+
     
     /**
      * Every mark has a pointer to its outermark
@@ -230,6 +237,7 @@ export class Mark {
         this.innerToOuter = null
         this.idVisualAttrMap = new Map<number, Set<string>>()
         this.referencedMarks = new Map<number, {}>()
+        this.filters = []
 
         this.c.taskGraph.addMark(this)
         this.init()
@@ -298,6 +306,36 @@ export class Mark {
             rawChannelItem.callback = func
           }
           this.channels.push(rawChannelItem)
+      }
+    }
+    filter({operator, col, value}: {operator: string; col: string, value: string|number}) {
+      if (!(Object.values(mgg.FilterOperators).includes(operator))) {
+        throw new Error(`Unsupported operator: ${operator}`)
+      }
+
+      if (!this.src.schema.attrs.includes(col)) {
+        throw new Error(`Cannot filter on ${col} as it is not in ${this.src.internalname}`)
+      }
+
+      switch (operator) {
+        case mgg.FilterOperators.EQUAL:
+          this.filters.push(eq(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.GREATER_EQUAL:
+          this.filters.push(gte(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.GREATER_THAN:
+          this.filters.push(gt(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.LESS_EQUAL:
+          this.filters.push(lte(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.LESS_THAN:
+          this.filters.push(lt(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.NOT_EQUALS:
+          this.filters.push(neq(column(this.src.internalname, col), literal(value)))
+          break
       }
     }
     /**
@@ -835,6 +873,13 @@ export class Mark {
         query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
       }
 
+      /**
+       * this.filters populated in filter function
+       */
+      this.filters.forEach((filter) => {
+        query = query.where(filter)
+      })
+
       query = query.select(column(this.src.internalname, IDNAME))
 
       query = query.from(this.src.internalname)
@@ -977,18 +1022,22 @@ export class Mark {
               || visualAttr == "y1"
               || visualAttr == "y2"
               || visualAttr == "y") {
-                let idcounter
+                let idcounter = null
 
-
+                console.log("wtf", queryItem.columns[0].renameAs)
                 for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
                   visualAttrSet.forEach((attr) => {
-                    if (attr.includes(visualAttr)) {
+                    console.log("attr", attr)
+                    if (attr == queryItem.columns[0].renameAs) {
                       idcounter = id
                     }
                   })
-                  if (!idcounter) {
-                    throw new Error("Cannot find visualAttr in applychannels")
+                  if (idcounter != null) {
+                    break
                   }
+                }
+                if (idcounter == null) {
+                  throw new Error("Cannot find visualAttr in applychannels")
                 }
 
                 let idcounterArr = data[`idcounter_${idcounter}`]
