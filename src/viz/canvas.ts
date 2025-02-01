@@ -399,7 +399,7 @@ export class Canvas implements IMark {
         referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
       }
     }
-    console.log("testingJan6", referenceCounts)
+
     let queue = []
   
     for (let [markID, count] of referenceCounts.entries()) {
@@ -429,7 +429,6 @@ export class Canvas implements IMark {
     let marks = this.marks.slice().sort((mark1, mark2) => {
       return arr.indexOf(mark1.id) - arr.indexOf(mark2.id)
     })
-    console.log("testingJan6", marks)
     return marks
   }
 
@@ -759,6 +758,48 @@ export class Canvas implements IMark {
     })
 
     return Promise.resolve()
+  }
+
+  async bucket({table, col, bucketSize}: {table: string, col: string, bucketSize: number}) {
+    let t = this.db.table(table)
+
+    if (!t)
+      throw new Error(`No such table ${table}`)
+
+    let newTableName = `bucketed_${table}`
+
+    let query = new Query()
+
+    let bucketExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
+         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
+
+    query = query.select({
+      count: count(),
+      [IDNAME]: idexpr,
+      [`${col}_bucket`]: sql`${bucketExpr}`
+    })
+    
+    query = query.groupby(col)
+    query = query.from(table)
+
+    let newTable = await this.db.fromSql(query, newTableName)
+
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+
+    await this.db.conn.exec(`ALTER TABLE ${table} ADD COLUMN ${col}_bucket_id INTEGER;`)
+    await this.db.conn.exec(`UPDATE ${table}
+                            SET ${col}_bucket_id = ${newTableName}.${IDNAME}
+                            FROM ${newTableName}
+                            WHERE
+                            ${table}.${col} >= CAST(REGEXP_EXTRACT(${newTableName}.${col}_bucket, '^(\\d+)', 1) AS INT) AND
+                            ${table}.${col} <= CAST(REGEXP_EXTRACT(${newTableName}.${col}_bucket, '(\\d+)$', 1) AS INT);`)
+
+    let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
+    this.db.addConstraint(c)
+
+    return newTableName
+
   }
 }
 

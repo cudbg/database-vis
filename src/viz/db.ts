@@ -512,18 +512,18 @@ export class Database {
     }
 
 
-  async appendID(name) {
-    await this.conn.exec(`ALTER TABLE ${name} ADD COLUMN ${IDNAME} INTEGER;`)
+  async appendID(tablename) {
+    await this.conn.exec(`ALTER TABLE ${tablename} ADD COLUMN ${IDNAME} INTEGER;`)
     await this.conn.exec(`CREATE TEMPORARY TABLE temp_table AS
                           SELECT
                               *,
                               row_number() OVER () - 1 AS new_id
-                          FROM ${name};`)
+                          FROM ${tablename};`)
     
-    await this.conn.exec(`UPDATE ${name}
+    await this.conn.exec(`UPDATE ${tablename}
                           SET ${IDNAME} = temp_table.new_id
                           FROM temp_table
-                          WHERE ${name}.rowid = temp_table.rowid;`)
+                          WHERE ${tablename}.rowid = temp_table.rowid;`)
     await this.conn.exec("DROP TABLE temp_table")
   }
 }

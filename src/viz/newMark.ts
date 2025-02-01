@@ -195,7 +195,6 @@ export class Mark {
      * Some filters to append onto the end of the SQL query when trying to get data
      */
     filters: any[]
-    buckets: any[]
 
     
     /**
@@ -241,7 +240,6 @@ export class Mark {
         this.idVisualAttrMap = new Map<number, Set<string>>()
         this.referencedMarks = new Map<number, {}>()
         this.filters = []
-        this.buckets = []
 
         this.c.taskGraph.addMark(this)
         this.init()
@@ -352,9 +350,6 @@ export class Mark {
       }
     }
 
-    bucket({col, size}: {col: string; size: number}) {
-      this.buckets.push({col, size})
-    }
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
      * @param usrSearchkeys
@@ -492,14 +487,16 @@ export class Mark {
            * We theoretically could create the path right here but I feel it would become messy
            * As such, We only create the path in constructQuery
            */
+
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
           if (!path)
             throw new Error("No possible path!")
+
           
-          for (let i = 1; i < path.length; i++) {
-            if (path[i].card != Cardinality.ONEONE)
-              throw new Error("No possible path!")
-          }
+          // for (let i = 1; i < path.length; i++) {
+          //   if (path[i].card != Cardinality.ONEONE)
+          //     throw new Error("No possible path!")
+          // }
 
           return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
@@ -1043,10 +1040,8 @@ export class Mark {
               || visualAttr == "y") {
                 let idcounter = null
 
-                console.log("wtf", queryItem.columns[0].renameAs)
                 for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
                   visualAttrSet.forEach((attr) => {
-                    console.log("attr", attr)
                     if (attr == queryItem.columns[0].renameAs) {
                       idcounter = id
                     }
@@ -1084,7 +1079,6 @@ export class Mark {
                       othermarkInfoCache = othermark.markInfoCache
                     otherlevel--
                   }
-
                 }
             }
           }
@@ -1492,7 +1486,6 @@ export class Mark {
       /**
        * Center along y-axis
        */
-      console.log("setting")
       let coords = []
       selection
       .each(function (d, i) {
@@ -1520,8 +1513,7 @@ export class Mark {
         }
         grouped.get(coord.x).push(coord)
       })
-      console.log("crow", crow)
-      console.log("grouped", grouped)
+
 
       let centeredPoints = []
       grouped.forEach((group, x) => {
@@ -1972,7 +1964,6 @@ export class Mark {
           }
         }
       }
-      console.log("referencedMarks", this.referencedMarks)
     }
 
 

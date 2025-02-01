@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
@@ -156,11 +156,18 @@
             await db.normalizeMany("heart_csv", ["target","age"].map((a) => [a]), {dimnames: ["heart_target", "heart_age"], factname: "heart_fact"})
 
             const dom = {x: {domain: [0,30]}}
+            let bucketedAgeTable = await c.bucket({table: "heart_age", col: "age", bucketSize: 4})
 
-            let age = c.dot("heart_age", {x: 10, y: "age"}, dom)
-            age.bucket({col: "age", size: 4 })
-
+            let age = c.dot(bucketedAgeTable, {x: 10, y: "age_bucket"}, dom)
             let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
+            
+            let links = c.link("heart_fact", {
+                                        x1: age.get("age", ['x']), 
+                                        y1: age.get("age", ['y']), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                    }, 
+                                    {curve: true})
 
 
 
@@ -476,7 +483,7 @@
 
             c.nest(info, habits)
         }
-        if (1) { //Multiple Table Habits Nested in Alcohol 1-1-N
+        if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
 
