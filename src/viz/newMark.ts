@@ -256,7 +256,7 @@ export class Mark {
           let callback = null
           let src = this.src
           let isVisualChannel = false
-          let isConstant = true
+          let isConstant = false
 
           let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel, isConstant}
 
@@ -265,7 +265,6 @@ export class Mark {
               this.addLayout(dattr);
               rawChannelItem.dataAttr = dattr.dattrs
               rawChannelItem.refLayout = dattr
-              rawChannelItem.isConstant = false
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
             let {othermark, constraint, othervattr, callback, isVisualChannel} = this.processGet(dattr)
@@ -275,7 +274,6 @@ export class Mark {
             rawChannelItem.callback = callback
             rawChannelItem.isGet = true
             rawChannelItem.isVisualChannel = isVisualChannel
-            rawChannelItem.isConstant = false
 
             if (isVisualChannel) {
               /**
@@ -298,7 +296,6 @@ export class Mark {
 
               if (dattr.scale.callback)
                 rawChannelItem.callback = dattr.scale.callback
-              rawChannelItem.isConstant = false
           } else if (dattr instanceof Object && "cols" in dattr) {
             if (!("func" in dattr))
               throw new Error("Error in initialization: Give me a callback function!")
@@ -310,9 +307,9 @@ export class Mark {
 
             rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
             rawChannelItem.callback = func
-            rawChannelItem.isConstant = false
           } else if (dattr instanceof Object && "constant" in dattr) {
             rawChannelItem.dataAttr = [dattr.constant]
+            rawChannelItem.isConstant = true
           }
           this.channels.push(rawChannelItem)
       }
