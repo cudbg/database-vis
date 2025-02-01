@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -156,7 +156,25 @@
             window.db = db;
 
             //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
-
+            /**
+             * example api to filter by status
+             * c.filter({operator: "=", from: "heart", column: "status", value: "1"})
+             * 
+             * We can implement this in two ways, eager filtering or lazy filtering
+             * 
+             * Eager filtering means appending an additional WHERE clause with the user condition.
+             * 
+             * Lazy filtering means running a second SQL query:
+             * SELECT id
+             * FROM <TABLE> 
+             * WHERE <user condition>
+             * 
+             * We get all the ids of rows that pass the user condition.
+             * Then we filter the result of the first query (where we got the actual data),
+             * dropping all rows whose ids aren not in the result of the second query.
+             * 
+             * NOTE: This function will apply the user condition/filter to all marks. Should we think about it being specific to some marks?
+            */
 
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
 
@@ -1007,7 +1025,7 @@ h
 
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 

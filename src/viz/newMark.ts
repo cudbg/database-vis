@@ -16,6 +16,8 @@ import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
 import { Scale, ScaleObject } from "./newScale";
 import { HOOK_PLACE } from "./task_graph/task_graph";
+import { mgg } from "./uapi/mgg";
+
 
 /**
  * Used in QueryItem
@@ -299,6 +301,13 @@ export class Mark {
           }
           this.channels.push(rawChannelItem)
       }
+    }
+    filter({operator, from, column, value}: {operator: string; from: string, column: string, value: string|number}) {
+      if (!(Object.values(mgg.FilterOperators).includes(operator))) {
+        throw new Error(`Unsupported operator: ${operator}`)
+      }
+
+
     }
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
@@ -977,18 +986,22 @@ export class Mark {
               || visualAttr == "y1"
               || visualAttr == "y2"
               || visualAttr == "y") {
-                let idcounter
+                let idcounter = null
 
-
+                console.log("wtf", queryItem.columns[0].renameAs)
                 for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
                   visualAttrSet.forEach((attr) => {
-                    if (attr.includes(visualAttr)) {
+                    console.log("attr", attr)
+                    if (attr == queryItem.columns[0].renameAs) {
                       idcounter = id
                     }
                   })
-                  if (!idcounter) {
-                    throw new Error("Cannot find visualAttr in applychannels")
+                  if (idcounter != null) {
+                    break
                   }
+                }
+                if (idcounter == null) {
+                  throw new Error("Cannot find visualAttr in applychannels")
                 }
 
                 let idcounterArr = data[`idcounter_${idcounter}`]

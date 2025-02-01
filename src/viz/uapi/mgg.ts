@@ -23,4 +23,16 @@ export class mgg {
     static async createTable(tname, attrs, newname, dimname?) { //returns a table object
         return await this.canvas.db.normalize(tname, attrs, newname, dimname)
     }
+
+    static FilterOperators = {
+        EQUAL: "=",
+        NOT_EQUALS: "!=",
+        LESS_THAN: "<",
+        GREATER_THAN: ">",
+        LESS_EQUAL: "<=",
+        GREATER_EQUAL: ">=",
+        CONTAINS: "contains",
+        STARTS_WITH: "startswith",
+        ENDS_WITH: "endswith"
+    }
 }
