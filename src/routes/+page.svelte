@@ -148,7 +148,7 @@
         if (1) {
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -160,7 +160,7 @@
 
             let age = c.dot(bucketedAgeTable, {x: 10, y: "age_bucket"}, dom)
             let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
-            
+
             let links = c.link("heart_fact", {
                                         x1: age.get("age", ['x']), 
                                         y1: age.get("age", ['y']), 
@@ -168,8 +168,13 @@
                                         y2: target.get("target", ['y']), 
                                     }, 
                                     {curve: true})
-
-
+            let ageLabels = c.text(bucketedAgeTable, 
+            {
+                x: age.get("age_bucket", ["x"]),
+                y: age.get("age_bucket", ["y"], (d) => d.y - 10),
+                text: "age_bucket",
+                fontSize: 20
+            })
 
         }
 

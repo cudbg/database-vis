@@ -770,30 +770,36 @@ export class Canvas implements IMark {
 
     let query = new Query()
 
-    let bucketExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
+    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
          FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
 
+    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
+    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
+
     query = query.select({
-      count: count(),
+      // count: count(),
       [IDNAME]: idexpr,
-      [`${col}_bucket`]: sql`${bucketExpr}`
+      [`${col}_bucket`]: sql`${bucketLabelExpr}`,
+      [`min_${col}`]: sql`${minBucketExpr}`,
+      [`max_${col}`]: sql`${maxBucketExpr}`,
     })
     
-    query = query.groupby(col)
+    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
     query = query.from(table)
 
     let newTable = await this.db.fromSql(query, newTableName)
 
     newTable.name(newTableName)
     newTable.keys(IDNAME)
+    newTable.keys(`${col}_bucket`)
 
     await this.db.conn.exec(`ALTER TABLE ${table} ADD COLUMN ${col}_bucket_id INTEGER;`)
     await this.db.conn.exec(`UPDATE ${table}
                             SET ${col}_bucket_id = ${newTableName}.${IDNAME}
                             FROM ${newTableName}
                             WHERE
-                            ${table}.${col} >= CAST(REGEXP_EXTRACT(${newTableName}.${col}_bucket, '^(\\d+)', 1) AS INT) AND
-                            ${table}.${col} <= CAST(REGEXP_EXTRACT(${newTableName}.${col}_bucket, '(\\d+)$', 1) AS INT);`)
+                            ${table}.${col} >= ${newTableName}.min_${col} AND
+                            ${table}.${col} <= ${newTableName}.max_${col};`)
 
     let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
     this.db.addConstraint(c)
