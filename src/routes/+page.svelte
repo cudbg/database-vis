@@ -145,7 +145,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -1025,7 +1025,7 @@ h
 
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
             await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
 
