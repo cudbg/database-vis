@@ -60,6 +60,7 @@ interface RawChannelItem {
   refLayout: RefLayout
   callback: Function
   isVisualChannel: boolean
+  isConstant: boolean
 }
 
 /**
@@ -76,6 +77,7 @@ interface QueryItem {
   columns: ColumnObj[]
 
   constraint: FKConstraint
+  isConstant: boolean
 }
 
 /**
@@ -111,7 +113,7 @@ function toQueryItem(item: RawChannelItem): QueryItem {
       columns.push({dataAttr: dattr, renameAs: dattr})
      })
   }
-  return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint}
+  return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint, isConstant: item.isConstant}
 
 }
 
@@ -254,14 +256,16 @@ export class Mark {
           let callback = null
           let src = this.src
           let isVisualChannel = false
+          let isConstant = true
 
-          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel}
+          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel, isConstant}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
               this.addLayout(dattr);
               rawChannelItem.dataAttr = dattr.dattrs
               rawChannelItem.refLayout = dattr
+              rawChannelItem.isConstant = false
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
             let {othermark, constraint, othervattr, callback, isVisualChannel} = this.processGet(dattr)
@@ -271,6 +275,7 @@ export class Mark {
             rawChannelItem.callback = callback
             rawChannelItem.isGet = true
             rawChannelItem.isVisualChannel = isVisualChannel
+            rawChannelItem.isConstant = false
 
             if (isVisualChannel) {
               /**
@@ -293,6 +298,7 @@ export class Mark {
 
               if (dattr.scale.callback)
                 rawChannelItem.callback = dattr.scale.callback
+              rawChannelItem.isConstant = false
           } else if (dattr instanceof Object && "cols" in dattr) {
             if (!("func" in dattr))
               throw new Error("Error in initialization: Give me a callback function!")
@@ -304,6 +310,9 @@ export class Mark {
 
             rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
             rawChannelItem.callback = func
+            rawChannelItem.isConstant = false
+          } else if (dattr instanceof Object && "constant" in dattr) {
+            rawChannelItem.dataAttr = [dattr.constant]
           }
           this.channels.push(rawChannelItem)
       }
@@ -753,13 +762,15 @@ export class Mark {
        */
 
       for (let i = 0; i < queryItems.length; i++) {
-        let {source, columns, constraint} = queryItems[i]
+        let {source, columns, constraint, isConstant} = queryItems[i]
 
         /**
         * Check if column is a numeric value. the user could have entered x: 5 
         * and we wouldnt want to query for column 5
         */
         if (!columns.some(column => source.schema.attrs.includes(column.dataAttr)))
+          continue
+        if (isConstant)
           continue
         /**
          * This is a foreign key reference

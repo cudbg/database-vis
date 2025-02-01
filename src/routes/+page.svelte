@@ -195,7 +195,7 @@
             let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100})
             let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100})
 
-            let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
+            let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: {constant: "exang"}, fontSize: 20}, {textAnchor: "bottom"})
             let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
             let Label3 = c.text("heart_target", {x: target.get("target", ["x","width"], (d) => d.x + (d.width)/2), text: "Status", fontSize: 20}, {textAnchor: "bottom"})
             let Label4 = c.text("heart_sex", {x: sex.get("sex", ["x","width"], (d) => d.x + (d.width)/2), text: "Sex", fontSize: 20}, {textAnchor: "bottom"})
