@@ -1226,7 +1226,24 @@ export class Mark {
           this.mark.klass(data[IDNAME], data)
         ],
         ...(this._scales)})
-      
+
+      this.overrideObservable(mark, data, crow)
+        
+      let markInfo = this.getMarkInfo(mark, data, crow)
+
+       /**
+        * we hide axes because each mark gets its own axis. 
+        * we don't want overlapping axes because that makes it hard to read
+        */
+      this.hideAxes(mark)
+
+
+      this.updateScales(mark)
+
+      return {mark, markInfo};
+    }
+
+    overrideObservable(mark, data, crow) {
       if (this.marktype == "text" && ("textAnchor" in this.options)) {
         /**
          * check if this is a text mark and if the user specified textAnchor
@@ -1250,19 +1267,10 @@ export class Mark {
       } else if (this.marktype == "square") {
         this.setEqualWidthAndHeight(mark, data)
       }
-      
-      let markInfo = this.getMarkInfo(mark, data, crow)
 
-       /**
-        * we hide axes because each mark gets its own axis. 
-        * we don't want overlapping axes because that makes it hard to read
-        */
-      this.hideAxes(mark)
-
-
-      this.updateScales(mark)
-
-      return {mark, markInfo};
+      if (this.marktype != "text" && this.marktype != "dot") {
+        this.setXY(mark, data)
+      }
     }
 
     setXTranslate(mark, data) {
@@ -1306,7 +1314,7 @@ export class Mark {
       })
     }
 
-     setYTranslate(mark, data) {
+    setYTranslate(mark, data) {
 
       let thisref = this
 
@@ -1397,8 +1405,7 @@ export class Mark {
     setEqualWidthAndHeight(mark, data) {
       let width = null
       let height = null
-      let x = null /**probably need to shift this somewhere else */
-      let y = null /**probably need to shift this somewhere else */
+
       let defaultLen = 100
 
       if ("width" in data) {
@@ -1413,19 +1420,10 @@ export class Mark {
         height = defaultLen
       }
 
-      if (("x" in this.mappings) && (typeof this.mappings.x === "number")) {
-        x = this.mappings.x
-      }
-
-      if (("y" in this.mappings) && (typeof this.mappings.y === "number")) {
-        y = this.mappings.y
-      }
-
       if (width != height) {
         width = defaultLen
         height = defaultLen
       }
-
 
       let selection = maybeselection(mark)
         .selectAll(`g[aria-label="rect"]`)
@@ -1434,6 +1432,28 @@ export class Mark {
       selection
         .attr("width", width)
         .attr("height", height)
+    }
+
+    /**
+     * This function takes care of setting x and y if the user has defined a constant for them
+     * @param mark 
+     * @param data 
+     */
+    setXY(mark, data) {
+      let x = null /**probably need to shift this somewhere else */
+      let y = null /**probably need to shift this somewhere else */
+
+      if (("x" in this.mappings) && (typeof this.mappings.x === "number")) {
+        x = this.mappings.x
+      }
+
+      if (("y" in this.mappings) && (typeof this.mappings.y === "number")) {
+        y = this.mappings.y
+      }
+
+      let selection = maybeselection(mark)
+        .selectAll(`g[aria-label="rect"]`)
+        .selectAll("*")
       
       if (x !== null) {
         selection.attr("x", x)
@@ -1442,6 +1462,7 @@ export class Mark {
       if (y !== null) {
         selection.attr("y", y)
       }
+
     }
 
     /**
