@@ -257,7 +257,7 @@
 
             
             let exang = c.square(tablename + "_" + specificAttributes[0], {x: 100, y: specificAttributes[0], fill: "none", stroke: "black", width: boxwidth})
-            let cp = c.square(tablename + "_" + specificAttributes[1], {x: 300, y: specificAttributes[1], fill: "none", stroke: "black", width: boxwidth})
+            let cp = c.square(Bucket1, {x: 300, y: "age_bucket", fill: "none", stroke: "black", width: boxwidth})
             let target = c.square(tablename + "_" + specificAttributes[2], {x: 500, y: specificAttributes[2], fill: "none", stroke: "black", width: boxwidth})
             let sex = c.square(tablename + "_" + specificAttributes[3], {x: 700, y: specificAttributes[3], fill: "none", stroke: "black", width: boxwidth})
             let fbs = c.square(tablename + "_" + specificAttributes[4], {x: 900, y: specificAttributes[4], fill: "none", stroke: "black", width: boxwidth})
@@ -267,7 +267,7 @@
 
             
             let Caption1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[0].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption2 = c.text(tablename + "_" + specificAttributes[1], {x: cp.get(specificAttributes[1], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[1].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
+           let Caption2 = c.text(Bucket1, {x: cp.get("age_bucket", ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[1].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
            let Caption3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[2].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
            let Caption4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[3].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
            let Caption5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[4].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
@@ -279,7 +279,7 @@
 
 
            let Label1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], ["x","width"], (d) => d.x + (d.width)/2), y: exang.get(specificAttributes[0], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[0], fontSize: labelsize})
-           let Label2 = c.text(tablename + "_" + specificAttributes[1], {x: cp.get(specificAttributes[1], ["x","width"], (d) => d.x + (d.width)/2), y: cp.get(specificAttributes[1], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[1], fontSize: labelsize})
+           let Label2 = c.text(Bucket1, {x: cp.get("age_bucket", ["x","width"], (d) => d.x + (d.width)/2), y: cp.get("age_bucket", ["y","width"], (d) => d.y + (d.width)/2), text: "age_bucket", fontSize: labelsize})
            let Label3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], ["x","width"], (d) => d.x + (d.width)/2), y: target.get(specificAttributes[2], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[2] , fontSize: labelsize})
            let Label4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], ["x","width"], (d) => d.x + (d.width)/2), y: sex.get(specificAttributes[3], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[3] , fontSize: labelsize})
            let Label5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], ["x","width"], (d) => d.x + (d.width)/2), y: fbs.get(specificAttributes[4], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[4] , fontSize: labelsize})

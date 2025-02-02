@@ -807,6 +807,25 @@ export class Canvas implements IMark {
     return newTableName
 
   }
+
+  foreignAttribute(otherTable: string | Table, otherAttr: string | string[], searchKeys: string | string[], callback?) {
+    let table : Table
+    if (typeof otherTable == "string") {
+        let t = this.db.table(otherTable)
+        if (!t)
+            throw new Error(`No such table ${otherTable}`)
+        table = t
+    } else {
+        table = otherTable
+    }
+    otherAttr = Array.isArray(otherAttr) ? otherAttr : [otherAttr]
+    if (!otherAttr.every((attr) => table.schema.attrs.includes(attr))) {
+        throw new Error (`${otherAttr} not found in ${table.internalname}`)
+    }
+    searchKeys = Array.isArray(searchKeys) ? searchKeys : [searchKeys]
+    return {otherTable: table, searchKeys: searchKeys, otherAttr, callback: callback, isVisualChannel: false}
+  }
+
 }
 
 for (const mtype of R.keys(marksbytype(Canvas.plotConfig))) {
