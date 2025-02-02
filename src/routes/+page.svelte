@@ -120,18 +120,20 @@
             `
         )
 
-        // await duckdb.exec(
-        //     `CREATE TABLE heart_disease as
-        //     SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
-        //     FROM heart_disease_csv
-        //     WHERE Status = false;`
-        // )
-        // await duckdb.exec( //sql query here
-        //     `CREATE TABLE heart as 
-        //     Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
-        //     FROM heart_csv
-        //     WHERE target = 0;`
-        // )
+        
+        await duckdb.exec(
+             `CREATE TABLE heart_disease as
+             SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
+             FROM heart_disease_csv
+             WHERE Status = false;`
+         )
+         await duckdb.exec( //sql query here
+             `CREATE TABLE heart as 
+             Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
+             FROM heart_csv
+             WHERE target = 0;`
+         )
+             
 
         })(duckdb);
 
@@ -145,7 +147,7 @@
         await db.loadFromConnection();
         let canvas
 
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
@@ -156,7 +158,7 @@
             await db.normalizeMany("heart_csv", ["target","age"].map((a) => [a]), {dimnames: ["heart_target", "heart_age"], factname: "heart_fact"})
 
             const dom = {x: {domain: [0,30]}}
-            let bucketedAgeTable = await c.bucket({table: "heart_age", col: "age", bucketSize: 4})
+            let bucketedAgeTable = await c.bucket({table: "heart_age", col: "age", bucketSize: 8})
 
             let age = c.dot(bucketedAgeTable, {x: 10, y: "age_bucket"}, dom)
             let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
@@ -178,12 +180,12 @@
 
         }
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+            let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -327,8 +329,8 @@
             var width = 10
             let captionsize = 15;
             let labelsize = 15;
-            
-            
+
+
 
             let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])
             let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
@@ -341,10 +343,14 @@
 
             const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
 
+            let bucketing1 = await c.bucket({table: "heart_" + specificAttributes[0], col: specificAttributes[0], bucketSize: 8})
 
 
 
-           let exang = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10, r: 1},o)
+
+
+
+           let exang = c.dot(bucketing1, {y : specificAttributes[0] +"_bucket", x: 10, r: 1},o)
            let cp = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20, r: 10},o)
            let target = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30, r: 10},o)
            let sex = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40, r: 10},o)
@@ -358,7 +364,7 @@
            let offset = width/7.2
 
 
-           let exang2 = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10 - offset, r: 1},o)
+           let exang2 = c.dot(bucketing1, {y : specificAttributes[0] +"_bucket", x: 10 - offset, r: 1},o)
            let cp2 = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20- offset, r: 10},o)
            let target2 = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30- offset, r: 10},o)
            let sex2 = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40- offset, r: 10},o)
@@ -383,6 +389,21 @@
            - compute two different points one of them is shifted
            -
            */
+
+           let links = c.link("heart_fact", {
+                                        x1: age.get("age", ['x']), 
+                                        y1: age.get("age", ['y']), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                    }, 
+                                    {curve: true})
+
+            let ageLabels = c.text(bucketedAgeTable, {
+                x: age.get("age_bucket", ["x"]),
+                y: age.get("age_bucket", ["y"], (d) => d.y - 10),
+                text: "age_bucket",
+                fontSize: 20
+            })
 
 
           
