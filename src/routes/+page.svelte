@@ -234,7 +234,7 @@
 
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age"].map((a) => [a]))
 
-            let specificAttributes: String[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca"];
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca"];
             let tablename = "heart"
            
 
@@ -243,9 +243,8 @@
             let labelsize = 20;
             let boxwidth = 50;
 
-            //let Bucket1 = await c.bucket({table: tablename + "_" + specificAttributes[1], col: specificAttributes[1], bucketSize: 8})
+            let Bucket1 = await c.bucket({table: tablename + "_" + specificAttributes[1], col: specificAttributes[1], bucketSize: 8})
             //specificAttributes[1] = specificAttributes[1] + "_bucket"
-
 
 
             let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])

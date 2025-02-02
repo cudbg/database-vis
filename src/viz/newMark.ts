@@ -1453,6 +1453,9 @@ export class Mark {
         return
       }
 
+      if (!("x" in this.mappings) && !("y" in this.mappings))
+        return
+
       let x = null
       let y = null
 
@@ -1476,6 +1479,7 @@ export class Mark {
       if (y !== null) {
         selection.attr("y", y)
       }
+
 
       if (x !== null && y !== null)
         return
@@ -1525,6 +1529,8 @@ export class Mark {
         group.forEach(coord => {
           if (minY == -1) {
             minY = coord.y
+          } else {
+            minY = Math.min(minY, coord.y)
           }
           maxY = Math.max(maxY, coord.y + (coord.height ? coord.height : 0))
           
