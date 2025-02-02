@@ -1464,8 +1464,9 @@ export class Mark {
         y = this.mappings.y
       }
 
+      let marktype = this.marktype == "square" ? "rect"  : this.marktype
       let selection = maybeselection(mark)
-        .selectAll(`g[aria-label="rect"]`)
+        .selectAll(`g[aria-label="${marktype}"]`) //hardcoded to deal only with rects for now. will need to make it generic later
         .selectAll("*")
       
       if (x !== null) {
@@ -1497,10 +1498,10 @@ export class Mark {
         markAttributes.y = parseFloat(el.attr("y"))
 
         if (el.attr("width"))
-          markAttributes.width = el.attr("width")
+          markAttributes.width = parseFloat(el.attr("width"))
 
         if (el.attr("height"))
-          markAttributes.height = el.attr("height")
+          markAttributes.height = parseFloat(el.attr("height"))
 
         coords.push(markAttributes)
       })
@@ -1513,6 +1514,7 @@ export class Mark {
         }
         grouped.get(coord.x).push(coord)
       })
+
 
 
       let centeredPoints = []
@@ -1529,9 +1531,9 @@ export class Mark {
         })
 
         let paddingTop = (crow.height - (maxY - minY))/2
-        console.log("paddingTop", paddingTop)
+        let offset = ((paddingTop - minY) > 0) ? (paddingTop - minY) : 0
         group.forEach(coord => {
-          centeredPoints.push({id: coord.id, x: coord.x, y: coord.y + paddingTop})
+          centeredPoints.push({id: coord.id, x: coord.x, y: coord.y + offset})
         })
       })
 
