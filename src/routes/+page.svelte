@@ -10,6 +10,7 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
+    import { IDNAME } from "../viz/table";
 
 
     let innerWidth = 10000;
@@ -206,36 +207,21 @@
                 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
+            let c = new Canvas(db, {width: 1800, height: 1000}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
-
-            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
-            /**
-             * example api to filter by status
-             * c.filter({operator: "=", from: "heart", column: "status", value: "1"})
-             * 
-             * We can implement this in two ways, eager filtering or lazy filtering
-             * 
-             * Eager filtering means appending an additional WHERE clause with the user condition.
-             * 
-             * Lazy filtering means running a second SQL query:
-             * SELECT id
-             * FROM <TABLE> 
-             * WHERE <user condition>
-             * 
-             * We get all the ids of rows that pass the user condition.
-             * Then we filter the result of the first query (where we got the actual data),
-             * dropping all rows whose ids aren not in the result of the second query.
-             * 
-             * NOTE: This function will apply the user condition/filter to all marks. Should we think about it being specific to some marks?
-            */
 
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age"].map((a) => [a]))
 
             let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca"];
             let tablename = "heart"
+
+            let tables = {t1: "heart_age", t2: "heart"}
+            let selectCols = {heart_age: ["age"], heart: ["chol"]}
+            let joinKeys = {age: IDNAME}
+
+            await db.join(tables, selectCols, joinKeys, "age_chol")
            
 
 
@@ -257,7 +243,7 @@
 
             
             let exang = c.square(tablename + "_" + specificAttributes[0], {x: 100, y: specificAttributes[0], fill: "none", stroke: "black", width: boxwidth})
-            let cp = c.square(Bucket1, {x: 300, y: "age_bucket", fill: "none", stroke: "black", width: boxwidth})
+            let cp = c.square(Bucket1, {x: 200, y: "age_bucket", fill: "none", stroke: "black", width: 150})
             let target = c.square(tablename + "_" + specificAttributes[2], {x: 500, y: specificAttributes[2], fill: "none", stroke: "black", width: boxwidth})
             let sex = c.square(tablename + "_" + specificAttributes[3], {x: 700, y: specificAttributes[3], fill: "none", stroke: "black", width: boxwidth})
             let fbs = c.square(tablename + "_" + specificAttributes[4], {x: 900, y: specificAttributes[4], fill: "none", stroke: "black", width: boxwidth})
@@ -356,6 +342,12 @@
                                         strokeOpacity: "count"
                                     }, 
                                     {curve: true})
+            // let cholDots = c.dot("age_chol", {
+            //                                     x: "age",
+            //                                     y: "chol"
+
+            //                                 })
+            //c.nest(cholDots, cp)
         }
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")
