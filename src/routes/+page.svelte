@@ -207,147 +207,92 @@
                 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 1800, height: 1000}) //setting up canvas
+            let canvasWidth = 1600;
+            let canvasHeight = 800;
+            let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
-            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age"].map((a) => [a]))
 
-            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca"];
+
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
+
+
+            //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+            //let tablename = "heart_disease"
+
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"];
             let tablename = "heart"
 
-            let tables = {t1: "heart_age", t2: "heart"}
-            let selectCols = {heart_age: ["age"], heart: ["chol"]}
-            let joinKeys = {age: IDNAME}
+            let bucketingAttribute = [1,8];
+            let bucketsizeArray = [8,40];
+            let bucketing = true;
 
-            await db.join(tables, selectCols, joinKeys, "age_chol")
-           
+            let tableArray = []; //Creating all the count tables
+            for(let i = 0; i < specificAttributes.length - 1; i++){
+                tableArray.push(await c.createCountTable(tablename + "_fact", [specificAttributes[i], specificAttributes[i+1]]))
+            }
 
+            let tableNameArray = []; //Creating an array to reference table names and allow for bucketing
+            for(let i = 0; i < specificAttributes.length; i++){
+                tableNameArray.push(tablename + "_" + specificAttributes[i])
+            }
 
-            let captionsize = 20;
-            let labelsize = 20;
-            let boxwidth = 50;
+            let workingAttributes = Array.from(specificAttributes); //creating a copy of the specificAttrbute array to allow for bucketing
 
-            let Bucket1 = await c.bucket({table: tablename + "_" + specificAttributes[1], col: specificAttributes[1], bucketSize: 8})
-            //specificAttributes[1] = specificAttributes[1] + "_bucket"
+            let bucketArray = []; //bucketing function
+            for(let i = 0; i < bucketingAttribute.length; i++){
+                bucketArray.push(await c.bucket({table: tablename + "_" + specificAttributes[bucketingAttribute[i]], col: specificAttributes[bucketingAttribute[i]], bucketSize: bucketsizeArray[i]}))
+                tableNameArray[bucketingAttribute[i]] = "bucketed_" + tablename + "_" + specificAttributes[bucketingAttribute[i]];
+                workingAttributes[bucketingAttribute[i]] = specificAttributes[bucketingAttribute[i]] + "_bucket";
+            }
 
+            let markArray = []; //creating the rectagular makrs
+            let boxWidth = 50
+            for(let i = 0; i < specificAttributes.length; i++){
+                markArray.push(c.square(tableNameArray[i], {
+                    x: (i)* (canvasWidth/specificAttributes.length) + (canvasWidth/specificAttributes.length)/2 - boxWidth/2, 
+                    y: workingAttributes[i], 
+                    fill: "none", 
+                    stroke: "black", 
+                    width: boxWidth}))
+            }
 
-            let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])
-            let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
-            let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
-            let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
-            let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
-            let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
-            let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
+            let captionArray = []; //creating the captions at the bottom
+            for(let i = 0; i < specificAttributes.length; i++){
+                captionArray.push(c.text(tableNameArray[i], {
+                    x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
+                    text: specificAttributes[i].toUpperCase(), 
+                    fontSize: 20}, 
+                    {textAnchor: "bottom"}))
+            }
 
-            
-            let exang = c.square(tablename + "_" + specificAttributes[0], {x: 100, y: specificAttributes[0], fill: "none", stroke: "black", width: boxwidth})
-            let cp = c.square(Bucket1, {x: 200, y: "age_bucket", fill: "none", stroke: "black", width: 150})
-            let target = c.square(tablename + "_" + specificAttributes[2], {x: 500, y: specificAttributes[2], fill: "none", stroke: "black", width: boxwidth})
-            let sex = c.square(tablename + "_" + specificAttributes[3], {x: 700, y: specificAttributes[3], fill: "none", stroke: "black", width: boxwidth})
-            let fbs = c.square(tablename + "_" + specificAttributes[4], {x: 900, y: specificAttributes[4], fill: "none", stroke: "black", width: boxwidth})
-            let slope = c.square(tablename + "_" + specificAttributes[5], {x: 1100, y: specificAttributes[5], fill: "none", stroke: "black", width: boxwidth})
-            let ca = c.square(tablename + "_" + specificAttributes[6], {x: 1300, y: specificAttributes[6], fill: "none", stroke: "black", width: boxwidth})
-            let thal = c.square(tablename + "_" + specificAttributes[7], {x: 1500, y: specificAttributes[7], fill: "none", stroke: "black", width: boxwidth})
+            let labelArray = []; //creating the labels for each mark
+            for(let i = 0; i < specificAttributes.length; i++){
+                labelArray.push(c.text(tableNameArray[i], {
+                    x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
+                    y: markArray[i].get(workingAttributes[i], ["y","width"], (d) => d.y + (d.width)/2), 
+                    text: workingAttributes[i], 
+                    fontSize: 20})) 
+            }
 
-            
-            let Caption1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[0].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption2 = c.text(Bucket1, {x: cp.get("age_bucket", ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[1].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[2].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[3].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[4].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption6 = c.text(tablename + "_" + specificAttributes[5], {x: slope.get(specificAttributes[5], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[5].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption7 = c.text(tablename + "_" + specificAttributes[6], {x: ca.get(specificAttributes[6], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[6].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-           let Caption8 = c.text(tablename + "_" + specificAttributes[7], {x: thal.get(specificAttributes[7], ["x","width"], (d) => d.x + (d.width)/2), text: specificAttributes[7].toUpperCase(), fontSize: 20}, {textAnchor: "bottom"})
-
-
-
-
-           let Label1 = c.text(tablename + "_" + specificAttributes[0], {x: exang.get(specificAttributes[0], ["x","width"], (d) => d.x + (d.width)/2), y: exang.get(specificAttributes[0], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[0], fontSize: labelsize})
-           let Label2 = c.text(Bucket1, {x: cp.get("age_bucket", ["x","width"], (d) => d.x + (d.width)/2), y: cp.get("age_bucket", ["y","width"], (d) => d.y + (d.width)/2), text: "age_bucket", fontSize: labelsize})
-           let Label3 = c.text(tablename + "_" + specificAttributes[2], {x: target.get(specificAttributes[2], ["x","width"], (d) => d.x + (d.width)/2), y: target.get(specificAttributes[2], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[2] , fontSize: labelsize})
-           let Label4 = c.text(tablename + "_" + specificAttributes[3], {x: sex.get(specificAttributes[3], ["x","width"], (d) => d.x + (d.width)/2), y: sex.get(specificAttributes[3], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[3] , fontSize: labelsize})
-           let Label5 = c.text(tablename + "_" + specificAttributes[4], {x: fbs.get(specificAttributes[4], ["x","width"], (d) => d.x + (d.width)/2), y: fbs.get(specificAttributes[4], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[4] , fontSize: labelsize})
-           let Label6 = c.text(tablename + "_" + specificAttributes[5], {x: slope.get(specificAttributes[5], ["x","width"], (d) => d.x + (d.width)/2), y: slope.get(specificAttributes[5], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[5], fontSize: labelsize})
-           let Label7 = c.text(tablename + "_" + specificAttributes[6], {x: ca.get(specificAttributes[6], ["x","width"], (d) => d.x + (d.width)/2), y: ca.get(specificAttributes[6], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[6], fontSize: labelsize})
-           let Label8 = c.text(tablename + "_" + specificAttributes[7], {x: thal.get(specificAttributes[7], ["x","width"], (d) => d.x + (d.width)/2), y: thal.get(specificAttributes[7], ["y","width"], (d) => d.y + (d.width)/2), text: specificAttributes[7], fontSize: labelsize})
-           
-
-
-            let VT1 = c.link(t1Name, {
-                                        x1: exang.get(specificAttributes[0], ['x',"width"], (d) => d.x + d.width), 
-                                        y1: exang.get(specificAttributes[0], ['y',"height"], (d) => d.y + (d.height)/2), 
-                                        x2: cp.get(specificAttributes[1], ['x']), 
-                                        y2: cp.get(specificAttributes[1], ['y',"height"], (d) => d.y + (d.height)/2), 
+           let linkArray = []; //creating the link between the labels
+           for(let i = 0; i < specificAttributes.length - 1; i++){
+                linkArray.push(c.link(tableArray[i], {
+                                        x1: markArray[i].get(specificAttributes[i], ['x',"width"], (d) => d.x + d.width), 
+                                        y1: markArray[i].get(specificAttributes[i], ['y',"height"], (d) => d.y + (d.height)/2), 
+                                        x2: markArray[i+1].get(specificAttributes[i+1], ['x']), 
+                                        y2: markArray[i+1].get(specificAttributes[i+1], ['y',"height"], (d) => d.y + (d.height)/2), 
                                         stroke: "count",
                                         strokeOpacity: "count"
                                     }, 
                                     {curve: true})
-
-            let VT2 = c.link(t2Name, {
-                                        x1: cp.get(specificAttributes[1], ['x', "width"], (d) => d.x + d.width), 
-                                        y1: cp.get(specificAttributes[1], ['y', "height"], (d) => d.y + (d.height)/2), 
-                                        x2: target.get(specificAttributes[2], ['x']), 
-                                        y2: target.get(specificAttributes[2], ['y',"height"], (d) => d.y + (d.height)/2), 
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    },
-                                    {curve: true})
-            let VT3 = c.link(t3Name, {
-                                        x1: target.get(specificAttributes[2], ['x',"width"], (d) => d.x + d.width),
-                                        y1: target.get(specificAttributes[2], ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: sex.get(specificAttributes[3], ['x']),
-                                        y2: sex.get(specificAttributes[3], ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    },
-                                    {curve: true})
-            let VT4 = c.link(t4Name, {
-                                        x1: sex.get(specificAttributes[3], ['x', "width"], (d) => d.x + d.width),
-                                        y1: sex.get(specificAttributes[3], ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: fbs.get(specificAttributes[4], ['x']),
-                                        y2: fbs.get(specificAttributes[4], ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    },
-                                    {curve: true})
-
-            let VT5 = c.link(t5Name, {
-                                        x1: fbs.get(specificAttributes[4], ['x', "width"], (d) => d.x + d.width),
-                                        y1: fbs.get(specificAttributes[4], ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: slope.get(specificAttributes[5], ['x']),
-                                        y2: slope.get(specificAttributes[5], ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    }, 
-                                    {curve: true})
+            )
+            }
             
-            let VT6 = c.link(t6Name, {
-                                        x1: slope.get(specificAttributes[5], ['x',"width"], (d) => d.x + d.width),
-                                        y1: slope.get(specificAttributes[5], ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: ca.get(specificAttributes[6], ['x']),
-                                        y2: ca.get(specificAttributes[6], ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    },
-                                    {curve: true})
-
-            let VT7 = c.link(t7Name, {
-                                        x1: ca.get(specificAttributes[6], ['x',"width"], (d) => d.x + d.width),
-                                        y1: ca.get(specificAttributes[6], ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: thal.get(specificAttributes[7], ['x']),
-                                        y2: thal.get(specificAttributes[7], ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count",
-                                        strokeOpacity: "count"
-                                    }, 
-                                    {curve: true})
-            // let cholDots = c.dot("age_chol", {
-            //                                     x: "age",
-            //                                     y: "chol"
-
-            //                                 })
-            //c.nest(cholDots, cp)
         }
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")
