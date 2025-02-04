@@ -15,6 +15,9 @@ import { Scale, ScaleObject } from "./newScale";
 import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
+import { ERMarkers, insertMarkers }from "./erMarkers"
+
+
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -835,6 +838,34 @@ export class Canvas implements IMark {
      */
 
     let newFkeysMark = fkeysMark.makemark(fkeysCols, canvasInfo)
+
+    const config = {stroke: "black"}
+    let fkeySvg = select(newFkeysMark.mark)
+    insertMarkers(fkeySvg, config)
+
+    fkeySvg
+    .selectAll(`g[aria-label='${fkeysMark.mark.aria}']`)
+    .selectAll("*")
+    .each(function (d, i) {
+      let el = d3.select(this);
+      let id = parseInt(el.attr("data__rav_id"))
+      let {x1_ref, x2_ref} = fkeysMark.referencedMarks.get(id)
+      let leftInfo = attributesMark.markInfoCache.get(x1_ref)
+      let rightInfo = attributesMark.markInfoCache.get(x2_ref)
+
+      if (leftInfo["textDecoration"] == "underline") { //left side is a key
+        el.attr("marker-start", `url(#${ERMarkers.ONE})`)
+      } else {
+        el.attr("marker-start", `url(#${ERMarkers.MANY})`)
+      }
+
+      if (rightInfo["textDecoration"] == "underline") { //left side is a key
+        el.attr("marker-end", `url(#${ERMarkers.ONE})`)
+      } else {
+        el.attr("marker-end", `url(#${ERMarkers.MANY})`)
+      }
+    })
+
     fkeysMark.node
     .append("g")
     .node().appendChild(newFkeysMark.mark);
