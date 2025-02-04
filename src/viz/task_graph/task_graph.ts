@@ -65,7 +65,6 @@ class Task {
 
 
             if (noAuto) {
-                console.log("noAuto trigger")
                 return
             }
 

@@ -187,16 +187,11 @@ export class Canvas implements IMark {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    console.log("innerTable", innerTable)
-    console.log("outerTable", outerTable)
-
     console.log("all constraints", this.db.constraints)
     let path = this.db.getFkPath(innerTable, outerTable)
 
     if (!path)
       throw new Error("No possible path!")
-
-    console.log("path", path)
 
     this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
     innerMark.outermark = outerMark
@@ -707,12 +702,19 @@ export class Canvas implements IMark {
         rowCounts.set(parentId, rowCounts.get(parentId) + 1)
       }
       
-      if (attributesGroups.has(parentId)) {
-        attributesGroups.get(parentId).push({[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20, text: info.text})
-      } else {
-        attributesGroups.set(parentId, [{[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20, text: info.text}])
+      let obj = {[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20}
+
+      for (let key of Object.keys(info)) {
+        if (!(key in obj)) {
+          obj[key] = info[key]
+        }
       }
-      attributesRows.push({[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20})
+      if (attributesGroups.has(parentId)) {
+        attributesGroups.get(parentId).push(obj)
+      } else {
+        attributesGroups.set(parentId, [obj])
+      }
+      attributesRows.push(obj)
     })
 
     let edges = g.edges().map(edge => {

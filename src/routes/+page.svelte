@@ -276,7 +276,7 @@
                     x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
                     y: markArray[i].get(workingAttributes[i], ["y","width"], (d) => d.y + (d.width)/2), 
                     text: workingAttributes[i], 
-                    fontSize: 20})) 
+                    fontSize: 20}, {lineAnchor: "middle"})) 
             }
 
            let linkArray = []; //creating the link between the labels
@@ -346,7 +346,7 @@
             console.log("create tables", sqlstring)
             await db.conn.exec(sqlstring)
 
-            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
+            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
 
             sqlstring = "INSERT INTO columns VALUES "
 
@@ -354,8 +354,14 @@
                 let tid = tableToId.get(table)
 
                 for (let i = 0; i < attributes.length; i++) {
-                    let tmp = `(${tid}, '${attributes[i]}', 'int', ${i}), `
-                    sqlstring += tmp 
+                    if (i == 0) {
+                        let tmp = `(${tid},'${attributes[i]}', 1, 'int', ${i}), `
+                        sqlstring += tmp 
+                    } else {
+                        let tmp = `(${tid}, '${attributes[i]}', 0, 'int', ${i}), `
+                        sqlstring += tmp 
+                    }
+
                 }
             }
             console.log("create columns", sqlstring)
@@ -392,7 +398,7 @@
             let vattributes= c.text("columns", {
                                             y: 'ordinal_position',
                                             text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            'text-decoration': {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
                                             x: 0
                             })
 
