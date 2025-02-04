@@ -600,7 +600,7 @@ export class Canvas implements IMark {
   }
 
   async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
-    let placeholder = "erdiagram"
+    let placeholder = "COMPOSITE_erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
     this.taskGraph.addDependency(placeholder, attributesMark, true)
@@ -758,7 +758,10 @@ export class Canvas implements IMark {
      * Time to make calls to functions in newMark to create new svg stuff
      */
     /**
-     * First remove all existing elements
+     * Sequence:
+     * Remove all elements
+     * Render tables, then attributes, then fkey edges
+     * For each mark, call makemark, fixup the markInfo if needed and then recreate its marktable
      */
 
     tablesMark.node.selectAll("*").remove()
@@ -799,6 +802,10 @@ export class Canvas implements IMark {
 
     tablesMark.prepareMarkInfo(newTablesMark.markInfo)
     await tablesMark.createMarkTable(newTablesMark.markInfo)
+
+    /**
+     * End tablesMark recreation, start attributes
+     */
     
     let newAttributesMarkInfo = []
     for (let [parentId, rows] of attributesGroups.entries()) {
@@ -810,7 +817,6 @@ export class Canvas implements IMark {
         .attr("width", this.options.width)
         .attr("height", this.options.height)
         .attr("viewBox", `0 0 ${this.options.width} ${this.options.height}`)
-      newAttributesMark.mark.removeAttribute("text-anchor")
 
       newAttributesMarkInfo.push(...newAttributesMark.markInfo)
 
@@ -821,6 +827,10 @@ export class Canvas implements IMark {
 
     attributesMark.prepareMarkInfo(newAttributesMarkInfo)
     await attributesMark.createMarkTable(newAttributesMarkInfo)
+
+    /**
+     * End attributeMarks recreation, start fkey edges
+     */
 
     let newFkeysMark = fkeysMark.makemark(fkeysCols, canvasInfo)
     fkeysMark.node

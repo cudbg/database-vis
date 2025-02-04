@@ -1341,6 +1341,8 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+
+        mark.removeAttribute("text-anchor")
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
