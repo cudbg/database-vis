@@ -202,7 +202,7 @@
 
         }
 
-        if (0) { //parallel coordinates with the new heart dataset
+        if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
@@ -259,6 +259,10 @@
                     fill: "none", 
                     stroke: "black", 
                     width: tableNameArray[i].includes("bucketed") ? 100 : boxWidth}))
+                
+                if (i == 1) {
+                    markArray[i].filter({operator: ">=", col: "min_age", value: 48})
+                }
             }
 
             let captionArray = []; //creating the captions at the bottom
@@ -295,7 +299,7 @@
             
         }
 
-        if (1) {
+        if (0) {
             let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
 
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
@@ -394,7 +398,7 @@
             window.db = db;
 
             let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y"), text: "table_name"})
+            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y", (d) => d.y - 10), text: "table_name"})
             let vattributes= c.text("columns", {
                                             y: 'ordinal_position',
                                             text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
