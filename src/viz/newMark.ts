@@ -229,6 +229,7 @@ export class Mark {
         let allMarks = marksbytype(plotConfig)
         this.mark = (allMarks[marktype] ?? marktype['dot']);
         this.src = source;
+        this.marktable = null
         this.mappings = mappings;
         this.options = options;
         this.layouts = {};
@@ -1964,7 +1965,14 @@ export class Mark {
     async createMarkTable(markInfo) {
       const tname = this.src.internalname + "_marktable" + this.id;
 
-      await this.createNewMarkTable(markInfo, tname)
+      if (!this.marktable) {
+        await this.createNewMarkTable(markInfo, tname)
+      } else {
+        /**
+         * This is specifically for ER diagram where we rerender and get fresh markinfo, so we drop all the old information
+         */
+        await this.c.db.conn.exec(`TRUNCATE ${tname}`)
+      }
 
       let tuples = this.valuesFromMarkInfo(markInfo).map((row) => `(${row.join(", ")})`).join(", ")
 
