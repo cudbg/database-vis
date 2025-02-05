@@ -229,6 +229,7 @@ export class Mark {
         let allMarks = marksbytype(plotConfig)
         this.mark = (allMarks[marktype] ?? marktype['dot']);
         this.src = source;
+        this.marktable = null
         this.mappings = mappings;
         this.options = options;
         this.layouts = {};
@@ -1340,6 +1341,13 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+        if (!("lineAnchor" in this.options)) {
+          mark.removeAttribute("text-anchor")
+        }
+
+        if ('textDecoration' in this.mappings) {
+          this.setTextDecoration(mark, data)
+        }
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
@@ -1431,6 +1439,32 @@ export class Mark {
                 break
               }
           }
+      })
+    }
+
+    /**
+     * Observable does not support text-decoration
+     * @param mark 
+     * @param data 
+     */
+    setTextDecoration(mark, data) {
+      let channelItem: RawChannelItem = this.channels.find((item) => item.visualAttr == 'textDecoration')
+      let queryItem: QueryItem = toQueryItem(channelItem)
+      let dataAttr = channelItem.dataAttr
+      let callback = channelItem.callback
+      let thisref = this
+
+      maybeselection(mark)
+      .selectAll(`g[aria-label='${this.mark.aria}']`)
+      .selectAll("*")
+      .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let id = parseInt(el.attr("data__rav_id"))
+        let idIdx = data[IDNAME].indexOf(id)
+
+        el.attr("text-decoration", data["textDecoration"][idIdx])
+
       })
     }
 
@@ -1675,6 +1709,8 @@ export class Mark {
                 markAttributes[IDNAME] = parseInt(attrValue);
               } else if (attrName == "font-size") {
                 markAttributes["fontSize"] = attrValue
+              } else if (attrName == "text-decoration") {
+                markAttributes["textDecoration"] = attrValue
               } else
                 markAttributes[attrName] = attrValue
           }
@@ -1934,7 +1970,12 @@ export class Mark {
 
         if (this.marktype == "text") {
           obj["text"] = markInfo[i]["text"]
+
+          if ("textDecoration" in markInfo[i]) {
+            obj["textDecoration"] = markInfo[i]["textDecoration"]
+          }
         }
+
         obj["data_xoffset"] = data_xoffset
         obj["data_yoffset"] = data_yoffset
 
@@ -1964,7 +2005,14 @@ export class Mark {
     async createMarkTable(markInfo) {
       const tname = this.src.internalname + "_marktable" + this.id;
 
-      await this.createNewMarkTable(markInfo, tname)
+      if (!this.marktable) {
+        await this.createNewMarkTable(markInfo, tname)
+      } else {
+        /**
+         * This is specifically for ER diagram where we rerender and get fresh markinfo, so we drop all the old information
+         */
+        await this.c.db.conn.exec(`TRUNCATE ${tname}`)
+      }
 
       let tuples = this.valuesFromMarkInfo(markInfo).map((row) => `(${row.join(", ")})`).join(", ")
 

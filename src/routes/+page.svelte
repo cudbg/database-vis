@@ -305,8 +305,10 @@
                 
             await db.loadFromConnection()
 
+
             let canvasWidth = 800;
             let canvasHeight = 600;
+
             let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
             canvas = c
             window.c = c;
@@ -356,15 +358,20 @@
                     y: workingAttributes[i], 
                     fill: "none", 
                     stroke: "black", 
-                    width: boxWidth}))
+                    width: tableNameArray[i].includes("bucketed") ? 100 : boxWidth}))
+                
+                if (i == 1) {
+                    markArray[i].filter({operator: ">=", col: "min_age", value: 48})
+                }
             }
 
             let captionArray = []; //creating the captions at the bottom
             for(let i = 0; i < specificAttributes.length; i++){
                 captionArray.push(c.text(tableNameArray[i], {
                     x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
-                    text: specificAttributes[i].toUpperCase(), 
-                    fontSize: 10}, 
+
+                    text: {constant: specificAttributes[i]}, 
+                    fontSize: 20}, 
                     {textAnchor: "bottom"}))
             }
 
@@ -374,7 +381,8 @@
                     x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
                     y: markArray[i].get(workingAttributes[i], ["y","width"], (d) => d.y + (d.width)/2), 
                     text: workingAttributes[i], 
-                    fontSize: 10})) 
+                    fontSize: 20}, {lineAnchor: "middle"})) 
+
             }
 
            let linkArray = []; //creating the link between the labels
@@ -394,6 +402,122 @@
         }
 
 
+        if (0) {
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
+
+            await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
+
+            let tablesToAttributes: Map<string, string[]> = new Map<string, string[]>()
+            let tableToId: Map<string, number> = new Map<string, number>()
+            let fkeysMap = {}
+
+            fkeysMap[0] = {leftTable: "heart", leftAttr: "id", rightTable: "heart_fact", rightAttr: "id"}
+            fkeysMap[1] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
+            fkeysMap[2] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+            fkeysMap[3] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
+            fkeysMap[4] = {leftTable: "heart_age", leftAttr: "bucket_id", rightTable: "bucketed_heart_age", rightAttr: "id"}
+
+            fkeysMap[5] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "exang_age_count", rightAttr: "exang"}
+            fkeysMap[6] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "exang_age_count", rightAttr: "age"}
+
+            fkeysMap[7] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "age_cp_count", rightAttr: "age"}
+            fkeysMap[8] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "age_cp_count", rightAttr: "cp"}
+
+            fkeysMap[9] = {leftTable: "exang_age_count", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
+            fkeysMap[10] = {leftTable: "exang_age_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+
+
+            fkeysMap[11] = {leftTable: "age_cp_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+            fkeysMap[12] = {leftTable: "age_cp_count", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
+            
+
+            tablesToAttributes.set("heart", ["id", "exang", "age", "cp"])
+            tablesToAttributes.set("heart_fact", ["id", "exang", "age", "cp"])
+            tablesToAttributes.set("heart_exang", ["id", "exang"])
+            tablesToAttributes.set("heart_age", ["id", "age", "bucket_id"])
+            tablesToAttributes.set("bucketed_heart_age", ["id", "age_bucket", "min_age", "max_age"])
+            tablesToAttributes.set("heart_cp", ["id", "cp"])
+            tablesToAttributes.set("exang_age_count", ["id", "count", "exang", "age"])
+            tablesToAttributes.set("age_cp_count", ["id", "count", "age", "cp"])
+
+            let idcounter = 0
+            let sqlstring = "INSERT INTO tables VALUES "
+            for (let [table, attributes] of tablesToAttributes.entries()) {
+                tableToId.set(table, idcounter)
+                sqlstring += `(${idcounter}, '${table}')`
+                if (idcounter != 7)
+                    sqlstring += ", "
+                idcounter += 1
+            }
+
+            console.log("create tables", sqlstring)
+            await db.conn.exec(sqlstring)
+
+            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
+
+            sqlstring = "INSERT INTO columns VALUES "
+
+            for (let [table, attributes] of tablesToAttributes.entries()) {
+                let tid = tableToId.get(table)
+
+                for (let i = 0; i < attributes.length; i++) {
+                    if (i == 0) {
+                        let tmp = `(${tid},'${attributes[i]}', 1, 'int', ${i}), `
+                        sqlstring += tmp 
+                    } else {
+                        let tmp = `(${tid}, '${attributes[i]}', 0, 'int', ${i}), `
+                        sqlstring += tmp 
+                    }
+
+                }
+            }
+            console.log("create columns", sqlstring)
+
+            await db.conn.exec(sqlstring)
+
+            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
+
+            sqlstring = "INSERT INTO fkeys VALUES "
+
+            for (let [key, obj] of Object.entries(fkeysMap)) {
+                // console.log("wtf is happening")
+                // console.log("obj", obj)
+                let {leftTable, leftAttr, rightTable, rightAttr} = obj
+
+                let leftId = tableToId.get(leftTable)
+                let rightId = tableToId.get(rightTable)
+
+                sqlstring += `(${leftId}, '${leftAttr}', ${rightId}, '${rightAttr}'), `
+            }
+
+            console.log("fkeys string", sqlstring)
+
+            await db.conn.exec(sqlstring)
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 1600, height: 1000})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            x: 0
+                            })
+
+            c.nest(vattributes, vtables, "tid")
+
+            let vfkeys = c.link("fkeys", {
+                                    x1: vattributes.get(["tid1", "col1"], ['x']), 
+                                    y1: vattributes.get(["tid1", "col1"], ['y']), 
+                                    x2: vattributes.get(["tid2", "col2"], ['x']), 
+                                    y2: vattributes.get(["tid2", "col2"], ['y'])})
+            await c.erDiagram(vtables, vattributes, vfkeys)
+        }
 
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")

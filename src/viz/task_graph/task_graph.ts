@@ -48,7 +48,7 @@ class Task {
         this.outgoing.push(dest)
     }
 
-    async run() {
+    async run(noAuto?) {
         if (this.state === STATES.RUNNING || this.state === STATES.COMPLETE)
             return Promise.resolve()
 
@@ -62,6 +62,12 @@ class Task {
             this.state = STATES.RUNNING
             this.output = await this.func();
             this.state = STATES.COMPLETE;
+
+
+            if (noAuto) {
+                return
+            }
+
             for (let i = 0; i < this.outgoing.length; i++) {
                 await this.outgoing[i].run()
             }
@@ -104,6 +110,7 @@ export class TaskGraph {
     markToTasksMap: Map<any, Task[]>
     markDependency: Map<any, Set<any>>
     tasksSorted: boolean
+    composite: string
 
 
 
@@ -112,6 +119,7 @@ export class TaskGraph {
         this.markToTasksMap = new Map<any, Task[]>()
         this.markDependency = new Map<any, Set<any>>()
         this.tasksSorted = false
+        this.composite = null
     }
 
     generateNewTaskName(hook_place: HOOK_PLACE, mark, taskName) {
@@ -199,6 +207,10 @@ export class TaskGraph {
         if (!this.markToTasksMap.has(mark)) {
             this.markDependency.set(mark, new Set())
             this.markToTasksMap.set(mark, [])
+
+            if (typeof mark == "string" && mark.includes("COMPOSITE")) {
+                this.composite = mark
+            }
         }
     }
 
@@ -268,9 +280,6 @@ export class TaskGraph {
 
 
     getStartingTasks() {
-        if (!this.tasksSorted)
-            this.topoSortMarks()
-
         let result: Task[] = []
 
         for (let [mark, tasks] of this.markToTasksMap.entries()) {
@@ -288,21 +297,88 @@ export class TaskGraph {
         return result
     }
 
-    // async completeAllTasks(mark) {
-    //     let tasks = this.markToTasksMap.get(mark)
-    //     for (let i = 0; i < tasks.length; i++){
-    //         await tasks[i].run()
-    //     }
-    // }
 
     async execute() {
         if (!this.running)
             return Promise.resolve()
+
+        if (!this.tasksSorted)
+            this.topoSortMarks()
+
+        if (this.composite != null) {
+            let compositeTask = this.markToTasksMap.get(this.composite)
+            let queue = []
+            let visited = new Set()
+            let adjList = new Map<any, any[]>()
+            let indegree = new Map<any, number>()
+            let marks = []
+
+            for (let [src, dests] of this.markDependency.entries()) {
+                if (dests.has(this.composite)) {
+                    visited.add(src)
+                    queue.push(src)
+                    adjList.set(src, [])
+                    indegree.set(src, 0)
+                }
+            }
+
+            while (queue.length > 0) {
+                let curr = queue.shift()
+                marks.push(curr)
+                for (let [src, dests] of this.markDependency.entries()) {
+                    if (dests.has(curr)) {
+                        indegree.set(curr, indegree.get(curr) + 1)
+                        if (adjList.has(src)) {
+                            adjList.get(src).push(curr)
+                        } else {
+                            adjList.set(src, [curr])
+                            indegree.set(src, 0)
+                            queue.push(src)
+                            visited.add(src)
+                        }
+                    }
+                }
+            }
+
+            let ans = []
+            queue = []
+            for (let [mark, count] of indegree.entries()) {
+                if (count == 0) {
+                    queue.push(mark)
+                }
+            }
+
+            while (queue.length > 0) {
+                let curr = queue.shift()
+                ans.push(curr)
+                let ng = adjList.get(curr)
+                for (let i = 0; i < ng.length; i++) {
+                    indegree.set(ng[i], indegree.get(ng[i]) - 1)
+                    if (indegree.get(ng[i]) == 0) {
+                        queue.push(ng[i])
+                    }
+                }
+            }
+
+            for (let i = 0; i < ans.length; i++) {
+                let curr = ans[i]
+                let tasks = this.markToTasksMap.get(curr)
+
+                for (let j = 0; j < tasks.length; j++) {
+                    await tasks[j].run(true)
+                }
+            }
+
+            await compositeTask[0].run()
+        }
         let startpoints = this.getStartingTasks()
+
+
         console.log("startpoints", startpoints)
 
         for (let i = 0; i < startpoints.length; i++)
             await startpoints[i].run()
+        
     }
 
     visualize(svg) {
