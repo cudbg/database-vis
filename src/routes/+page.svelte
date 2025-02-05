@@ -11,6 +11,7 @@
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
+    import { lab } from "d3";
 
 
     let innerWidth = 10000;
@@ -202,13 +203,112 @@
 
         }
 
+        if (0) { //parallel coordinates with the new heart dataset
+
+                        
+        await db.loadFromConnection()
+
+        let canvasWidth = 1200;
+        let canvasHeight = 800;
+        let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
+        canvas = c
+        window.c = c;
+        window.db = db;
+
+
+
+        await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+
+
+        await c.hier("heart", ["sex", "exang", "thalach", "cp", "target","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"])
+        //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+        //let tablename = "heart_disease"
+
+        let specificAttributes: string[] = ["exang", "cp", "target","fbs","slope","ca","thal"];
+        let tablename = "heart"
+
+        let bucketingAttribute = [];
+        let bucketsizeArray = [];
+        let bucketing = true;
+
+
+        //_-------------------------------------------------------------------------------------------------------------------------
+
+        let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
+
+
+                    
+        let markArray2 = []; //creating the rectagular makrs
+        let boxWidth2 = 50
+
+        for(let i = 0; i < specificAttributes.length; i++){
+            markArray2.push(c.square(specificAttributes[i], {
+                x: (i)* (canvasWidth/specificAttributes.length) + (canvasWidth/specificAttributes.length)/2 - boxWidth2/2, 
+                y: specificAttributes[i], 
+                fill: "none", 
+                stroke: "black", 
+                width: boxWidth2}))
+
+                c.nest(markArray2[i], bigRect)
+        }
+
+        
+        let tableNameArray = []; //Creating an array to reference table names and allow for bucketing
+            for(let i = 0; i < specificAttributes.length; i++){
+                tableNameArray.push(tablename + "_" + specificAttributes[i])
+            }
+
+        
+
+        /*
+        let captionArray = []; //creating the captions at the bottom
+        for(let i = 0; i < specificAttributes.length; i++){
+                captionArray.push(c.text(specificAttributes[i], {
+                    x: markArray2[i].get(["sex", ...specificAttributes.slice(0, i)], "x"), 
+                    text: specificAttributes[i].toUpperCase(), 
+                    fontSize: 20}, 
+                    {textAnchor: "bottom"}))
+                c.nest(captionArray[i], bigRect, ["sex", ...specificAttributes.slice(0, i)])
+        }
+                */
+        
+                    
+        
+
+
+        let workingAttributes = Array.from(specificAttributes); //creating a copy of the specificAttrbute array to allow for bucketing
+
+        /*
+        
+        let labelArray = []; //creating the labels for each mark
+            for(let i = 0; i < specificAttributes.length; i++){
+                labelArray.push(c.text(specificAttributes[i], {
+                    x: 200, 
+                    y: 200, 
+                    text: workingAttributes[i], 
+                    fontSize: 20})) 
+                c.nest(labelArray[i], markArray2[i], workingAttributes[i])
+            }
+        
+        */
+        
+
+        
+
+                
+        //--------------------------------------------------------------------------------------------------------------------------
+
+        }
+
         if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
 
-            let canvasWidth = 1600;
-            let canvasHeight = 1000;
+
+            let canvasWidth = 800;
+            let canvasHeight = 600;
+
             let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
             canvas = c
             window.c = c;
@@ -220,15 +320,15 @@
 
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
 
-
+            await c.hier("heart", ["sex", "exang", "thalach", "cp", "target","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"])
             //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
             //let tablename = "heart_disease"
 
-            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"];
+            let specificAttributes: string[] = ["exang","chol" ,"cp", "target","fbs","slope","age","ca","thal"];
             let tablename = "heart"
 
-            let bucketingAttribute = [1,8];
-            let bucketsizeArray = [8,40];
+            let bucketingAttribute = [1,6];
+            let bucketsizeArray = [50,8];
             let bucketing = true;
 
             let tableArray = []; //Creating all the count tables
@@ -251,7 +351,7 @@
             }
 
             let markArray = []; //creating the rectagular makrs
-            let boxWidth = 50
+            let boxWidth = 30
             for(let i = 0; i < specificAttributes.length; i++){
                 markArray.push(c.square(tableNameArray[i], {
                     x: (i)* (canvasWidth/specificAttributes.length) + (canvasWidth/specificAttributes.length)/2 - boxWidth/2, 
@@ -269,6 +369,7 @@
             for(let i = 0; i < specificAttributes.length; i++){
                 captionArray.push(c.text(tableNameArray[i], {
                     x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
+
                     text: {constant: specificAttributes[i]}, 
                     fontSize: 20}, 
                     {textAnchor: "bottom"}))
@@ -281,6 +382,7 @@
                     y: markArray[i].get(workingAttributes[i], ["y","width"], (d) => d.y + (d.width)/2), 
                     text: workingAttributes[i], 
                     fontSize: 20}, {lineAnchor: "middle"})) 
+
             }
 
            let linkArray = []; //creating the link between the labels
@@ -298,6 +400,7 @@
             }
             
         }
+
 
         if (0) {
             let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
@@ -415,6 +518,7 @@
                                     y2: vattributes.get(["tid2", "col2"], ['y'])})
             await c.erDiagram(vtables, vattributes, vfkeys)
         }
+
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
@@ -445,23 +549,50 @@
         }
 
         if (0) { //hierarchical nesting on heart disease status and chest pain
-            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart2")
-
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            let canvasWidth = 1200;
+            let canvasHeight = 800;
+            let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
 
-            await c.hier("heart2", ["target", "cp"])
 
-            let target = c.rect("target", {...sq("target")("x", "y"), fill: "none", stroke: "black"})
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
+
+
+            //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+            //let tablename = "heart_disease"
+
+            /*
+
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","chol","ca","thal"];
+            let tablename = "heart"
+
+            c.nest( smallRect, bigRect)
+            */
+
+            await c.hier("heart", ["sex", "cp"])
+
+
+            let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
+            let smallRect = c.square("cp", {
+                    x: (3)* (canvasWidth/8) + (canvasWidth/8)/2 - 50/2, 
+                    y: "cp", 
+                    fill: "none", 
+                    stroke: "black", 
+                    width: 50})
+
+            
+            let target = c.rect("sex", {...sq("sex")("x", "y"), fill: "none", stroke: "black"})
 
             let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
 
-            let targetLabel = c.text("target", {x: target.get("target", "x"), y: target.get("target", "y"), text: {cols: "target", func: (d) => d.target == "0" ? "NA" : "Present"}})
+            let targetLabel = c.text("sex", {x: target.get("sex", "x"), y: target.get("sex", "y"), text: {cols: "sex", func: (d) => d.target == "0" ? "NA" : "Present"}})
 
             c.nest(cp, target)
         }
