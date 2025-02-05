@@ -3,6 +3,7 @@ import { creator, select } from "d3";
 import { Query, sql, agg, and, eq, column, count } from "@uwdata/mosaic-sql";
 import type { Database } from "./db";
 import { createView, IDNAME, Table } from "./table";
+import * as d3 from "d3";
 import { Cardinality, FKConstraint } from "./constraint";
 import { Mark, type IMark, marksbytype } from "./newMark"
 //import { Mark, type IMark, marksbytype  } from "./mark";
@@ -14,6 +15,9 @@ import { Scale, ScaleObject } from "./newScale";
 import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
+import { ERMarkers, insertMarkers }from "./erMarkers"
+
+
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
   if (typeof source === "string")
@@ -186,16 +190,11 @@ export class Canvas implements IMark {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    console.log("innerTable", innerTable)
-    console.log("outerTable", outerTable)
-
     console.log("all constraints", this.db.constraints)
     let path = this.db.getFkPath(innerTable, outerTable)
 
     if (!path)
       throw new Error("No possible path!")
-
-    console.log("path", path)
 
     this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
     innerMark.outermark = outerMark
@@ -399,7 +398,7 @@ export class Canvas implements IMark {
         referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
       }
     }
-    console.log("testingJan6", referenceCounts)
+
     let queue = []
   
     for (let [markID, count] of referenceCounts.entries()) {
@@ -429,7 +428,6 @@ export class Canvas implements IMark {
     let marks = this.marks.slice().sort((mark1, mark2) => {
       return arr.indexOf(mark1.id) - arr.indexOf(mark2.id)
     })
-    console.log("testingJan6", marks)
     return marks
   }
 
@@ -599,32 +597,28 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
-    let placeholder = "erdiagram"
+  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+    let placeholder = "COMPOSITE_erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
     this.taskGraph.addDependency(placeholder, attributesMark, true)
-    this.taskGraph.addDependency(placeholder, labelsMark, true)
     this.taskGraph.addDependency(placeholder, fkeysMark, true)
 
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, labelsMark, attributesMark, fkeysMark)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, labelsMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
     let tablesMarkInfo = tablesMark.markInfoCache
     let attributesMarkInfo = attributesMark.markInfoCache
-    let labelsMarkInfo = labelsMark.markInfoCache
-    console.log("labelsMarkInfo", labelsMarkInfo)
-
     let g = new dagre.graphlib.Graph({compound: true})
     
     g.setGraph({rankdir: "LR"})
 
-    g.setDefaultEdgeLabel(function() { return {}; });
+    //g.setDefaultEdgeLabel(function() { return {}; });
 
     /**
      * First get number of attrbutes per table
@@ -675,13 +669,13 @@ export class Canvas implements IMark {
       let leftEntityId = attributesMark.innerToOuter.get(leftAttributeId)
       let rightEntityId = attributesMark.innerToOuter.get(rightAttributeId)
 
-      g.setEdge(`${tablesMark.marktype}_${leftEntityId.toString()}`, `${tablesMark.marktype}_${rightEntityId.toString()}`)
+      g.setEdge(`${tablesMark.marktype}_${leftEntityId.toString()}`, `${tablesMark.marktype}_${rightEntityId.toString()}`, {label: `${x1_ref}#${x2_ref}#${key}`})
     }
 
     dagre.layout(g)
 
 
-    let entities = []
+    let tableRows = []
 
     g.nodes().forEach(id => {
       const rect = g.node(id);
@@ -692,43 +686,17 @@ export class Canvas implements IMark {
         }
 
         let parsedId = parseInt(match[1], 10)
-        entities.push({ id: parsedId, x: rect.x, y: rect.y, width: rect.width, height: rect.height})
+        tableRows.push({ [IDNAME]: parsedId, x: rect.x, y: rect.y, width: baseTableWidth, height: rect.height, stroke: "black", fill: "none"})
     });
-
-    let edges = g.edges().map(edge => {
-      const source = g.node(edge.v);
-      const target = g.node(edge.w);
-      return {
-        x1: source.x, y1: source.y,
-        x2: target.x, y2: target.y
-        };
-    });
-
-    this.node.selectAll("*").remove()
-
-    let inner = this.node.append("g")
-    
-    entities.forEach((entity) => {
-      inner.append("rect")
-        .attr("x", entity.x)
-        .attr("y", entity.y)
-        .attr("width", baseTableWidth)
-        .attr("height", entity.height)
-        .style("fill", "none")
-        .style("stroke", "black")
-    })
-
-    edges.forEach((edge) => {
-      inner.append("path")
-        .attr("d", `M${edge.x1},${edge.y1}L${edge.x2},${edge.y2}`)
-        .style("stroke", "black")
-    })
-
+  
     let rowCounts = new Map<number, number>()
+
+    let attributesGroups = new Map<number, {}[]>()
+    let attributesRows = []
 
     attributesMarkInfo.forEach((info, id) => {
       let parentId = attributesMark.innerToOuter.get(id)
-      let parentInfo = entities.find((entity) => entity.id == parentId)
+      let parentInfo = tableRows.find((entity) => entity[IDNAME] == parentId)
       let currRowCount = 0
       if (!rowCounts.has(parentId)) {
         rowCounts.set(parentId, 1)
@@ -736,30 +704,244 @@ export class Canvas implements IMark {
         currRowCount = rowCounts.get(parentId)
         rowCounts.set(parentId, rowCounts.get(parentId) + 1)
       }
+      
+      let obj = {[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20}
 
-      inner.append("text")
-        .attr("x", parentInfo.x)
-        .attr("y", parentInfo.y + (currRowCount + 1)  * 20)
-        .text(info.text)
+      for (let key of Object.keys(info)) {
+        if (!(key in obj)) {
+          obj[key] = info[key]
+        }
+      }
+      if (attributesGroups.has(parentId)) {
+        attributesGroups.get(parentId).push(obj)
+      } else {
+        attributesGroups.set(parentId, [obj])
+      }
+      attributesRows.push(obj)
     })
+
+    let edges = g.edges().map(edge => {
+      let label: string = g.edge(edge).label
+      let ids = label.split("#",3)
+      let leftId = parseInt(ids[0])
+      let rightId = parseInt(ids[1])
+      let edgeId = parseInt(ids[2])
+
+      let leftAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == leftId)
+      let rightAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == rightId)
+
+      const source = g.node(edge.v);
+      const target = g.node(edge.w);
+
+      let leftEntityId = parseFloat(source.label.split("_",2)[1])
+      let rightEntityId = parseFloat(target.label.split("_",2)[1])
+
+      let leftEntityInfo = tableRows.find((table) => table[IDNAME] == leftEntityId)
+      let rightEntityInfo = tableRows.find((table) => table[IDNAME] == rightEntityId)
+
+
+      let x1 = leftAttrInfo.x
+      let y1 = leftAttrInfo.y
+      let x2 = rightAttrInfo.x
+      let y2 = rightAttrInfo.y
+
+      if (x1 < x2) {
+        x1 += leftEntityInfo.width
+      } else if (x2 < x1) {
+        x2 += rightEntityInfo.width
+      }
+      
+
+      return {
+        [IDNAME]: edgeId,
+        x1: x1, y1: y1,
+        x2: x2, y2: y2
+        };
+    });
 
     /**
-     * Assume for now that x and y always exist on label marks, are the same, and hold id of the table that this label is associated with
+     * Time to make calls to functions in newMark to create new svg stuff
      */
-    labelsMarkInfo.forEach((info, id) => {
-      let obj = labelsMark.referencedMarks.get(id)
+    /**
+     * Sequence:
+     * Remove all elements
+     * Render tables, then attributes, then fkey edges
+     * For each mark, call makemark, fixup the markInfo if needed and then recreate its marktable
+     */
+
+    tablesMark.node.selectAll("*").remove()
+    attributesMark.node.selectAll("*").remove()
+    fkeysMark.node.selectAll("*").remove()
+
+    let tableCols = tablesMark.rowsToCols(tableRows)
+    let fkeysCols = fkeysMark.rowsToCols(edges)
 
 
-      let parentInfo = entities.find((entity) => entity.id == obj.x_ref)
-      inner.append("text")
-      .attr("x", parentInfo.x)
-      .attr("y", parentInfo.y)
-      .text(info.text)
+    attributesMark._scales.x = {type: "identity"}
+    attributesMark._scales.y = {type: "identity"}
 
+    let canvasInfo = {width: this.options.width, height: this.options.height}
+    let newTablesMark = tablesMark.makemark(tableCols, canvasInfo)
+
+    select(newTablesMark.mark)
+      .selectAll(`g[aria-label='${tablesMark.mark.aria}']`)
+      .selectAll("*")
+      .each(function (d, i) {
+        let el = d3.select(this);
+        let id = parseInt(el.attr("data__rav_id"))
+        let tableRow = tableRows.find((table) => table[IDNAME] == id)
+        el.attr("x", tableRow.x)
+        el.attr("y", tableRow.y)
+        el.attr("width", tableRow.width)
+        el.attr("height", tableRow.height)
+
+        let row = newTablesMark.markInfo.find((info) => info[IDNAME] == id)
+        row.x = tableRow.x
+        row.y = tableRow.y
+        row.width = tableRow.width
+        row.height = tableRow.height
+      })
+    tablesMark.node
+      .append("g")
+      .node().appendChild(newTablesMark.mark);
+
+    tablesMark.prepareMarkInfo(newTablesMark.markInfo)
+    await tablesMark.createMarkTable(newTablesMark.markInfo)
+
+    /**
+     * End tablesMark recreation, start attributes
+     */
+    
+    let newAttributesMarkInfo = []
+    for (let [parentId, rows] of attributesGroups.entries()) {
+      let parentInfo = tableRows.find((table) => table[IDNAME] == parentId)
+      let cols = attributesMark.rowsToCols(rows)
+      let newAttributesMark = attributesMark.makemark(cols, parentInfo)
+
+      select(newAttributesMark.mark)
+        .attr("width", this.options.width)
+        .attr("height", this.options.height)
+        .attr("viewBox", `0 0 ${this.options.width} ${this.options.height}`)
+
+      newAttributesMarkInfo.push(...newAttributesMark.markInfo)
+
+      attributesMark.node
+        .append("g")
+        .node().appendChild(newAttributesMark.mark);
+    }
+
+    attributesMark.prepareMarkInfo(newAttributesMarkInfo)
+    await attributesMark.createMarkTable(newAttributesMarkInfo)
+
+    /**
+     * End attributeMarks recreation, start fkey edges
+     */
+
+    let newFkeysMark = fkeysMark.makemark(fkeysCols, canvasInfo)
+
+    const config = {stroke: "black"}
+    let fkeySvg = select(newFkeysMark.mark)
+    insertMarkers(fkeySvg, config)
+
+    fkeySvg
+    .selectAll(`g[aria-label='${fkeysMark.mark.aria}']`)
+    .selectAll("*")
+    .each(function (d, i) {
+      let el = d3.select(this);
+      let id = parseInt(el.attr("data__rav_id"))
+      let {x1_ref, x2_ref} = fkeysMark.referencedMarks.get(id)
+      let leftInfo = attributesMark.markInfoCache.get(x1_ref)
+      let rightInfo = attributesMark.markInfoCache.get(x2_ref)
+
+      if (leftInfo["textDecoration"] == "underline") { //left side is a key
+        el.attr("marker-start", `url(#${ERMarkers.ONE})`)
+      } else {
+        el.attr("marker-start", `url(#${ERMarkers.MANY})`)
+      }
+
+      if (rightInfo["textDecoration"] == "underline") { //left side is a key
+        el.attr("marker-end", `url(#${ERMarkers.ONE})`)
+      } else {
+        el.attr("marker-end", `url(#${ERMarkers.MANY})`)
+      }
     })
+
+    fkeysMark.node
+    .append("g")
+    .node().appendChild(newFkeysMark.mark);
+
+    fkeysMark.prepareMarkInfo(newFkeysMark.markInfo)
+    await fkeysMark.createMarkTable(newFkeysMark.markInfo)
 
     return Promise.resolve()
   }
+
+  async bucket({table, col, bucketSize}: {table: string, col: string, bucketSize: number}) {
+    let t = this.db.table(table)
+
+    if (!t)
+      throw new Error(`No such table ${table}`)
+
+    let newTableName = `bucketed_${table}`
+
+    let query = new Query()
+
+    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
+         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
+
+    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
+    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
+
+    query = query.select({
+      // count: count(),
+      [IDNAME]: idexpr,
+      [`${col}_bucket`]: sql`${bucketLabelExpr}`,
+      [`min_${col}`]: sql`${minBucketExpr}`,
+      [`max_${col}`]: sql`${maxBucketExpr}`,
+    })
+    
+    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
+    query = query.from(table)
+
+    let newTable = await this.db.fromSql(query, newTableName)
+
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+    newTable.keys(`${col}_bucket`)
+
+    await this.db.conn.exec(`ALTER TABLE ${table} ADD COLUMN ${col}_bucket_id INTEGER;`)
+    await this.db.conn.exec(`UPDATE ${table}
+                            SET ${col}_bucket_id = ${newTableName}.${IDNAME}
+                            FROM ${newTableName}
+                            WHERE
+                            ${table}.${col} >= ${newTableName}.min_${col} AND
+                            ${table}.${col} <= ${newTableName}.max_${col};`)
+
+    let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
+    this.db.addConstraint(c)
+
+    return newTableName
+
+  }
+
+  foreignAttribute(otherTable: string | Table, otherAttr: string | string[], searchKeys: string | string[], callback?) {
+    let table : Table
+    if (typeof otherTable == "string") {
+        let t = this.db.table(otherTable)
+        if (!t)
+            throw new Error(`No such table ${otherTable}`)
+        table = t
+    } else {
+        table = otherTable
+    }
+    otherAttr = Array.isArray(otherAttr) ? otherAttr : [otherAttr]
+    if (!otherAttr.every((attr) => table.schema.attrs.includes(attr))) {
+        throw new Error (`${otherAttr} not found in ${table.internalname}`)
+    }
+    searchKeys = Array.isArray(searchKeys) ? searchKeys : [searchKeys]
+    return {otherTable: table, searchKeys: searchKeys, otherAttr, callback: callback, isVisualChannel: false}
+  }
+
 }
 
 for (const mtype of R.keys(marksbytype(Canvas.plotConfig))) {

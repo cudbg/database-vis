@@ -10,6 +10,8 @@
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
+    import { IDNAME } from "../viz/table";
+    import { lab } from "d3";
 
 
     let innerWidth = 10000;
@@ -120,18 +122,20 @@
             `
         )
 
+        
         await duckdb.exec(
-            `CREATE TABLE heart_disease as
-            SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
-            FROM heart_disease_csv
-            WHERE Status = false;`
-        )
-        await duckdb.exec( //sql query here
-            `CREATE TABLE heart as 
-            Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
-            FROM heart_csv
-            WHERE target = 0;`
-        )
+             `CREATE TABLE heart_disease as
+             SELECT Gender, Family_Heart_Disease, Alcohol_Consumption, Exercise_Habits, Stress_Level, Age, Smoking, Gender, High_Blood_Pressure,Status, BMI, Sleep_Hours, Sugar_Consumption,CRP_Level,Blood_Pressure
+             FROM heart_disease_csv
+             WHERE Status = false;`
+         )
+         await duckdb.exec( //sql query here
+             `CREATE TABLE heart as 
+             Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
+             FROM heart_csv
+             WHERE target = 0;`
+         )
+             
 
         })(duckdb);
 
@@ -145,132 +149,456 @@
         await db.loadFromConnection();
         let canvas
 
+        if (0) {
+            await db.loadFromConnection()
+             /*   
+            await c.hier("heart_disease2", ["Alcohol_Consumption", "Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
+            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
+
+            let habitsLabel = c.text("Alcohol_Consumption", {x: alcohol.get("Alcohol_Consumption", "x"), y: alcohol.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
+            
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Age", r: "Status", fill: "Cholesterol_Level"})
+
+            c.nest(habits, alcohol)
+            c.nest(info, habits)
+
+            */
+
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalizeMany("heart_csv", ["target","age","cp"].map((a) => [a]), {dimnames: ["heart_target", "heart_age","heart_cp"], factname: "heart_fact"})
+
+            await c.hier("heart_fact", ["heart_age", "heart_age", "heart_cp"])
+            //let cp = c.rect("heart_cp", {...sq("heart_cp")("x", "y"), fill: "none", stroke: "black"})
+
+            const dom = {x: {domain: [0,30]}}
+            let bucketedAgeTable = await c.bucket({table: "heart_age", col: "age", bucketSize: 8})
+
+            let age = c.dot(bucketedAgeTable, {x: 10, y: "age_bucket"}, dom)
+            let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
+
+            let links = c.link("heart_fact", {
+                                        x1: age.get("age", ['x']), 
+                                        y1: age.get("age", ['y']), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                    }, 
+                                    {curve: true})
+            let ageLabels = c.text(bucketedAgeTable, 
+            {
+                x: age.get("age_bucket", ["x"]),
+                y: age.get("age_bucket", ["y"], (d) => d.y - 10),
+                text: "age_bucket",
+                fontSize: 20
+            })
+
+        }
+
+        if (0) { //parallel coordinates with the new heart dataset
+
+                        
+        await db.loadFromConnection()
+
+        let canvasWidth = 1200;
+        let canvasHeight = 800;
+        let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
+        canvas = c
+        window.c = c;
+        window.db = db;
+
+
+
+        await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+
+
+        await c.hier("heart", ["sex", "exang", "thalach", "cp", "target","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"])
+        //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+        //let tablename = "heart_disease"
+
+        let specificAttributes: string[] = ["exang", "cp", "target","fbs","slope","ca","thal"];
+        let tablename = "heart"
+
+        let bucketingAttribute = [];
+        let bucketsizeArray = [];
+        let bucketing = true;
+
+
+        //_-------------------------------------------------------------------------------------------------------------------------
+
+        let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
+
+
+                    
+        let markArray2 = []; //creating the rectagular makrs
+        let boxWidth2 = 50
+
+        for(let i = 0; i < specificAttributes.length; i++){
+            markArray2.push(c.square(specificAttributes[i], {
+                x: (i)* (canvasWidth/specificAttributes.length) + (canvasWidth/specificAttributes.length)/2 - boxWidth2/2, 
+                y: specificAttributes[i], 
+                fill: "none", 
+                stroke: "black", 
+                width: boxWidth2}))
+
+                c.nest(markArray2[i], bigRect)
+        }
+
+        
+        let tableNameArray = []; //Creating an array to reference table names and allow for bucketing
+            for(let i = 0; i < specificAttributes.length; i++){
+                tableNameArray.push(tablename + "_" + specificAttributes[i])
+            }
+
+        
+
+        /*
+        let captionArray = []; //creating the captions at the bottom
+        for(let i = 0; i < specificAttributes.length; i++){
+                captionArray.push(c.text(specificAttributes[i], {
+                    x: markArray2[i].get(["sex", ...specificAttributes.slice(0, i)], "x"), 
+                    text: specificAttributes[i].toUpperCase(), 
+                    fontSize: 20}, 
+                    {textAnchor: "bottom"}))
+                c.nest(captionArray[i], bigRect, ["sex", ...specificAttributes.slice(0, i)])
+        }
+                */
+        
+                    
+        
+
+
+        let workingAttributes = Array.from(specificAttributes); //creating a copy of the specificAttrbute array to allow for bucketing
+
+        /*
+        
+        let labelArray = []; //creating the labels for each mark
+            for(let i = 0; i < specificAttributes.length; i++){
+                labelArray.push(c.text(specificAttributes[i], {
+                    x: 200, 
+                    y: 200, 
+                    text: workingAttributes[i], 
+                    fontSize: 20})) 
+                c.nest(labelArray[i], markArray2[i], workingAttributes[i])
+            }
+        
+        */
+        
+
+        
+
+                
+        //--------------------------------------------------------------------------------------------------------------------------
+
+        }
+
         if (1) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
+
+            let canvasWidth = 800;
+            let canvasHeight = 600;
+
+            let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
-            //await db.normalize("Heart_CSV2", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"], "heart")
-            /**
-             * example api to filter by status
-             * c.filter({operator: "=", from: "heart", column: "status", value: "1"})
-             * 
-             * We can implement this in two ways, eager filtering or lazy filtering
-             * 
-             * Eager filtering means appending an additional WHERE clause with the user condition.
-             * 
-             * Lazy filtering means running a second SQL query:
-             * SELECT id
-             * FROM <TABLE> 
-             * WHERE <user condition>
-             * 
-             * We get all the ids of rows that pass the user condition.
-             * Then we filter the result of the first query (where we got the actual data),
-             * dropping all rows whose ids aren not in the result of the second query.
-             * 
-             * NOTE: This function will apply the user condition/filter to all marks. Should we think about it being specific to some marks?
-            */
-
-            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal"].map((a) => [a]))
-
-            let t1Name = await c.createCountTable("heart_fact", ["exang", "cp"])
-            let t2Name = await c.createCountTable("heart_fact", ["cp", "target"])
-            let t3Name = await c.createCountTable("heart_fact", ["target", "sex"])
-            let t4Name = await c.createCountTable("heart_fact", ["sex", "fbs"])
-            let t5Name = await c.createCountTable("heart_fact", ["fbs", "slope"])
-            let t6Name = await c.createCountTable("heart_fact", ["slope", "ca"])
-            let t7Name = await c.createCountTable("heart_fact", ["ca", "thal"])
-
-            let exang = c.square("heart_exang", {x: 100, y: "exang", fill: "none", stroke: "black", width: 100})
-            let cp = c.square("heart_cp", {x: 300, y: "cp", fill: "none", stroke: "black", width: 100})
-            let target = c.square("heart_target", {x: 500, y: "target", fill: "none", stroke: "black", width: 100})
-            let sex = c.square("heart_sex", {x: 700, y: "sex", fill: "none", stroke: "black", width: 100})
-            let fbs = c.square("heart_fbs", {x: 900, y: "fbs", fill: "none", stroke: "black", width: 100})
-            let slope = c.square("heart_slope", {x: 1100, y: "fbs", fill: "none", stroke: "black", width: 100})
-            let ca = c.square("heart_ca", {x: 1300, y: "ca", fill: "none", stroke: "black", width: 100})
-            let thal = c.square("heart_thal", {x: 1500, y: "thal", fill: "none", stroke: "black", width: 100})
-
-            let Label1 = c.text("heart_exang", {x: exang.get("exang", ["x","width"], (d) => d.x + (d.width)/2), text: "Exang", fontSize: 20}, {textAnchor: "bottom"})
-            let Label2 = c.text("heart_cp", {x: cp.get("cp", ["x","width"], (d) => d.x + (d.width)/2), text: "Chest Pain", fontSize: 20}, {textAnchor: "bottom"})
-            let Label3 = c.text("heart_target", {x: target.get("target", ["x","width"], (d) => d.x + (d.width)/2), text: "Status", fontSize: 20}, {textAnchor: "bottom"})
-            let Label4 = c.text("heart_sex", {x: sex.get("sex", ["x","width"], (d) => d.x + (d.width)/2), text: "Sex", fontSize: 20}, {textAnchor: "bottom"})
-            let Label5 = c.text("heart_fbs", {x: fbs.get("fbs", ["x","width"], (d) => d.x + (d.width)/2), text: "Fbs", fontSize: 20}, {textAnchor: "bottom"})
-            let Label6 = c.text("heart_slope", {x: slope.get("slope", ["x","width"], (d) => d.x + (d.width)/2), text: "Slope", fontSize: 20}, {textAnchor: "bottom"})
-            let Label7 = c.text("heart_ca", {x: ca.get("ca", ["x","width"], (d) => d.x + (d.width)/2), text: "Ca", fontSize: 20}, {textAnchor: "bottom"})
-            let Label8 = c.text("heart_thal", {x: thal.get("thal", ["x","width"], (d) => d.x + (d.width)/2), text: "Thal", fontSize: 20}, {textAnchor: "bottom"})
 
 
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
 
-            let VT1 = c.link(t1Name, {
-                                        x1: exang.get("exang", ['x',"width"], (d) => d.x + d.width), 
-                                        y1: exang.get("exang", ['y',"height"], (d) => d.y + (d.height)/2), 
-                                        x2: cp.get("cp", ['x']), 
-                                        y2: cp.get("cp", ['y',"height"], (d) => d.y + (d.height)/2), 
-                                        stroke: "count"
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
+
+            await c.hier("heart", ["sex", "exang", "thalach", "cp", "target","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"])
+            //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+            //let tablename = "heart_disease"
+
+            let specificAttributes: string[] = ["exang","chol" ,"cp", "target","fbs","slope","age","ca","thal"];
+            let tablename = "heart"
+
+            let bucketingAttribute = [1,6];
+            let bucketsizeArray = [50,8];
+            let bucketing = true;
+
+            let tableArray = []; //Creating all the count tables
+            for(let i = 0; i < specificAttributes.length - 1; i++){
+                tableArray.push(await c.createCountTable(tablename + "_fact", [specificAttributes[i], specificAttributes[i+1]]))
+            }
+
+            let tableNameArray = []; //Creating an array to reference table names and allow for bucketing
+            for(let i = 0; i < specificAttributes.length; i++){
+                tableNameArray.push(tablename + "_" + specificAttributes[i])
+            }
+
+            let workingAttributes = Array.from(specificAttributes); //creating a copy of the specificAttrbute array to allow for bucketing
+
+            let bucketArray = []; //bucketing function
+            for(let i = 0; i < bucketingAttribute.length; i++){
+                bucketArray.push(await c.bucket({table: tablename + "_" + specificAttributes[bucketingAttribute[i]], col: specificAttributes[bucketingAttribute[i]], bucketSize: bucketsizeArray[i]}))
+                tableNameArray[bucketingAttribute[i]] = "bucketed_" + tablename + "_" + specificAttributes[bucketingAttribute[i]];
+                workingAttributes[bucketingAttribute[i]] = specificAttributes[bucketingAttribute[i]] + "_bucket";
+            }
+
+            let markArray = []; //creating the rectagular makrs
+            let boxWidth = 30
+            for(let i = 0; i < specificAttributes.length; i++){
+                markArray.push(c.square(tableNameArray[i], {
+                    x: (i)* (canvasWidth/specificAttributes.length) + (canvasWidth/specificAttributes.length)/2 - boxWidth/2, 
+                    y: workingAttributes[i], 
+                    fill: "none", 
+                    stroke: "black", 
+                    width: tableNameArray[i].includes("bucketed") ? 100 : boxWidth}))
+                
+                if (i == 1) {
+                    markArray[i].filter({operator: ">=", col: "min_age", value: 48})
+                }
+            }
+
+            let captionArray = []; //creating the captions at the bottom
+            for(let i = 0; i < specificAttributes.length; i++){
+                captionArray.push(c.text(tableNameArray[i], {
+                    x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
+
+                    text: {constant: specificAttributes[i]}, 
+                    fontSize: 20}, 
+                    {textAnchor: "bottom"}))
+            }
+
+            let labelArray = []; //creating the labels for each mark
+            for(let i = 0; i < specificAttributes.length; i++){
+                labelArray.push(c.text(tableNameArray[i], {
+                    x: markArray[i].get(workingAttributes[i], ["x","width"], (d) => d.x + (d.width)/2), 
+                    y: markArray[i].get(workingAttributes[i], ["y","width"], (d) => d.y + (d.width)/2), 
+                    text: workingAttributes[i], 
+                    fontSize: 20}, {lineAnchor: "middle"})) 
+
+            }
+
+           let linkArray = []; //creating the link between the labels
+           for(let i = 0; i < specificAttributes.length - 1; i++){
+                linkArray.push(c.link(tableArray[i], {
+                                        x1: markArray[i].get(specificAttributes[i], ['x',"width"], (d) => d.x + d.width), 
+                                        y1: markArray[i].get(specificAttributes[i], ['y',"height"], (d) => d.y + (d.height)/2), 
+                                        x2: markArray[i+1].get(specificAttributes[i+1], ['x']), 
+                                        y2: markArray[i+1].get(specificAttributes[i+1], ['y',"height"], (d) => d.y + (d.height)/2), 
+                                        stroke: "count",
+                                        strokeOpacity: "count"
                                     }, 
                                     {curve: true})
-
-            let VT2 = c.link(t2Name, {
-                                        x1: cp.get("cp", ['x', "width"], (d) => d.x + d.width), 
-                                        y1: cp.get("cp", ['y', "height"], (d) => d.y + (d.height)/2), 
-                                        x2: target.get("target", ['x']), 
-                                        y2: target.get("target", ['y',"height"], (d) => d.y + (d.height)/2), 
-                                        stroke: "count"
-                                    },
-                                    {curve: true})
-            let VT3 = c.link(t3Name, {
-                                        x1: target.get("target", ['x',"width"], (d) => d.x + d.width),
-                                        y1: target.get("target", ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: sex.get("sex", ['x']),
-                                        y2: sex.get("sex", ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count"
-                                    },
-                                    {curve: true})
-            let VT4 = c.link(t4Name, {
-                                        x1: sex.get("sex", ['x', "width"], (d) => d.x + d.width),
-                                        y1: sex.get("sex", ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: fbs.get("fbs", ['x']),
-                                        y2: fbs.get("fbs", ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count"
-                                    },
-                                    {curve: true})
-
-            let VT5 = c.link(t5Name, {
-                                        x1: fbs.get("fbs", ['x', "width"], (d) => d.x + d.width),
-                                        y1: fbs.get("fbs", ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: slope.get("slope", ['x']),
-                                        y2: slope.get("slope", ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count"
-                                    }, 
-                                    {curve: true})
+            )
+            }
             
-            let VT6 = c.link(t6Name, {
-                                        x1: slope.get("slope", ['x',"width"], (d) => d.x + d.width),
-                                        y1: slope.get("slope", ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: ca.get("ca", ['x']),
-                                        y2: ca.get("ca", ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count"
-                                    },
-                                    {curve: true})
-
-            let VT7 = c.link(t7Name, {
-                                        x1: ca.get("ca", ['x',"width"], (d) => d.x + d.width),
-                                        y1: ca.get("ca", ['y', "height"], (d) => d.y + (d.height)/2),
-                                        x2: thal.get("thal", ['x']),
-                                        y2: thal.get("thal", ['y',"height"], (d) => d.y + (d.height)/2),
-                                        stroke: "count"
-                                    }, 
-                                    {curve: true})
         }
 
-        if (0) { //parallel coordinates with the new heart dataset
+
+        if (0) {
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
+
+            await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
+
+            let tablesToAttributes: Map<string, string[]> = new Map<string, string[]>()
+            let tableToId: Map<string, number> = new Map<string, number>()
+            let fkeysMap = {}
+
+            fkeysMap[0] = {leftTable: "heart", leftAttr: "id", rightTable: "heart_fact", rightAttr: "id"}
+            fkeysMap[1] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
+            fkeysMap[2] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+            fkeysMap[3] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
+            fkeysMap[4] = {leftTable: "heart_age", leftAttr: "bucket_id", rightTable: "bucketed_heart_age", rightAttr: "id"}
+
+            fkeysMap[5] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "exang_age_count", rightAttr: "exang"}
+            fkeysMap[6] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "exang_age_count", rightAttr: "age"}
+
+            fkeysMap[7] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "age_cp_count", rightAttr: "age"}
+            fkeysMap[8] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "age_cp_count", rightAttr: "cp"}
+
+            fkeysMap[9] = {leftTable: "exang_age_count", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
+            fkeysMap[10] = {leftTable: "exang_age_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+
+
+            fkeysMap[11] = {leftTable: "age_cp_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
+            fkeysMap[12] = {leftTable: "age_cp_count", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
+            
+
+            tablesToAttributes.set("heart", ["id", "exang", "age", "cp"])
+            tablesToAttributes.set("heart_fact", ["id", "exang", "age", "cp"])
+            tablesToAttributes.set("heart_exang", ["id", "exang"])
+            tablesToAttributes.set("heart_age", ["id", "age", "bucket_id"])
+            tablesToAttributes.set("bucketed_heart_age", ["id", "age_bucket", "min_age", "max_age"])
+            tablesToAttributes.set("heart_cp", ["id", "cp"])
+            tablesToAttributes.set("exang_age_count", ["id", "count", "exang", "age"])
+            tablesToAttributes.set("age_cp_count", ["id", "count", "age", "cp"])
+
+            let idcounter = 0
+            let sqlstring = "INSERT INTO tables VALUES "
+            for (let [table, attributes] of tablesToAttributes.entries()) {
+                tableToId.set(table, idcounter)
+                sqlstring += `(${idcounter}, '${table}')`
+                if (idcounter != 7)
+                    sqlstring += ", "
+                idcounter += 1
+            }
+
+            console.log("create tables", sqlstring)
+            await db.conn.exec(sqlstring)
+
+            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
+
+            sqlstring = "INSERT INTO columns VALUES "
+
+            for (let [table, attributes] of tablesToAttributes.entries()) {
+                let tid = tableToId.get(table)
+
+                for (let i = 0; i < attributes.length; i++) {
+                    if (i == 0) {
+                        let tmp = `(${tid},'${attributes[i]}', 1, 'int', ${i}), `
+                        sqlstring += tmp 
+                    } else {
+                        let tmp = `(${tid}, '${attributes[i]}', 0, 'int', ${i}), `
+                        sqlstring += tmp 
+                    }
+
+                }
+            }
+            console.log("create columns", sqlstring)
+
+            await db.conn.exec(sqlstring)
+
+            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
+
+            sqlstring = "INSERT INTO fkeys VALUES "
+
+            for (let [key, obj] of Object.entries(fkeysMap)) {
+                // console.log("wtf is happening")
+                // console.log("obj", obj)
+                let {leftTable, leftAttr, rightTable, rightAttr} = obj
+
+                let leftId = tableToId.get(leftTable)
+                let rightId = tableToId.get(rightTable)
+
+                sqlstring += `(${leftId}, '${leftAttr}', ${rightId}, '${rightAttr}'), `
+            }
+
+            console.log("fkeys string", sqlstring)
+
+            await db.conn.exec(sqlstring)
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 1600, height: 1000})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            x: 0
+                            })
+
+            c.nest(vattributes, vtables, "tid")
+
+            let vfkeys = c.link("fkeys", {
+                                    x1: vattributes.get(["tid1", "col1"], ['x']), 
+                                    y1: vattributes.get(["tid1", "col1"], ['y']), 
+                                    x2: vattributes.get(["tid2", "col2"], ['x']), 
+                                    y2: vattributes.get(["tid2", "col2"], ['y'])})
+            await c.erDiagram(vtables, vattributes, vfkeys)
+        }
+
+        if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
+            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")
+            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
+
+            await db.loadFromConnection()
+            //loads all tables and constraints from duck db
+
+            let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.hier("heart_disease2", ["Alcohol_Consumption", "Exercise_Habits", "Gender"])
+            //Excercise_Habits("HAB")
+            //Gender (HAB, GEN, ...)
+            //hierarchy ~= normalization
+            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
+
+            let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
+            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
+
+            let habitsLabel = c.text("Alcohol_Consumption", {x: alcohol.get("Alcohol_Consumption", "x"), y: alcohol.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
+            
+            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Age", r: "Status", fill: "Cholesterol_Level"})
+
+            c.nest(habits, alcohol)
+            c.nest(info, habits)
+        }
+
+        if (0) { //hierarchical nesting on heart disease status and chest pain
+            await db.loadFromConnection()
+
+            let canvasWidth = 1200;
+            let canvasHeight = 800;
+            let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+
+
+            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+
+            await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
+
+
+            //let specificAttributes: String[] = ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Stress_Level", "Smoking", "High_Blood_Pressure", "Age","Exercise_Habits"];
+            //let tablename = "heart_disease"
+
+            /*
+
+            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","chol","ca","thal"];
+            let tablename = "heart"
+
+            c.nest( smallRect, bigRect)
+            */
+
+            await c.hier("heart", ["sex", "cp"])
+
+
+            let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
+            let smallRect = c.square("cp", {
+                    x: (3)* (canvasWidth/8) + (canvasWidth/8)/2 - 50/2, 
+                    y: "cp", 
+                    fill: "none", 
+                    stroke: "black", 
+                    width: 50})
 
             
+            let target = c.rect("sex", {...sq("sex")("x", "y"), fill: "none", stroke: "black"})
+
+            let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
+
+            let targetLabel = c.text("sex", {x: target.get("sex", "x"), y: target.get("sex", "y"), text: {cols: "sex", func: (d) => d.target == "0" ? "NA" : "Present"}})
+
+            c.nest(cp, target)
+        }
+        
+
+        if (0) { //parallel coordinates with the new heart dataset (old one with two points)
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 1800, height: 800}) //setting up canvas
@@ -294,26 +622,32 @@
             
             
             var width = 10
-           let captionsize = 15;
-           let labelsize = 15;
-            
-            
+            let captionsize = 15;
+            let labelsize = 15;
+
+
 
             let t1Name = await c.createCountTable(tablename + "_fact", [specificAttributes[0], specificAttributes[1]])
-           let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
-           let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
-           let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
-           let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
-           let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
-           let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
+            let t2Name = await c.createCountTable(tablename + "_fact", [specificAttributes[1], specificAttributes[2]])
+            let t3Name = await c.createCountTable(tablename + "_fact", [specificAttributes[2], specificAttributes[3]])
+            let t4Name = await c.createCountTable(tablename + "_fact", [specificAttributes[3], specificAttributes[4]])
+            let t5Name = await c.createCountTable(tablename + "_fact", [specificAttributes[4], specificAttributes[5]])
+            let t6Name = await c.createCountTable(tablename + "_fact", [specificAttributes[5], specificAttributes[6]])
+            let t7Name = await c.createCountTable(tablename + "_fact", [specificAttributes[6], specificAttributes[7]])
 
 
-           const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
+            const o = {x: {domain: [0,80]}, r: {domain: [0,0.00001]}, y: [0,100]}
+
+            let bucketing1 = await c.bucket({table: "heart_" + specificAttributes[0], col: specificAttributes[0], bucketSize: 8})
+
+            
 
 
 
 
-           let exang = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10, r: 1},o)
+
+
+           let exang = c.dot(bucketing1, {y : specificAttributes[0] +"_bucket", x: 10, r: 1},o)
            let cp = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20, r: 10},o)
            let target = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30, r: 10},o)
            let sex = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40, r: 10},o)
@@ -327,7 +661,7 @@
            let offset = width/7.2
 
 
-           let exang2 = c.dot(tablename + "_" + specificAttributes[0], {y : specificAttributes[0], x: 10 - offset, r: 1},o)
+           let exang2 = c.dot(bucketing1, {y : specificAttributes[0] +"_bucket", x: 10 - offset, r: 1},o)
            let cp2 = c.dot(tablename + "_" + specificAttributes[1], {y : specificAttributes[1], x: 20- offset, r: 10},o)
            let target2 = c.dot(tablename + "_" + specificAttributes[2], {y : specificAttributes[2], x: 30- offset, r: 10},o)
            let sex2 = c.dot(tablename + "_" + specificAttributes[3], {y : specificAttributes[3], x: 40- offset, r: 10},o)
@@ -352,6 +686,21 @@
            - compute two different points one of them is shifted
            -
            */
+
+           let links = c.link("heart_fact", {
+                                        x1: age.get("age", ['x']), 
+                                        y1: age.get("age", ['y']), 
+                                        x2: target.get("target", ['x']), 
+                                        y2: target.get("target", ['y']), 
+                                    }, 
+                                    {curve: true})
+
+            let ageLabels = c.text(bucketedAgeTable, {
+                x: age.get("age_bucket", ["x"]),
+                y: age.get("age_bucket", ["y"], (d) => d.y - 10),
+                text: "age_bucket",
+                fontSize: 20
+            })
 
 
           
@@ -386,31 +735,6 @@
            let VT6 = c.link(t6Name, {x1: slope.get(specificAttributes[5], ['x']), y1: slope.get(specificAttributes[5], ['y']), x2: ca.get(specificAttributes[6], ['x', 'r'], (d) => d.x - width*d.r), y2: ca.get(specificAttributes[6], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
            let VT7 = c.link(t7Name, {x1: ca.get(specificAttributes[6], ['x']), y1: ca.get(specificAttributes[6], ['y']), x2: thal.get(specificAttributes[7], ['x', 'r'], (d) => d.x - width*d.r), y2: thal.get(specificAttributes[7], ['y']),stroke: "count",strokeOpacity: "count"}, {curve: true})
        }
-
-
-        if (0) { //hierarchical nesting on heart disease status and chest pain
-            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target"], "heart")
-
-            await db.loadFromConnection()
-
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-
-            await c.hier("heart", ["target", "cp"])
-
-            let target = c.rect("target", {...sq("target")("x", "y"), fill: "none", stroke: "black"})
-
-            let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
-
-            let targetLabel = c.text("target", {x: target.get("target", "x"), y: target.get("target", "y"), text: {cols: "target", func: (d) => d.target == "0" ? "NA" : "Present"}})
-
-
-            c.nest(cp, target)
-        }
-        
 
         if (0) { //Single Table 
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age"], "heart_disease")
@@ -455,34 +779,6 @@
             
             let info = c.dot("Gender", {x: "Blood_Pressure", y: "Cholesterol_Level", r: "Status", fill: "Age"})
 
-            c.nest(info, habits)
-        }
-        if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
-            await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease")
-            //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
-
-            await db.loadFromConnection()
-            //loads all tables and constraints from duck db
-
-            let c = new Canvas(db, {width: 2000, height: 1200}) //setting up canvas
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            await c.hier("heart_disease", ["Alcohol_Consumption", "Exercise_Habits", "Gender"])
-            //Excercise_Habits("HAB")
-            //Gender (HAB, GEN, ...)
-            //hierarchy ~= normalization
-            //await db.normalize("Gender", ["Gender"], "gender_only", "info")
-
-            let alcohol = c.rect("Alcohol_Consumption", {...sq("Alcohol_Consumption")("x", "y"), fill: "none", stroke: "black"})
-            let habits = c.rect("Exercise_Habits", {x: "Exercise_Habits", fill: "none", stroke: "black"})
-
-            let habitsLabel = c.text("Alcohol_Consumption", {x: alcohol.get("Alcohol_Consumption", "x"), y: alcohol.get("Alcohol_Consumption", "y"), text: "Alcohol_Consumption"})
-            
-            let info = c.dot("Gender", {x: "Blood_Pressure", y: "Age", r: "Status", fill: "Cholesterol_Level"})
-
-            c.nest(habits, alcohol)
             c.nest(info, habits)
         }
 
@@ -570,7 +866,7 @@
             canvas = c
             window.c = c;
             window.db = db;
-h 
+
             await db.normalize("heart_disease_csv", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"], "heart_disease")
             //starting table, attributes to pull out [], name of new table with choosen values, name of table with non choosen values. 
             await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Status", "Age"].map((a) => [a]))
@@ -663,7 +959,7 @@ h
 
             let vrect = c.rect("TimeProvince2", {x: "province", y:0, fill: "white", stroke: "black"})
             let vdot = c.dot("Weather2", {x: vrect.get(["date","province"],"x"), y: "date", fill: "avgtemp"})
-            let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
+            //let vdot2 = c.dot("TimeProvince2", {x: "province", y: "date", r: logscale("confirmed")}) //define boundary
             //c.nest(vdot, vrect, ["date","province"]) //(inner objext, outer object, foreign key)
         }
 
