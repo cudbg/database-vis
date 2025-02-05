@@ -496,10 +496,7 @@ export class Database {
         for (let col of cols)
           q = q.select({[col]: column(tablename, col)})
       }
-  
-      /**
-       * Assume that user never selects _rav_id because that is not supposed to be exposed to user
-       */
+
       q = q.select({[IDNAME]: idexpr})
       
       for (let [leftcol, rightcol] of Object.entries(joinKeys))

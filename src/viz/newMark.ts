@@ -93,6 +93,8 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   //setting source to select from
   if (item.isGet && item.isVisualChannel) {
       source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
+  } else if (item.src != item.mark.src) {
+    source = item.src
   } else {
     source = item.mark.src
   }
@@ -227,6 +229,7 @@ export class Mark {
         let allMarks = marksbytype(plotConfig)
         this.mark = (allMarks[marktype] ?? marktype['dot']);
         this.src = source;
+        this.marktable = null
         this.mappings = mappings;
         this.options = options;
         this.layouts = {};
@@ -310,6 +313,14 @@ export class Mark {
           } else if (dattr instanceof Object && "constant" in dattr) {
             rawChannelItem.dataAttr = [dattr.constant]
             rawChannelItem.isConstant = true
+          } else if (dattr instanceof Object && "otherTable" in dattr) {
+            let {otherTable, constraint, otherAttr, callback} = this.processForeignAttribute(dattr)
+            rawChannelItem.src = otherTable
+            rawChannelItem.constraint = constraint
+            rawChannelItem.callback = callback
+            rawChannelItem.dataAttr = otherAttr
+            rawChannelItem.isGet = true
+
           }
           this.channels.push(rawChannelItem)
       }
@@ -502,6 +513,69 @@ export class Mark {
         }
       }
 
+      throw new Error("No possible path")
+    }
+
+    processForeignAttribute(foreignObj) {
+      let otherTable = foreignObj.otherTable
+      let searchKeys = foreignObj.searchKeys
+      let otherAttr = foreignObj.otherAttr
+      let callback = foreignObj.callback
+      let isVisualChannel = foreignObj.isVisualChannel
+      /**
+       * If both marks share the same source table, then skip checking and create a new FKConstraint
+       */
+      if (otherTable == this.src) {
+        /**
+         * Search currently available constraints so that we don't add redundant constraints
+         */
+        for (let constraint of Object.values(this.c.db.constraints)) {
+          if (!(constraint instanceof FKConstraint))
+            continue
+          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
+            continue
+          
+          if ((constraint.X.length != searchKeys.length) || (constraint.Y.length != searchKeys.length))
+            continue
+          if (!(constraint.X.every((value, index) => value == searchKeys[index])))
+            continue
+          if (!(constraint.Y.every((value, index) => value == searchKeys[index])))
+            continue
+          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+        }
+        let constraint = new FKConstraint({t1: this.src, X: searchKeys, t2: this.src, Y: searchKeys})
+        this.c.db.addConstraint(constraint)
+        
+        return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+      }
+      for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
+        if (!(constraint instanceof FKConstraint))
+          continue
+        /**
+         * Check if there is a valid foreign key reference from this.src to othermark.src for the given searchkey
+         * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
+         * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
+         */
+        let validFkConstraint = this.checkValidFkConstraint(constraint, searchKeys)
+        if (validFkConstraint) {
+          /**
+           * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
+           * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
+           * 
+           * We theoretically could create the path right here but I feel it would become messy
+           * As such, We only create the path in constructQuery
+           */
+          let path = this.c.db.getFKPath(this.src, otherTable, constraint)
+          if (!path)
+            throw new Error("No possible path!")
+          
+          // for (let i = 1; i < path.length; i++) {
+          //   if (path[i].card != Cardinality.ONEONE)
+          //     throw new Error("No possible path!")
+          // }
+          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+        }
+      }
       throw new Error("No possible path")
     }
 
@@ -865,7 +939,7 @@ export class Mark {
         }
 
         //possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
-        let nestQueryItem: QueryItem = {srcmark: nest.outerMark, source: nest.outerMark.src, columns: [{dataAttr: IDNAME, renameAs: `${IDNAME}_parent`}], constraint: nest.fk}
+        let nestQueryItem: QueryItem = {srcmark: nest.outerMark, source: nest.outerMark.src, columns: [{dataAttr: IDNAME, renameAs: `${IDNAME}_parent`}], constraint: nest.fk, isConstant: false}
 
         if (!pathInMap) {
           pathQueryItemMap.set(possibleNewPath, new Set([nestQueryItem])) /* empty set because this is a nest, no attributes are being selected */
@@ -1267,6 +1341,13 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+        if (!("lineAnchor" in this.options)) {
+          mark.removeAttribute("text-anchor")
+        }
+
+        if ('textDecoration' in this.mappings) {
+          this.setTextDecoration(mark, data)
+        }
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
@@ -1358,6 +1439,32 @@ export class Mark {
                 break
               }
           }
+      })
+    }
+
+    /**
+     * Observable does not support text-decoration
+     * @param mark 
+     * @param data 
+     */
+    setTextDecoration(mark, data) {
+      let channelItem: RawChannelItem = this.channels.find((item) => item.visualAttr == 'textDecoration')
+      let queryItem: QueryItem = toQueryItem(channelItem)
+      let dataAttr = channelItem.dataAttr
+      let callback = channelItem.callback
+      let thisref = this
+
+      maybeselection(mark)
+      .selectAll(`g[aria-label='${this.mark.aria}']`)
+      .selectAll("*")
+      .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let id = parseInt(el.attr("data__rav_id"))
+        let idIdx = data[IDNAME].indexOf(id)
+
+        el.attr("text-decoration", data["textDecoration"][idIdx])
+
       })
     }
 
@@ -1453,6 +1560,9 @@ export class Mark {
         return
       }
 
+      if (!("x" in this.mappings) && !("y" in this.mappings))
+        return
+
       let x = null
       let y = null
 
@@ -1476,6 +1586,7 @@ export class Mark {
       if (y !== null) {
         selection.attr("y", y)
       }
+
 
       if (x !== null && y !== null)
         return
@@ -1525,6 +1636,8 @@ export class Mark {
         group.forEach(coord => {
           if (minY == -1) {
             minY = coord.y
+          } else {
+            minY = Math.min(minY, coord.y)
           }
           maxY = Math.max(maxY, coord.y + (coord.height ? coord.height : 0))
           
@@ -1596,6 +1709,8 @@ export class Mark {
                 markAttributes[IDNAME] = parseInt(attrValue);
               } else if (attrName == "font-size") {
                 markAttributes["fontSize"] = attrValue
+              } else if (attrName == "text-decoration") {
+                markAttributes["textDecoration"] = attrValue
               } else
                 markAttributes[attrName] = attrValue
           }
@@ -1855,7 +1970,12 @@ export class Mark {
 
         if (this.marktype == "text") {
           obj["text"] = markInfo[i]["text"]
+
+          if ("textDecoration" in markInfo[i]) {
+            obj["textDecoration"] = markInfo[i]["textDecoration"]
+          }
         }
+
         obj["data_xoffset"] = data_xoffset
         obj["data_yoffset"] = data_yoffset
 
@@ -1885,7 +2005,14 @@ export class Mark {
     async createMarkTable(markInfo) {
       const tname = this.src.internalname + "_marktable" + this.id;
 
-      await this.createNewMarkTable(markInfo, tname)
+      if (!this.marktable) {
+        await this.createNewMarkTable(markInfo, tname)
+      } else {
+        /**
+         * This is specifically for ER diagram where we rerender and get fresh markinfo, so we drop all the old information
+         */
+        await this.c.db.conn.exec(`TRUNCATE ${tname}`)
+      }
 
       let tuples = this.valuesFromMarkInfo(markInfo).map((row) => `(${row.join(", ")})`).join(", ")
 
