@@ -1299,6 +1299,11 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
+
+      if (this.marktype == "dot" || this.marktype == "point") {
+        this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
+      }
+
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),

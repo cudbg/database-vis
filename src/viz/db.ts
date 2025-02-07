@@ -248,6 +248,7 @@ export class Database {
       } else if (card == Cardinality.ONEMANY) {
         edges[t1.internalname] ??= [];
         edges[t2.internalname] ??= [];
+        edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
@@ -267,6 +268,7 @@ export class Database {
     destination = (destination instanceof Table)? destination.internalname: destination;
    
     let edges = this.getFkDependencyGraph();
+
 
     // bfs to search from src to dst and return path of constraints
     let paths = [];
@@ -313,19 +315,19 @@ export class Database {
     let visited = new Set<string>()
     visited.add(source.internalname)
     let path = [searchConstraint]
-    let start
+    let start = source.internalname
 
 
-    if (searchConstraint.card == Cardinality.ONEMANY) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else if (searchConstraint.t1.internalname != source.internalname) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else {
-      start = searchConstraint.t2.internalname
-      visited.add(searchConstraint.t2.internalname)
-    }
+    // if (searchConstraint.card == Cardinality.ONEMANY) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else if (searchConstraint.t1.internalname != source.internalname) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else {
+    //   start = searchConstraint.t2.internalname
+    //   visited.add(searchConstraint.t2.internalname)
+    // }
 
     if (start == destination.internalname)
       return path
@@ -470,6 +472,8 @@ export class Database {
       c.t1 = newFact;
       this.addConstraint(new FKConstraint(c))
     }
+
+    this.addConstraint(new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]}))
   }
 
     /**

@@ -544,7 +544,7 @@ export class Canvas implements IMark {
     return newTableNames
   }
 
-  async createCountTable(tablename: string, groupBy: string|string[]) {
+  async createCountTable(tablename: string, groupBy: string|string[], newTableName?) {
     let t = this.db.table(tablename)
 
     if (!t)
@@ -552,14 +552,20 @@ export class Canvas implements IMark {
 
     groupBy = groupBy instanceof Array ? groupBy : [groupBy]
     let groupByObj = {}
-    let newTableName = ""
+    newTableName ??= groupBy.forEach((col) => {
+      newTableName += `${col}_`
+    }) + "count"
 
     groupBy.forEach((col) => {
       groupByObj[col] = col
-      newTableName += `${col}_`
-    })
+    }) + "count"
 
-    newTableName += "count"
+    // groupBy.forEach((col) => {
+    //   groupByObj[col] = col
+    //   newTableName += `${col}_`
+    // })
+
+    // newTableName += "count"
 
     let query = new Query()
     query = query.select({
