@@ -157,10 +157,35 @@
          * each of the example types in the main normalization vis example figure in the paper 
          * along with data transform, filter, and highlight
          * 
+         * PLAN:
+         * We present a data analysis over the heart dataset, where we try to find which variables
+         * have the highest correlation with target (ie. a person having heart disease)
+         * 
+         * Assume that we begin with a single table: heart(target, cp, thalach, age, sex)
+         * 
+         * target: Whether a person has heart disease (0 or 1)
+         * cp: Chest pain type (0,1,2,3)
+         * thalach: Maximum heart rate achieved, discrete value (71 - 202)
+         * age: age in years, discrete value (29 - 77)
+         * sex: male or female (1 = Male, 0 = Female)
+         * 
+         * To see the correlations between the columns in the table, we create a heatmap.
+         * To create a heatmap, we first normalize all columns in heart to get:
         */
 
         /* SCATTER PLOT FIG 5A */
-        if (1) {
+        /**
+         * NOTE: Might make life way easier if we had a color legend automatically set up
+        */
+        if (0) {
+            /**
+             * SCATTERPLOT:
+             * We first begin with a scatterplot where x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"
+             * The scatterplot does not tell us a lot about the data. It only indicates a negative correlation between age and thalach
+             * There is no distinction separation between black and brown dots in the scatterplot, indicating that heart disease status
+             * is not strongly dependent on age or maximum heart rate
+             */
+
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
@@ -168,23 +193,65 @@
             window.c = c;
             window.db = db;
 
-            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target", "sex", "fbs", "slope", "ca", "age", "oldpeak", "trestbps", "chol"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", r: "cp", symbol: "exang"})
-
+            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"})
         }
 
-        /* TIMECARD / PUNCHCARD DESIGN FIG 5B SKIPPED FOR NOW */
-        if (0) {
+        /* TIMECARD / PUNCHCARD DESIGN FIG 5B The boring stuff */
+        if (1) {
+            /**
+             * TIMECARD:
+             * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
+             * DATA TRANSFORMATIONS:
+             * Normalize all columns in heart to get:
+             * target(id, target)
+             * cp(id, cp)
+             * thalach(id, thalach)
+             * age(id, age)
+             * sex(id, sex)
+             * combined(target, cp, thalach, age, sex)
+             * combined.target is a foreign key reference to target.id, combined.cp to cp.id, and so on and so forth
+             * 
+             * There appears to be some correlation between cp and thalach because the dots are not evenly distributed.
+             * However, the timecard does not say much more. What we really need is a number
+             */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
-            await db.normalize("heart_csv", ["age", "chol", "target", "cp"], "heart_reduced")
-            await db.normalizeMany("heart_reduced", ["age", "chol", "target", "cp"].map((a) => [a]), {dimnames: ["ageTable", "cholTable", "targetTable", "cpTable"], factname: "edgeTable"})
+            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
+            
+            await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
+                {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
 
-            let ageMark = c.dot("ageTable", {x: "age", y: "chol", fill: "target", r: "cp"})
+            let sa = c.linear("sa")
+            let sb = c.linear("sb")
+            let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
+            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
+            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+        }
+
+        /* HEATMAP!! FIG 5B The more exciting stuff */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
+            await db.table("heart_reduced").fold(["target", "cp", "thalach", "age", "sex"], "key", "val", "folded")
+            
+            await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
+                {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
+
+            let sa = c.linear("sa")
+            let sb = c.linear("sb")
+            let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'black'})
+            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
+            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
         }
 
         /* PARALLEL COORDINATES FIG 5C SKIPPED FOR NOW */
