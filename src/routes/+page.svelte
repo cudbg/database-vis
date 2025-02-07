@@ -149,6 +149,118 @@
         await db.loadFromConnection();
         let canvas
 
+        /**START OF ANALYSIS */
+
+        /**
+         * GOAL:
+         * Concretely use thr dataset you have to showcase an analysis that goes through 
+         * each of the example types in the main normalization vis example figure in the paper 
+         * along with data transform, filter, and highlight
+         * 
+        */
+
+        /* SCATTER PLOT FIG 5A */
+        if (1) {
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["exang", "thalach", "cp", "target", "sex", "fbs", "slope", "ca", "age", "oldpeak", "trestbps", "chol"], "heart_reduced")
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", r: "cp", symbol: "exang"})
+
+        }
+
+        /* TIMECARD / PUNCHCARD DESIGN FIG 5B SKIPPED FOR NOW */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["age", "chol", "target", "cp"], "heart_reduced")
+            await db.normalizeMany("heart_reduced", ["age", "chol", "target", "cp"].map((a) => [a]), {dimnames: ["ageTable", "cholTable", "targetTable", "cpTable"], factname: "edgeTable"})
+
+            let ageMark = c.dot("ageTable", {x: "age", y: "chol", fill: "target", r: "cp"})
+        }
+
+        /* PARALLEL COORDINATES FIG 5C SKIPPED FOR NOW */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            
+        }
+
+        /* SMALL MULTIPLES FIG 5D */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["age", "thalach", "target", "cp"], "heart_reduced")
+            await db.normalize("heart_reduced", "cp", "cpTable", "infoTable")
+            let cpRects = c.rect("cpTable", {x: "cp", y: 0, stroke: "black", fill: "none"})
+            let infoDots = c.dot("infoTable", {x: "age", y:"thalach", fill: "target"})
+
+            let cpLabel = c.text("cpTable",
+            {
+                x: cpRects.get("cp", "x"),
+                y: cpRects.get("cp", "y", (d) => d.y - 10),
+                text: "cp",
+                fontSize: 20
+            })
+
+            c.nest(infoDots, cpRects)
+
+        }
+
+        /* CATEGORICAL SCATTERPLOT FIG 5E */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["age", "thalach", "target", "cp"], "heart_reduced")
+            await db.normalize("heart_reduced", "cp", "cpTable", "infoTable")
+
+            let cpLabel = c.text("infoTable",
+            {
+                x: "cp",
+                y: 0,
+                text: "cp",
+                fontSize: 20
+            }, {textAnchor: "bottom"})
+
+            let infoDots = c.dot("infoTable",
+            {
+                x: cpLabel.get("cp", "x"),
+                y: "thalach",
+                fill: "target"
+
+            })
+        }
+
+        /* TABLE FIG 5F SKIPPED FOR NOW */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+        }
+
+        /**END OF ANALYSIS*/
         if (0) {
             await db.loadFromConnection()
              /*   
@@ -300,7 +412,7 @@
 
         }
 
-        if (1) { //parallel coordinates with the new heart dataset
+        if (0) { //parallel coordinates with the new heart dataset
 
                 
             await db.loadFromConnection()

@@ -491,6 +491,7 @@ export class Mark {
         let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
 
         if (validFkConstraint) {
+          console.log("constraint", constraint)
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
            * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
@@ -732,8 +733,8 @@ export class Mark {
 
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
-
-        select(root)
+        console.log("markInfo", markInfo)
+        // select(root)
   
         root
           .append("g")
@@ -1777,7 +1778,7 @@ export class Mark {
                    */
                   throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
                 }
-              } else {
+              } else if (attrName) {
                 attrName = attrName.replace(/-/g, "_")
                 markAttributes[attrName] = attrValue;
               }
@@ -1939,7 +1940,7 @@ export class Mark {
           if (key == "cy") {
             markInfo[i]["y"] = value
             key = "y"
-            delete markInfo[i]["y"]
+            delete markInfo[i]["cy"]
           }
 
           if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
