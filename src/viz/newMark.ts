@@ -491,7 +491,6 @@ export class Mark {
         let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
 
         if (validFkConstraint) {
-          console.log("constraint", constraint)
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
            * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
@@ -1125,6 +1124,7 @@ export class Mark {
                     break
                   }
                 }
+
                 if (idcounter == null) {
                   throw new Error("Cannot find visualAttr in applychannels")
                 }

@@ -527,6 +527,7 @@
             `)
 
             let attrs = ["sex", "age", "thalach", "cp"]
+            //let attrs = ["sex", "cp"]
 
             for (let i = 0; i < attrs.length; i++) {
                             //make age table
@@ -582,15 +583,15 @@
                 let rightMark = marks[i + 1]
 
                 let tableName = `${leftAttr}_${rightAttr}`
-                console.log("link tablename", tableName)
 
-                c.link(tableName,
+                let link = c.link(tableName,
                 {
                     x1: leftMark.get(leftFK, "x"),
                     y1: leftMark.get(leftFK, "y"),
                     x2: rightMark.get(rightFK, "x"),
                     y2: rightMark.get(rightFK, "y"),
                 })
+                c.nest(link, targetRects)
             }
 
 
