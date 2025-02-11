@@ -196,10 +196,6 @@ export class RLSQ extends RLSpaceFilling {
     this.tiling = tiling ?? d3.treemapSquarify;
   }
   layout(data, {width, height, minx=0, miny=0}) {
-    console.log("layout data", data)
-    console.log("width", width)
-    console.log("height", height)
-
     const treemap = d3.treemap()
     treemap.tile(this.tiling);
     treemap.size([width, height])
@@ -241,6 +237,9 @@ export class RLGRID extends RLSpaceFilling {
   }
 
   layout(data, {width, height, minx=0, miny=0}) {
+    console.log("layout data", data)
+    console.log("width", width)
+    console.log("height", height)
     /**
      * Need null guard
      */

@@ -12,6 +12,7 @@
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
     import { attr } from "svelte/internal";
+    import { symbol } from "d3";
 
 
     let innerWidth = 10000;
@@ -196,7 +197,7 @@
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
-        if (0) {
+        if (1) {
             /**
              * TIMECARD:
              * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
@@ -227,11 +228,20 @@
             await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
                 {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
 
+            // let sa = c.linear("sa")
+            // let sb = c.linear("sb")
+            // let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
+            // dots.orderBy(["thalach", "cp"])
+            // let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
+            // let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+
             let sa = c.linear("sa")
             let sb = c.linear("sb")
-            let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
-            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
-            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: "cp"}, {textAnchor: "bottom"})
+            cpLabel.orderBy("cp")
+            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: "thalach"}, {textAnchor: "left"})
+            thalachLabel.orderBy("thalach", true)
+            let dots = c.dot("combined", {x: cpLabel.get("cp", "x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 1 */
@@ -667,7 +677,7 @@
         }
 
         /* SMALL MULTIPLES FIG 5D */
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -681,7 +691,7 @@
 
             let targetRects = c.rect("target", {x: "target", y: 0, stroke: "black", fill: "none"})
             let cpRects = c.rect("cp", {...grid("cp", 2)("x","y"), stroke: "black", fill: "none"})
-            let dots = c.dot("sex", {x: "age", y: "thalach", fill: "sex"})
+            let dots = c.dot("sex", {x: "thalach", y: "age", symbol: "sex"})
 
             c.nest(cpRects, targetRects)
             c.nest(dots, cpRects)
