@@ -253,6 +253,22 @@ export class Mark {
     }
 
     init() {
+      /**
+       * Loop through all the key value pairs in this.mappings.
+       * All keys are visual channels (eg. x, y, fill etc.)
+       * For any key, the value can be any of the following cases:
+       *    1. A string to represent a data attribute (eg. x: "a")
+       *    2. A foreign attribute. For this case, the value is an object returned by the get method
+       *    3. A scale object. Take for example x: sa("a"), where sa is a scaling function.
+       *       sa("a") indicates we want to scale the data attribute "a" and it returns a scale object.
+       *    4. Some layout algorithm. ...grid("a", 2) indicates we want to create a grid based 
+       *       on the data attribute "a" with 2 columns. ...grid("a",2) returns an object
+       *    5. An object that looks like this: {cols: "a", func: <some typescript function>}. This object indicates that
+       *       we want to run some function over "a"data attribute.
+       * 
+       * We need to handle all these different cases and convert each key,value mapping into a RawChannelItem so that
+       * there is a common interface to all of them
+       */
       for (const [va,dattr] of Object.entries(this.mappings)) {
           let mark = this
           let visualAttr = va
@@ -332,6 +348,7 @@ export class Mark {
 
     /**
      * Use this function to filter over a column in the source table of this mark
+     * This function will append a WHERE clause to the query constructed in constructQuery()
      * @param
      */
     filter({operator, col, value}: {operator: string; col: string, value: string|number}) {
@@ -366,7 +383,8 @@ export class Mark {
     }
 
     /**
-     * Use this function to filter over a column in the source table of this mark
+     * Use this function to order output rows according to some data attribute
+     * This function will append an ORDER BY clause to the query constructed in constructQuery()
      * @param
      */
     orderBy(cols: string | string[], desc: boolean = false) {
@@ -387,8 +405,6 @@ export class Mark {
      *                The desired visual attribute to get from this mark
      * @param callback 
      *                A callback function that is run over usrVattr during render
-     * @returns 
-     *                object with format {mark: this, filter: ..., vattr: ...}
      */
     get(usrSearchkeys: String | String[], usrAttr: String | String[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
       let searchkeys = null
@@ -660,6 +676,11 @@ export class Mark {
     }
 
     async runQueryTask(outer, isNested) {
+      /**
+       * If this mark is nested within some other mark, outer is a MarkNest object
+       * Pass outer to constructQuery so that we can get data about the outermark 
+       * such as the id of the outermark for each row in the source table of this mark
+       */
       let query
       if (isNested)
         query = this.constructQuery(outer)
@@ -670,12 +691,14 @@ export class Mark {
 
     runLayoutTask(rows, outer, dummyroot, isNested) {
       /**
-       * The data from query has format [{}, {}, {}] where each object represents
-       * a single data point ie. each object looks like {x: ..., y: ...}
-       * We convert from rowsToCols so that the data looks like { x: [], y: []}
-       * The idea is to collect each visual attribute into an array
-       * This is to allow applychannels to work properly
+       * If this mark is nested, then we need to partition the output of the query
+       * according to the corresponding id of the outermark
        * 
+       * Eg. Given 3 outer rectangles with ids 0, 1, 2 and that this mark is a dot mark,
+       * we want to nest the dots within the rectangles. We need loop from i = 0 to i = 2,
+       * for each iteration, pick out the rows that outermark.id = i
+       * 
+       * We then call applychannels and doLayout for each iteration
        */
       if (isNested) {
         let channelObj = {}
@@ -708,6 +731,10 @@ export class Mark {
     }
 
     runRenderTask(root, channels, crow, isNested) {
+      /**
+       * This is where we render the marks and get information from them
+       * This function appends the newly created mark onto the HTML display and returns information about mark as markInfo
+      */
       if (isNested) {
         let markInfoArr = []
 
@@ -760,6 +787,10 @@ export class Mark {
     }
 
     async runCleanupTask(root, dummyroot, markInfo) {
+      /**
+       * This function takes the markInfo from runRenderTask.
+       * It prepares markInfo for insertion into the database (and then creates a marktable and isnerts it)
+       */
       this.prepareMarkInfo(markInfo)
       await this.createMarkTable(markInfo)
       this._markelsidx = markels(root, this.marktype);
@@ -1370,6 +1401,10 @@ export class Mark {
       return {mark, markInfo};
     }
 
+    /**
+     * Observable does some strange things to our marks and sometimes we are better off
+     * modifying the svg elements returned by observable
+     */
     overrideObservable(mark, data, crow) {
       if (this.marktype == "text" && ("textAnchor" in this.options)) {
         /**
