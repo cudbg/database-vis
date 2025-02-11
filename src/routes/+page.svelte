@@ -4,13 +4,15 @@
 	import { Database } from "../viz/db";
     import { DuckDB } from "../viz/duckdb";
     import { Canvas }  from "../viz/canvas";
-    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq } from "../viz/ref"
+    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq, grid } from "../viz/ref"
 
     import Debug from "../components/Debug.svelte";
     import TableInspector from "../components/TableInspector.svelte";
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
+    import { attr } from "svelte/internal";
+    import { symbol } from "d3";
 
 
     let innerWidth = 10000;
@@ -174,7 +176,7 @@
         /**
          * NOTE: Might make life way easier if we had a color legend automatically set up
         */
-        if (1) {
+        if (0) {
             /**
              * SCATTERPLOT:
              * We first begin with a scatterplot where x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"
@@ -191,11 +193,11 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"})
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"}, {x: {range: [10, 990]}})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
-        if (0) {
+        if (1) {
             /**
              * TIMECARD:
              * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
@@ -223,14 +225,23 @@
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
             
-            await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
-                {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
+            await db.normalizeMany("heart_reduced", ["cp", "thalach"].map(a => [a]),
+                {dimnames: ["cp", "thalach"], factname: "combined"})
 
-            let sa = c.linear("sa")
-            let sb = c.linear("sb")
-            let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
-            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
-            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+            // let sa = c.linear("sa")
+            // let sb = c.linear("sb")
+            // let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
+            // dots.orderBy(["thalach", "cp"])
+            // let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
+            // let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+
+            // let sa = c.linear("sa")
+            // let sb = c.linear("sb")
+            let cpLabel = c.text("cp", {x: IDNAME, y: 0, text: "cp", fontSize: 20}, {textAnchor: "bottom"})
+            cpLabel.orderBy("cp")
+            let thalachLabel = c.text("thalach", {x: 0, y: IDNAME, text: "thalach"}, {textAnchor: "left"})
+            thalachLabel.orderBy("thalach",true)
+            let dots = c.dot("combined", {x: cpLabel.get("cp", "x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 1 */
@@ -259,7 +270,7 @@
             let dotMarks = []
 
             attrs.forEach((attr, i) => {
-                let mark = c.dot(attr, {x: i * 200, y: attr})
+                let mark = c.dot(attr, {x: i * 200, y: attr}, {x:{domain: [10, 990]}})
                 let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
                 dotMarks.push(mark)
             })
@@ -313,7 +324,7 @@
             attrs.forEach((attr, i) => {
                 //NOTE: THIS IS ACTUALLY WRONG AND WE NEED TO FIX THIS AT SOME POINT.
                 //THIS CREATES REPLICAS OF TEXT SVGS
-                let mark = c.dot(attr, {x: i * 200, y: attr})
+                let mark = c.dot(attr, {x: i * 200, y: attr}, {x: {domain: [10, 990]}})
                 let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
 
                 dotMarks.push(mark)
@@ -360,7 +371,7 @@
              * 
             */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -393,11 +404,11 @@
                 let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
                 let label = c.text(table,
                     {
-                        x: mark.get(attr, "x"), 
+                        x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
                         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
                         text: attr
 
-                    })
+                    }, {lineAnchor: "middle"})
                 if (attr == "age_bucket") {
                     mark.filter({operator: ">=", col: "min_age", value: 40})
                     mark.filter({operator: "<=", col: "max_age", value: 63})
@@ -444,9 +455,9 @@
 
                 let linkMark = c.link(table, mappingObj, {curve: true})
 
-                if (leftAttr == "thalach" || leftAttr == "age") {
-                    linkMark.filter({operator: ">=", col: "count", value: 2})
-                } 
+                // if (leftAttr == "thalach" || leftAttr == "age") {
+                //     linkMark.filter({operator: ">=", col: "count", value: 2})
+                // } 
             }
 
         }
@@ -465,101 +476,203 @@
              * 
              * 
             */
+
+            /**
+             * Base table: T(a,b,c,d)
+             * 
+             * We want T.a to be outer rects
+             * 
+             * We want parallel coordinates between T.b, T.c and T.d nested within the T.a rectangles
+             * 
+             * Hence, we need the following tables:
+             * 
+             * A(id, a) -> for outer rectangles
+             * 
+             * B(id, aid, b)
+             * C(id, aid, c)
+             * D(id, aid, d)
+             * 
+             * 
+             * 
+             * Data transformation process
+             * 1. Normalize out T.a to get A(id, a) T_fact(aid, b, c, d)
+             * 2. Normalize out aid and b from T_fact to get B(id, aid, b) T_fact2(...)
+             * 
+             * 
+             * PATH:
+             * sex(id, target, sex) -> combined(id, sex_id, ...) via sex.id == combined.sex_id
+             * combined(id, sex_id, ...) -> infoTable(id, sex, target, ...) via combined.id == infoTable.id
+             * infoTable(id, sex, target, ...) ->  targetTable(id, target) via infoTable.target == targetTable.id
+             * 
+            */
+           /*
+           SELECT DISTINCT sex._rav_id, sex.sex, targetTable._rav_id as parent_id
+           FROM sex, combined, infoTable, targetTable
+           WHERE sex._rav_id == combined.sex_id AND combined._rav_id == infoTable._rav_id AND infoTable.target == targetTable._rav_id
+
+            SELECT DISTINCT sex._rav_id, sex.sex, targetTable._rav_id as parent_id
+            FROM sex, combined, infoTable, targetTable
+            WHERE sex.target == combined.target AND combined._rav_id == infoTable._rav_id AND infoTable.target == targetTable._rav_id
+
+            SELECT DISTINCT sex._rav_id, sex.sex, targetTable._rav_id as parent_id
+            FROM sex, infoTable, targetTable
+            WHERE sex.target == infoTable.target AND infoTable.target == targetTable._rav_id
+           */
+
+            await db.conn.exec(`
+            CREATE TABLE heart_reduced (_rav_id int primary key, sex int, age int, thalach int, cp int, target int)
+            `)
+            await db.conn.exec(`
+            INSERT INTO heart_reduced(_rav_id, sex, age, thalach, cp, target)
+            SELECT (ROW_NUMBER() OVER ())::int - 1 AS _rav_id, sex, age, thalach, cp, target
+            FROM (SELECT DISTINCT sex, age, thalach, cp, target FROM heart_csv) AS unique_rows;
+            `)
+
+            //make target table
+            await db.conn.exec(`CREATE TABLE targetTable (_rav_id int primary key, target int)`)
+
+            await db.conn.exec(`
+            INSERT INTO targetTable(_rav_id, target)
+            SELECT (ROW_NUMBER() OVER ())::int - 1 AS _rav_id, target
+            FROM (SELECT DISTINCT target FROM heart_reduced) AS unique_rows;
+            `)
+
+
+            let attrs = ["sex", "age", "thalach", "cp"]
+            //let attrs = ["sex", "cp"]
+
+            for (let i = 0; i < attrs.length; i++) {
+                            //make age table
+                await db.conn.exec(`CREATE TABLE ${attrs[i]}Table (_rav_id int primary key, ${attrs[i]} int, target_id int, FOREIGN KEY (target_id) references targetTable(_rav_id))`)
+
+                await db.conn.exec(`
+                INSERT INTO ${attrs[i]}Table (_rav_id, ${attrs[i]}, target_id)
+                SELECT
+                    (ROW_NUMBER() OVER ())::int - 1 AS _rav_id,
+                    unique_${attrs[i]}.${attrs[i]} as ${attrs[i]},
+                    targetTable._rav_id as target_id
+                FROM (
+                    SELECT DISTINCT heart_reduced.${attrs[i]} as ${attrs[i]}, heart_reduced.target as target
+                    FROM heart_reduced
+                    JOIN targetTable ON heart_reduced.target = targetTable.target
+                ) AS unique_${attrs[i]}
+                JOIN targetTable on unique_${attrs[i]}.target = targetTable.target
+                `)
+            }
+
+            for (let i  = 0; i < attrs.length - 1; i++) {
+                await db.conn.exec(`CREATE TABLE ${attrs[i]}_${attrs[i + 1]} (_rav_id int primary key, ${attrs[i]}_id int, ${attrs[i + 1]}_id int, FOREIGN KEY (${attrs[i]}_id) references ${attrs[i]}Table(_rav_id), FOREIGN KEY (${attrs[i + 1]}_id) references ${attrs[i + 1]}Table(_rav_id))`)
+
+                await db.conn.exec(`
+                INSERT INTO ${attrs[i]}_${attrs[i + 1]} (_rav_id, ${attrs[i]}_id, ${attrs[i + 1]}_id)
+                SELECT (ROW_NUMBER() OVER ())::int - 1 AS _rav_id, ${attrs[i]}Table._rav_id as ${attrs[i]}_id, ${attrs[i + 1]}Table._rav_id as ${attrs[i + 1]}_id
+                FROM ${attrs[i]}Table, ${attrs[i + 1]}Table
+                WHERE ${attrs[i]}Table.target_id = ${attrs[i + 1]}Table.target_id
+                `)
+            }
+
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
-
-            let attrs = ["sex", "age", "thalach", "cp", "target"]
-
-            await db.normalize("heart_csv", attrs, "heart_reduced")
-
-            attrs.pop()
-
-            await db.normalize("heart_reduced", "target", "targetTable", "infoTable")
             
-            await db.normalizeMany("infoTable", attrs.map(a => [a]),
-                {dimnames: attrs, factname: "combined"})
-            
-            let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
-            let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
-            
-            await c.createCountTable("combined", ["age", "thalach"], "age_thalach_count")
-            await c.createCountTable("combined", ["thalach", "cp"], "thalach_cp_count")
+            let targetRects = c.rect("targetTable", {x: 0, y: "target", fill: "none", stroke: "black"})
 
-            let targetRects = c.rect("targetTable", {x: 0, y: "target", stroke: "black", fill: "none"})
-
-            let squareMarks = []
-
+            let marks = []
             attrs.forEach((attr, i) => {
-                let table = attr
-
-                if (attr == "age") {
-                    attr = "age_bucket"
-                    table = bucketedAgeTable
-                } else if (attr == "thalach") {
-                    attr = "thalach_bucket"
-                    table = bucketedThalachTable
-                }
-                let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
-                // let label = c.text(table,
-                //     {
-                //         x: mark.get(attr, "x"), 
-                //         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
-                //         text: attr
-
-                //     })
-                if (attr == "age_bucket") {
-                    mark.filter({operator: ">=", col: "min_age", value: 40})
-                    mark.filter({operator: "<=", col: "max_age", value: 63})
-                } else if (attr == "thalach_bucket") {
-                    mark.filter({operator: ">=", col: "min_thalach", value: 100})
-                    mark.filter({operator: "<=", col: "max_thalach", value: 189})
-                }
-                squareMarks.push(mark)
-                c.nest(mark, targetRects, IDNAME)
+                let mark = c.dot(`${attr}Table`, {x: 150 * i, y: attr})
+                c.nest(mark, targetRects)
+                marks.push(mark)
             })
 
-            // for (let i = 0; i < attrs.length - 1; i++) {
-            //     let leftMark = dotMarks[i]
-            //     let rightMark = dotMarks[i + 1]
-            //     let leftAttr = attrs[i]
-            //     let rightAttr = attrs[i + 1]
-            //     let table = "combined"
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                let leftFK = `${leftAttr}_id`
+                let rightFK = `${rightAttr}_id`
+                let leftMark = marks[i]
+                let rightMark = marks[i + 1]
 
-            //     let mappingObj = 
-            //     {
-            //         x1: leftMark.get(leftAttr, ["x", "width"], (d) => d.x + d.width),
-            //         y1: leftMark.get(leftAttr, ["y", "height"], (d) => d.y + d.height/2),
-            //         x2: rightMark.get(rightAttr, "x"),
-            //         y2: rightMark.get(rightAttr, ["y", "height"], (d) => d.y + d.height/2),
-            //     }
+                let tableName = `${leftAttr}_${rightAttr}`
 
-            //     //Use count table instead of combined in this case
-            //     if (leftAttr == "thalach") {
-            //         table = "thalach_cp_count"
-            //         mappingObj["strokeWidth"] = "count"
-            //         mappingObj["opacity"] = "count"
-            //         mappingObj["stroke"] = "count"
-            //     } else if (leftAttr == "age") {
-            //         table = "age_thalach_count"
-            //         mappingObj["strokeWidth"] = "count"
-            //         mappingObj["opacity"] = "count"
-            //         mappingObj["stroke"] = "count"
-            //     } else if (leftAttr == "cp") {
-            //         table = "cp_target_count"
-            //         mappingObj["strokeWidth"] = "count"
-            //         mappingObj["opacity"] = "count"
-            //         mappingObj["stroke"] = "count"
-            //     }
+                let link = c.link(tableName,
+                {
+                    x1: leftMark.get(leftFK, "x"),
+                    y1: leftMark.get(leftFK, "y"),
+                    x2: rightMark.get(rightFK, "x"),
+                    y2: rightMark.get(rightFK, "y"),
+                })
+                c.nest(link, targetRects)
+            }
 
-            //     let linkMark = c.link(table, mappingObj, {curve: true})
 
-            //     if (leftAttr == "thalach" || leftAttr == "age") {
-            //         linkMark.filter({operator: ">=", col: "count", value: 2})
-            //     } 
-            // }
+        }
+
+        /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
+        if (0) {
+            await db.conn.exec(`
+            CREATE TABLE heart_reduced (_rav_id int primary key, sex int, age int, thalach int, cp int, target int)
+            `)
+            await db.conn.exec(`
+            INSERT INTO heart_reduced(_rav_id, sex, age, thalach, cp, target)
+            SELECT (ROW_NUMBER() OVER ())::int - 1 AS _rav_id, sex, age, thalach, cp, target
+            FROM (SELECT DISTINCT sex, age, thalach, cp, target FROM heart_csv) AS unique_rows;
+            `)
+
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+            
+            let attrs = ["sex", "age", "thalach", "cp"]
+
+            await db.normalize("heart_reduced", "target", "targetTable", "infoTable")
+            await db.normalize("infoTable", ["target", "sex"], "sex", "attr_sex")
+            await db.normalize("infoTable", ["target", "age"], "age", "attr_age")
+            await db.normalize("infoTable", ["target", "thalach"], "thalach", "attr_thalach")
+            await db.normalize("infoTable", ["target", "cp"], "cp", "attr_cp")
+
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                
+                await db.join({t1: leftAttr, t2: rightAttr}, {t1Cols: [{renameAs: `${leftAttr}_id`, col: IDNAME}], t2Cols: [{renameAs: `${rightAttr}_id`, col: IDNAME}]}, [["target", "target"]], `${leftAttr}_${rightAttr}`)
+            }
+
+
+
+            let targetRects = c.rect("targetTable", {x: 0, y: "target", fill: "none", stroke: "black"})
+
+            let marks = []
+            attrs.forEach((attr, i) => {
+                let mark = c.dot(attr, {x: 150 * i, y: attr})
+                c.nest(mark, targetRects)
+                marks.push(mark)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                let leftFK = `${leftAttr}_id`
+                let rightFK = `${rightAttr}_id`
+                let leftMark = marks[i]
+                let rightMark = marks[i + 1]
+
+                let tableName = `${leftAttr}_${rightAttr}`
+
+                let link = c.link(tableName,
+                {
+                    x1: leftMark.get(leftFK, "x"),
+                    y1: leftMark.get(leftFK, "y"),
+                    x2: rightMark.get(rightFK, "x"),
+                    y2: rightMark.get(rightFK, "y"),
+                })
+                c.nest(link, targetRects)
+            }
+
 
         }
 
@@ -577,8 +690,8 @@
             await c.hier("heart_reduced", ["target", "cp", "sex"])
 
             let targetRects = c.rect("target", {x: "target", y: 0, stroke: "black", fill: "none"})
-            let cpRects = c.rect("cp", {x: "cp", y:0, stroke: "black", fill: "none"})
-            let dots = c.dot("sex", {x: "age", y: "thalach", fill: "sex"})
+            let cpRects = c.rect("cp", {...grid("cp", 2)("x","y"), stroke: "black", fill: "none"})
+            let dots = c.dot("sex", {x: "thalach", y: "age", symbol: "sex"})
 
             c.nest(cpRects, targetRects)
             c.nest(dots, cpRects)
@@ -626,7 +739,7 @@
 
             let infoDots = c.dot("infoTable",
             {
-                x: cpLabel.get("cp", "x"),
+                x: cpLabel.get(IDNAME, "x"),
                 y: "thalach",
                 fill: "target"
 

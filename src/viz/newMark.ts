@@ -197,6 +197,8 @@ export class Mark {
      * Some filters to append onto the end of the SQL query when trying to get data
      */
     filters: any[]
+    ordering: string[]
+    orderByDesc: boolean
 
     
     /**
@@ -243,6 +245,8 @@ export class Mark {
         this.idVisualAttrMap = new Map<number, Set<string>>()
         this.referencedMarks = new Map<number, {}>()
         this.filters = []
+        this.ordering = []
+        this.orderByDesc = false
 
         this.c.taskGraph.addMark(this)
         this.init()
@@ -359,6 +363,17 @@ export class Mark {
           this.filters.push(neq(column(this.src.internalname, col), literal(value)))
           break
       }
+    }
+
+    /**
+     * Use this function to filter over a column in the source table of this mark
+     * @param
+     */
+    orderBy(cols: string | string[], desc: boolean = false) {
+      cols = Array.isArray(cols) ? cols : [cols]
+      cols.forEach((col) => this.ordering.push(col))
+
+      if (desc) this.orderByDesc = true
     }
 
     /**
@@ -491,7 +506,6 @@ export class Mark {
         let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
 
         if (validFkConstraint) {
-          console.log("constraint", constraint)
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
            * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
@@ -973,6 +987,9 @@ export class Mark {
 
       query = query.select(column(this.src.internalname, IDNAME))
 
+      if (this.ordering.length > 0)
+        query = query.orderby(this.ordering)
+
       query = query.from(this.src.internalname)
 
       let pathCounter = 1
@@ -1052,6 +1069,16 @@ export class Mark {
         }
         pathCounter++
       }
+
+      /**
+       * This part feels extremely hacky and unsafe
+       * But I am pretty sure we can gurantee that order by is the last thing in the sql query 
+       */
+      query = query.toString()
+
+      if (this.orderByDesc) {
+        query += " DESC"
+      }
       return query
     }
  
@@ -1125,6 +1152,7 @@ export class Mark {
                     break
                   }
                 }
+
                 if (idcounter == null) {
                   throw new Error("Cannot find visualAttr in applychannels")
                 }
@@ -1300,9 +1328,23 @@ export class Mark {
      */
     makemark(data, crow, scales?) {
 
-      if (this.marktype == "dot" || this.marktype == "point") {
-        this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
-      }
+      // if (this.marktype == "dot" || this.marktype == "point") {
+      //   this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
+      //   //Set up x domain, range
+      //   // if (typeof this.mappings?.x == "number")
+      //   //   this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+        
+      //   //this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+
+        
+      //   // this.options["x"] = this.options["x"] == null ? {range: [crow.x, crow.x + crow.width]} : {...this.options["x"], range: [crow.x, crow.x + crow.width]}
+      //   // console.log("options", this.options)
+      //   //Set up y domain, range
+      //   // if (typeof this.mappings?.y == "number")
+      //   //   this.options["y"] = this.options["y"] == null ? {domain: [crow.y, crow.y + crow.height]} : {...this.options["y"], domain: [crow.y, crow.y + crow.height]}
+        
+      //   // this.options["y"] = this.options["y"] == null ? {range: [crow.y, crow.y + crow.height]} : {...this.options["y"], range: [crow.y, crow.y + crow.height]}
+      // }
 
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
@@ -1363,6 +1405,47 @@ export class Mark {
       if (this.marktype != "text" && this.marktype != "dot") {
         this.setXY(mark, data, crow)
       }
+
+      if (this.marktype == "text" && this.ordering.length != 0) {
+        this.sortCoordinates(mark, data)
+      }
+    }
+
+    /**
+     * This function is used for sorting text svgs because observable doesn't maintain
+     * order even when we use an orderby clause
+     */
+    sortCoordinates(mark, data) {
+      let thisref = this
+
+      let coordinates = []
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll("*")
+        .each(function (d, i) {
+          let el = d3.select(this);
+          let elAttrs = el.node().attributes;
+          let {x,y} = thisref.getTransformInfo(el)
+          coordinates.push({x,y})
+      })
+
+      coordinates.sort((a,b) => {
+        if (a.x !== b.x) {
+          return a.x - b.x;
+        }
+        return a.y - b.y;
+      })
+
+      maybeselection(mark)
+      .selectAll(`g[aria-label='${this.mark.aria}']`)
+      .selectAll("*")
+      .each(function (d, i) {
+        let el = d3.select(this);
+        let newTransform = `translate(${coordinates[i].x}, ${coordinates[i].y})`
+
+        el.attr("transform", newTransform)
+    })
+
     }
 
     setXTranslate(mark, data) {

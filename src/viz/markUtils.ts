@@ -142,8 +142,11 @@ export function markdata(attrs, root, markinfo, data={}) {
     cols[IDNAME] = [];
     cols['data_xoffset'] = []
     cols['data_yoffset'] = []
+
+    let ariaLabel = markinfo.aria == "square" ? "rect" : markinfo.aria
+
     let g = maybeselection(root)
-        .selectAll(`g[aria-label='${markinfo.aria}']`)
+        .selectAll(`g[aria-label='${ariaLabel}']`)
         .selectAll("*").each(function() {
         let sel = select(this);
         let i = sel.datum() as number;
