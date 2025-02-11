@@ -525,6 +525,7 @@ export class Canvas implements IMark {
 
     for (let i = 0; i < attrHierarchy.length; i++) {
       let currAttrs = attrHierarchy.slice(0, i + 1)
+      let selectAttrs = currAttrs.slice()
       if (i == attrHierarchy.length - 1) {
         currAttrs = currAttrs.concat(rest)
       }
@@ -532,6 +533,7 @@ export class Canvas implements IMark {
       let select = currTable.schema.pick(currAttrs).asObject()
       let newTable = await currTable.distinctproject(select, newTableNames[i])
       newTable.keys(IDNAME)
+      newTable.keys(selectAttrs)
 
       if (prevTable) {
         let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
@@ -544,7 +546,7 @@ export class Canvas implements IMark {
     return newTableNames
   }
 
-  async createCountTable(tablename: string, groupBy: string|string[]) {
+  async createCountTable(tablename: string, groupBy: string|string[], newTableName?) {
     let t = this.db.table(tablename)
 
     if (!t)
@@ -552,14 +554,20 @@ export class Canvas implements IMark {
 
     groupBy = groupBy instanceof Array ? groupBy : [groupBy]
     let groupByObj = {}
-    let newTableName = ""
+    newTableName ??= groupBy.forEach((col) => {
+      newTableName += `${col}_`
+    }) + "count"
 
     groupBy.forEach((col) => {
       groupByObj[col] = col
-      newTableName += `${col}_`
-    })
+    }) + "count"
 
-    newTableName += "count"
+    // groupBy.forEach((col) => {
+    //   groupByObj[col] = col
+    //   newTableName += `${col}_`
+    // })
+
+    // newTableName += "count"
 
     let query = new Query()
     query = query.select({

@@ -248,6 +248,11 @@ export class Database {
       } else if (card == Cardinality.ONEMANY) {
         edges[t1.internalname] ??= [];
         edges[t2.internalname] ??= [];
+        /**
+         * honestly unsure about whether to include this line
+         * Ideally we always want to go from N to 1, but this line goes from 1 to N, which can lead to row explosion
+         */
+        //edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
@@ -267,6 +272,7 @@ export class Database {
     destination = (destination instanceof Table)? destination.internalname: destination;
    
     let edges = this.getFkDependencyGraph();
+
 
     // bfs to search from src to dst and return path of constraints
     let paths = [];
@@ -313,19 +319,19 @@ export class Database {
     let visited = new Set<string>()
     visited.add(source.internalname)
     let path = [searchConstraint]
-    let start
+    let start = source.internalname
 
 
-    if (searchConstraint.card == Cardinality.ONEMANY) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else if (searchConstraint.t1.internalname != source.internalname) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else {
-      start = searchConstraint.t2.internalname
-      visited.add(searchConstraint.t2.internalname)
-    }
+    // if (searchConstraint.card == Cardinality.ONEMANY) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else if (searchConstraint.t1.internalname != source.internalname) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else {
+    //   start = searchConstraint.t2.internalname
+    //   visited.add(searchConstraint.t2.internalname)
+    // }
 
     if (start == destination.internalname)
       return path
@@ -434,6 +440,27 @@ export class Database {
     this.setTable(newFact)
     this.addConstraint(c1)
     this.addConstraint(c2)
+
+    /**
+     * If there exists constraints from base table with attrs that were normalized out,
+     * we need to create constraints from newDim to the table that is related to base table
+     * 
+     * We do not need do this for newFact because newFact does not contain attrs
+     */
+    for (const [cname, constraint] of Object.entries(this.constraints)) {
+      if (constraint.t2.internalname == name) {
+        if (constraint.Y.every(col => attrs.includes(col))) {
+          let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newDim, Y: constraint.Y})
+          this.addConstraint(c)
+        }
+      } else if (constraint.t1.internalname == name) {
+        if (constraint.X.every(col => attrs.includes(col))) {
+          let c = new FKConstraint({t1: newDim, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
+          this.addConstraint(c)
+        }
+      }
+    }
+
   }
 
 
@@ -470,6 +497,8 @@ export class Database {
       c.t1 = newFact;
       this.addConstraint(new FKConstraint(c))
     }
+
+    this.addConstraint(new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]}))
   }
 
     /**
@@ -486,27 +515,61 @@ export class Database {
    * {tablename: column}: obj that specify what columns to select from what table.
    *                        tablename must be either t1 or t2
   */
-    async join({t1, t2}, selectCols: {[key: string]: string[]}, joinKeys, newTableName) {
-      t1 = this.table(t1)
-      t2 = this.table(t2)
-    
-      let q = Query.from(t1.internalname, t2.internalname)
-  
-      for (let [tablename, cols] of Object.entries(selectCols)) {
-        for (let col of cols)
-          q = q.select({[col]: column(tablename, col)})
-      }
+  async join({t1, t2}, selectCols: {t1Cols: {renameAs: string, col: string}[], t2Cols: {renameAs: string, col: string}[]}, joinKeys: string[][], newTableName: string) {
+    let table1 = this.table(t1)
+    let table2 = this.table(t2)
 
-      q = q.select({[IDNAME]: idexpr})
-      
-      for (let [leftcol, rightcol] of Object.entries(joinKeys))
-        q = q.where(eq(column(t1.internalname, leftcol), column(t2.internalname, rightcol)))
-  
-      let newTable = await this.fromSql(q, newTableName)
-      newTable.name(newTableName)
-      newTable.keys(IDNAME)
-      this.setTable(newTable)
+    if (!table1) {
+      throw new Error(`t1 ${t1} does not exist`)
     }
+
+    if (!table2) {
+      throw new Error(`t2 ${t2} does not exist`)
+    }
+
+    let query = new Query()
+    query = query.distinct()
+
+    let {t1Cols, t2Cols} = selectCols
+
+    t1Cols.forEach((obj,i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table1.internalname, col)})
+    })
+
+    t2Cols.forEach((obj, i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table2.internalname, col)})
+    })
+
+    joinKeys.forEach((join) => {
+      let left = join[0]
+      let right = join[1]
+
+      query = query.where(eq(column(table1.internalname, left), column(table2.internalname, right)))
+    })
+
+    query = query.select({[IDNAME]: idexpr})
+    query = query.from(table1.internalname)
+    query = query.from(table2.internalname)
+
+    let newTable = await this.fromSql(query, newTableName)
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+    this.setTable(newTable)
+
+    t1Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table1, X: [col], t2: newTable, Y: [renameAs]})
+      this.addConstraint(c)
+    })
+
+    t2Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table2, X: [col], t2: newTable, Y: [renameAs]})
+      this.addConstraint(c)
+    })
+  }
 
 
   async appendID(tablename) {
