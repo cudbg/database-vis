@@ -515,7 +515,7 @@ export class Database {
    * {tablename: column}: obj that specify what columns to select from what table.
    *                        tablename must be either t1 or t2
   */
-  async join({t1, t2}, selectCols: {t1Cols: string[], t2Cols: string[]}, newTableName: string) {
+  async join({t1, t2}, selectCols: {t1Cols: {renameAs: string, col: string}[], t2Cols: {renameAs: string, col: string}[]}, joinKeys: string[][], newTableName: string) {
     let table1 = this.table(t1)
     let table2 = this.table(t2)
 
@@ -527,57 +527,46 @@ export class Database {
       throw new Error(`t2 ${t2} does not exist`)
     }
 
-    let path = this.getFkPath(table1, table2)
-
-    if (!path) {
-      throw new Error("No path exists, cannot join tables")
-    }
-
     let query = new Query()
     query = query.distinct()
 
-    let visited = new Set<string>()
-
-    path.forEach((edge) => {
-      let {t1, X, t2, Y} = edge
-      if (!visited.has(t1.internalname)) {
-        query = query.from(t1.internalname)
-        visited.add(t1.internalname)
-      }
-
-      if (!visited.has(t2.internalname)) {
-        query = query.from(t2.internalname)
-        visited.add(t2.internalname)
-      }
-
-      for (let i = 0; i < X.length; i++)
-        query = query.where(eq(column(t1.internalname, X[i]), column(t2.internalname, Y[i])))
-    })
-
     let {t1Cols, t2Cols} = selectCols
 
-    t1Cols.forEach((col) => {
-      query = query.select({[col]: column(t1.internalname, col)})
+    t1Cols.forEach((obj,i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table1.internalname, col)})
     })
 
-    t2Cols.forEach((col) => {
-      query = query.select({[col]: column(t2.internalname, col)})
+    t2Cols.forEach((obj, i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table2.internalname, col)})
+    })
+
+    joinKeys.forEach((join) => {
+      let left = join[0]
+      let right = join[1]
+
+      query = query.where(eq(column(table1.internalname, left), column(table2.internalname, right)))
     })
 
     query = query.select({[IDNAME]: idexpr})
+    query = query.from(table1.internalname)
+    query = query.from(table2.internalname)
 
     let newTable = await this.fromSql(query, newTableName)
     newTable.name(newTableName)
     newTable.keys(IDNAME)
     this.setTable(newTable)
 
-    t1Cols.forEach((col) => {
-      let c = new FKConstraint({t1: table1, X: [col], t2: newTable, Y: [col]})
+    t1Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table1, X: [col], t2: newTable, Y: [renameAs]})
       this.addConstraint(c)
     })
 
-    t2Cols.forEach((col) => {
-      let c = new FKConstraint({t1: table2, X: [col], t2: newTable, Y: [col]})
+    t2Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table2, X: [col], t2: newTable, Y: [renameAs]})
       this.addConstraint(c)
     })
   }

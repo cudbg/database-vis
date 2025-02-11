@@ -11,6 +11,7 @@
     import TopNav from "../components/TopNav.svelte";
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
+    import { attr } from "svelte/internal";
 
 
     let innerWidth = 10000;
@@ -452,7 +453,7 @@
         }
 
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
-        if (1) {
+        if (0) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -526,6 +527,7 @@
             FROM (SELECT DISTINCT target FROM heart_reduced) AS unique_rows;
             `)
 
+
             let attrs = ["sex", "age", "thalach", "cp"]
             //let attrs = ["sex", "cp"]
 
@@ -570,6 +572,74 @@
             let marks = []
             attrs.forEach((attr, i) => {
                 let mark = c.dot(`${attr}Table`, {x: 150 * i, y: attr})
+                c.nest(mark, targetRects)
+                marks.push(mark)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                let leftFK = `${leftAttr}_id`
+                let rightFK = `${rightAttr}_id`
+                let leftMark = marks[i]
+                let rightMark = marks[i + 1]
+
+                let tableName = `${leftAttr}_${rightAttr}`
+
+                let link = c.link(tableName,
+                {
+                    x1: leftMark.get(leftFK, "x"),
+                    y1: leftMark.get(leftFK, "y"),
+                    x2: rightMark.get(rightFK, "x"),
+                    y2: rightMark.get(rightFK, "y"),
+                })
+                c.nest(link, targetRects)
+            }
+
+
+        }
+
+        /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
+        if (1) {
+            await db.conn.exec(`
+            CREATE TABLE heart_reduced (_rav_id int primary key, sex int, age int, thalach int, cp int, target int)
+            `)
+            await db.conn.exec(`
+            INSERT INTO heart_reduced(_rav_id, sex, age, thalach, cp, target)
+            SELECT (ROW_NUMBER() OVER ())::int - 1 AS _rav_id, sex, age, thalach, cp, target
+            FROM (SELECT DISTINCT sex, age, thalach, cp, target FROM heart_csv) AS unique_rows;
+            `)
+
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+            
+            let attrs = ["sex", "age", "thalach", "cp"]
+
+            await db.normalize("heart_reduced", "target", "targetTable", "infoTable")
+            await db.normalize("infoTable", ["target", "sex"], "sex", "attr_sex")
+            await db.normalize("infoTable", ["target", "age"], "age", "attr_age")
+            await db.normalize("infoTable", ["target", "thalach"], "thalach", "attr_thalach")
+            await db.normalize("infoTable", ["target", "cp"], "cp", "attr_cp")
+
+
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                
+                await db.join({t1: leftAttr, t2: rightAttr}, {t1Cols: [{renameAs: `${leftAttr}_id`, col: IDNAME}], t2Cols: [{renameAs: `${rightAttr}_id`, col: IDNAME}]}, [["target", "target"]], `${leftAttr}_${rightAttr}`)
+            }
+
+
+
+            let targetRects = c.rect("targetTable", {x: 0, y: "target", fill: "none", stroke: "black"})
+
+            let marks = []
+            attrs.forEach((attr, i) => {
+                let mark = c.dot(attr, {x: 150 * i, y: attr})
                 c.nest(mark, targetRects)
                 marks.push(mark)
             })
