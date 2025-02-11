@@ -193,7 +193,7 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"})
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"}, {x: {range: [10, 990]}})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
@@ -225,8 +225,8 @@
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
             
-            await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
-                {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
+            await db.normalizeMany("heart_reduced", ["cp", "thalach"].map(a => [a]),
+                {dimnames: ["cp", "thalach"], factname: "combined"})
 
             // let sa = c.linear("sa")
             // let sb = c.linear("sb")
@@ -235,12 +235,12 @@
             // let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
             // let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
 
-            let sa = c.linear("sa")
-            let sb = c.linear("sb")
-            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: "cp"}, {textAnchor: "bottom"})
+            // let sa = c.linear("sa")
+            // let sb = c.linear("sb")
+            let cpLabel = c.text("cp", {x: IDNAME, y: 0, text: "cp", fontSize: 20}, {textAnchor: "bottom"})
             cpLabel.orderBy("cp")
-            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: "thalach"}, {textAnchor: "left"})
-            thalachLabel.orderBy("thalach", true)
+            let thalachLabel = c.text("thalach", {x: 0, y: IDNAME, text: "thalach"}, {textAnchor: "left"})
+            thalachLabel.orderBy("thalach",true)
             let dots = c.dot("combined", {x: cpLabel.get("cp", "x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
         }
 
@@ -270,7 +270,7 @@
             let dotMarks = []
 
             attrs.forEach((attr, i) => {
-                let mark = c.dot(attr, {x: i * 200, y: attr})
+                let mark = c.dot(attr, {x: i * 200, y: attr}, {x:{domain: [10, 990]}})
                 let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
                 dotMarks.push(mark)
             })
@@ -324,7 +324,7 @@
             attrs.forEach((attr, i) => {
                 //NOTE: THIS IS ACTUALLY WRONG AND WE NEED TO FIX THIS AT SOME POINT.
                 //THIS CREATES REPLICAS OF TEXT SVGS
-                let mark = c.dot(attr, {x: i * 200, y: attr})
+                let mark = c.dot(attr, {x: i * 200, y: attr}, {x: {domain: [10, 990]}})
                 let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
 
                 dotMarks.push(mark)
@@ -371,7 +371,7 @@
              * 
             */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -404,11 +404,11 @@
                 let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
                 let label = c.text(table,
                     {
-                        x: mark.get(attr, "x"), 
+                        x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
                         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
                         text: attr
 
-                    })
+                    }, {lineAnchor: "middle"})
                 if (attr == "age_bucket") {
                     mark.filter({operator: ">=", col: "min_age", value: 40})
                     mark.filter({operator: "<=", col: "max_age", value: 63})
@@ -455,9 +455,9 @@
 
                 let linkMark = c.link(table, mappingObj, {curve: true})
 
-                if (leftAttr == "thalach" || leftAttr == "age") {
-                    linkMark.filter({operator: ">=", col: "count", value: 2})
-                } 
+                // if (leftAttr == "thalach" || leftAttr == "age") {
+                //     linkMark.filter({operator: ">=", col: "count", value: 2})
+                // } 
             }
 
         }
@@ -739,7 +739,7 @@
 
             let infoDots = c.dot("infoTable",
             {
-                x: cpLabel.get("cp", "x"),
+                x: cpLabel.get(IDNAME, "x"),
                 y: "thalach",
                 fill: "target"
 

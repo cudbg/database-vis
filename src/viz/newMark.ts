@@ -1328,9 +1328,23 @@ export class Mark {
      */
     makemark(data, crow, scales?) {
 
-      if (this.marktype == "dot" || this.marktype == "point") {
-        this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
-      }
+      // if (this.marktype == "dot" || this.marktype == "point") {
+      //   this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
+      //   //Set up x domain, range
+      //   // if (typeof this.mappings?.x == "number")
+      //   //   this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+        
+      //   //this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+
+        
+      //   // this.options["x"] = this.options["x"] == null ? {range: [crow.x, crow.x + crow.width]} : {...this.options["x"], range: [crow.x, crow.x + crow.width]}
+      //   // console.log("options", this.options)
+      //   //Set up y domain, range
+      //   // if (typeof this.mappings?.y == "number")
+      //   //   this.options["y"] = this.options["y"] == null ? {domain: [crow.y, crow.y + crow.height]} : {...this.options["y"], domain: [crow.y, crow.y + crow.height]}
+        
+      //   // this.options["y"] = this.options["y"] == null ? {range: [crow.y, crow.y + crow.height]} : {...this.options["y"], range: [crow.y, crow.y + crow.height]}
+      // }
 
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
