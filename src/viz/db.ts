@@ -252,7 +252,7 @@ export class Database {
          * honestly unsure about whether to include this line
          * Ideally we always want to go from N to 1, but this line goes from 1 to N, which can lead to row explosion
          */
-        edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        //edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 

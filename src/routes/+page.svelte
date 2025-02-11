@@ -625,7 +625,6 @@
             await db.normalize("infoTable", ["target", "cp"], "cp", "attr_cp")
 
 
-
             for (let i = 0; i < attrs.length - 1; i++) {
                 let leftAttr = attrs[i]
                 let rightAttr = attrs[i + 1]
