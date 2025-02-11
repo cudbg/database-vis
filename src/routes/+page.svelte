@@ -4,7 +4,7 @@
 	import { Database } from "../viz/db";
     import { DuckDB } from "../viz/duckdb";
     import { Canvas }  from "../viz/canvas";
-    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq } from "../viz/ref"
+    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq, grid } from "../viz/ref"
 
     import Debug from "../components/Debug.svelte";
     import TableInspector from "../components/TableInspector.svelte";
@@ -600,7 +600,7 @@
         }
 
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
-        if (1) {
+        if (0) {
             await db.conn.exec(`
             CREATE TABLE heart_reduced (_rav_id int primary key, sex int, age int, thalach int, cp int, target int)
             `)
@@ -667,7 +667,7 @@
         }
 
         /* SMALL MULTIPLES FIG 5D */
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -680,7 +680,7 @@
             await c.hier("heart_reduced", ["target", "cp", "sex"])
 
             let targetRects = c.rect("target", {x: "target", y: 0, stroke: "black", fill: "none"})
-            let cpRects = c.rect("cp", {x: "cp", y:0, stroke: "black", fill: "none"})
+            let cpRects = c.rect("cp", {...grid("cp", 2)("x","y"), stroke: "black", fill: "none"})
             let dots = c.dot("sex", {x: "age", y: "thalach", fill: "sex"})
 
             c.nest(cpRects, targetRects)
