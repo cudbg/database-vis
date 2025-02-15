@@ -798,12 +798,25 @@
             let attrs =  ["target", "cp", "thalach", "age", "sex"]
             await db.normalize("heart_csv", attrs, "heart_reduced")
 
+            /**
+             * Returns table with name "heart_reduced"
+             */
             let table = db.table("heart_reduced")
 
+            /**
+             * Create table called target with columns target and rowid
+             * 
+             * rowid is _rav_id in heart_reduced
+             */
             let targetTable = await table.project({ 
                 target: "target", 
                 rowid: IDNAME }, "target", "rowid")
 
+            /**
+             * Create all other tables (ie. cp, thalach, age, sex)
+             * addConstraint allows us to add a foreign key reference from cp.rowid to target.rowid
+             * Why: See figure 6(f) in paper. We need this foreign key reference
+            */
             for (let i = 1; i < attrs.length; i++) {
                 let attrTable = await table.project({ 
                 [`${attrs[i]}`]: attrs[i], 
@@ -819,7 +832,6 @@
             
             for (let i = 1; i < attrs.length; i++) {
                 let textMark = c.text(attrs[i], {y: s("rowid"), text: attrs[i], x: targetText.get("rowid", "x", (d) => d.x + (i * 100))})
-                //textMark.filter({operator: "<=", col: "rowid", value: 5})
             }
             
         }
