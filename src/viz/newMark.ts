@@ -340,7 +340,7 @@ export class Mark {
           } else if (dattr instanceof Object && "constant" in dattr) {
             rawChannelItem.dataAttr = [dattr.constant]
             rawChannelItem.isConstant = true
-          } else if (dattr instanceof Object && "otherTable" in dattr) {
+          } else if (dattr instanceof Object && "othertable" in dattr) {
             let {otherTable, constraint, otherAttr, callback} = this.processForeignAttribute(dattr)
             rawChannelItem.src = otherTable
             rawChannelItem.constraint = constraint
@@ -478,7 +478,7 @@ export class Mark {
     }
 
 
-    checkValidFkConstraint(c: FKConstraint, othermark: Mark, currSearchkey: string[]) {
+    checkValidFkConstraint(c: FKConstraint, currSearchkey: string[]) {
       if ((c.card != Cardinality.ONEMANY) && (c.card != Cardinality.ONEONE))
         return false
 
@@ -543,7 +543,7 @@ export class Mark {
          * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
          * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
          */
-        let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
+        let validFkConstraint = this.checkValidFkConstraint(constraint, searchkeys)
 
         if (validFkConstraint) {
           /**
@@ -571,11 +571,10 @@ export class Mark {
     }
 
     processForeignAttribute(foreignObj) {
-      let otherTable = foreignObj.otherTable
-      let searchKeys = foreignObj.searchKeys
+      let otherTable = foreignObj.othertable
+      let searchKeys = foreignObj.searchkeys
       let otherAttr = foreignObj.otherAttr
       let callback = foreignObj.callback
-      let isVisualChannel = foreignObj.isVisualChannel
       /**
        * If both marks share the same source table, then skip checking and create a new FKConstraint
        */
@@ -595,12 +594,12 @@ export class Mark {
             continue
           if (!(constraint.Y.every((value, index) => value == searchKeys[index])))
             continue
-          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+          return {otherTable, constraint, otherAttr, callback}
         }
         let constraint = new FKConstraint({t1: this.src, X: searchKeys, t2: this.src, Y: searchKeys})
         this.c.db.addConstraint(constraint)
         
-        return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+        return {otherTable, constraint, otherAttr, callback}
       }
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
         if (!(constraint instanceof FKConstraint))
@@ -627,7 +626,7 @@ export class Mark {
           //   if (path[i].card != Cardinality.ONEONE)
           //     throw new Error("No possible path!")
           // }
-          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+          return {otherTable, constraint, otherAttr, callback}
         }
       }
       throw new Error("No possible path")
