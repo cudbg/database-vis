@@ -272,7 +272,7 @@
 
             attrs.forEach((attr, i) => {
                 let mark = c.dot(attr, {x: i * 200, y: attr}, {x:{domain: [10, 990]}})
-                let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
+                let label = c.text(attr, {x: mark.get(null, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
                 dotMarks.push(mark)
             })
 
@@ -284,10 +284,8 @@
 
                 let linkMark = c.link("combined",
                     {
-                        x1: leftMark.get(leftAttr, "x"),
-                        y1: leftMark.get(leftAttr, "y"),
-                        x2: rightMark.get(rightAttr, "x"),
-                        y2: rightMark.get(rightAttr, "y"),
+                        ...leftMark.get(null, {x1: "x", y1: "y"}),
+                        ...rightMark.get(null, {x2: "x", y2: "y"})
                     }
                 )
             }
@@ -430,10 +428,10 @@
 
                 let mappingObj = 
                 {
-                    x1: leftMark.get(leftAttr, ["x", "width"], (d) => d.x + d.width),
-                    y1: leftMark.get(leftAttr, ["y", "height"], (d) => d.y + d.height/2),
-                    x2: rightMark.get(rightAttr, "x"),
-                    y2: rightMark.get(rightAttr, ["y", "height"], (d) => d.y + d.height/2),
+                    x1: leftMark.get(null, ["x", "width"], (d) => d.x + d.width),
+                    y1: leftMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
+                    x2: rightMark.get(null, "x"),
+                    y2: rightMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
                 }
 
                 //Use count table instead of combined in this case
@@ -456,9 +454,9 @@
 
                 let linkMark = c.link(table, mappingObj, {curve: true})
 
-                // if (leftAttr == "thalach" || leftAttr == "age") {
-                //     linkMark.filter({operator: ">=", col: "count", value: 2})
-                // } 
+                if (leftAttr == "thalach" || leftAttr == "age") {
+                    linkMark.filter({operator: ">=", col: "count", value: 2})
+                } 
             }
 
         }
@@ -748,7 +746,7 @@
         }
 
         /* HEATMAP */
-        if (0) {
+        if (1) {
             /**
              * Data transformation process
              * 
@@ -2083,7 +2081,7 @@
             await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE T (id int primary key, a int, b int)`)
             await db.conn.exec(`CREATE TABLE S (id int primary key, c int, d int, FOREIGN KEY (c) REFERENCES T(id))`)
 
@@ -2108,8 +2106,7 @@
             window.c = c;
             window.db = db;
 
-            let dots = c.dot("S", {x: "d", y: c.db.table("T").get("c", "a")})
-
+            let dots = c.dot("S", {x: "d", y: c.db.table("T").get(null, "a")})
         }
         (await canvas.render({ document, svg, graphSvg }));
 

@@ -214,17 +214,22 @@ export class Table {
     return t;
   }
 
-  get(filter: string | string[], props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback} {
-    filter = Array.isArray(filter) ? filter : [filter]
-    
+  get(filter: string | string[] | null = null, props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback} {
     props = Array.isArray(props) ? props : [props]
 
     if (!props.every((attr) => this.schema.attrs.includes(attr))) {
       throw new Error(`Give me valid columns to get!`)
     }
+    
 
-    let obj = {othertable: this, searchkeys: filter, otherAttr: props, callback: callback}
-    return obj
+    if (!filter) {
+      return {othertable: this, searchkeys: null, otherAttr: props, callback: callback}
+    } else {
+      filter = Array.isArray(filter) ? filter : [filter]
+  
+      let obj = {othertable: this, searchkeys: filter, otherAttr: props, callback: callback}
+      return obj
+    }    
   }
 
   public name(newName) {

@@ -401,14 +401,15 @@ export class Mark {
       if (desc) this.orderByDesc = true
     }
 
-    getHelper(filter: string | string[], props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
-      filter = Array.isArray(filter) ? filter : [filter]
+    getHelper(filter: string | string[] | null = null, props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
+      if (filter)
+        filter = Array.isArray(filter) ? filter : [filter]
 
       props = Array.isArray(props) ? props : [props]
   
       let valid = true
       for (let attr of props) {
-        if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present to this.mappings
+        if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present in this.mappings
           valid = false
         }
       }
@@ -418,16 +419,8 @@ export class Mark {
         return obj
       }
 
-      /**
-       * Need to handle case where we want a data attribute and not a visual channel
-       */
-      valid = true
 
       if (!props.every((attr) => this.src.schema.attrs.includes(attr))) {
-        valid = false
-      }
-
-      if (!valid) {
         throw new Error(`Give me valid columns to get!`)
       }
 
@@ -435,8 +428,8 @@ export class Mark {
       return obj
     }
 
-    get(filter: string | string[], sugar: Record<string, string>): {[key: string]: {othermark, searchkeys, otherAttr, callback, isVisualChannel}};
-    get(filter: string | string[], props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel};
+    get(filter: string | string[] | null, sugar: Record<string, string>): {[key: string]: {othermark, searchkeys, otherAttr, callback, isVisualChannel}};
+    get(filter: string | string[] | null, props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel};
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
      * @param arg1
@@ -452,7 +445,7 @@ export class Mark {
      *                A callback function that is run over usrVattr during render
      */
     get(
-      arg1: string | string[],
+      arg1: string | string[] | null = null,
       arg2: Record<string, string> | string | string[], 
       arg3?: any): {othermark, searchkeys, otherAttr, callback, isVisualChannel} | {[key: string] : {othermark, searchkeys, otherAttr, callback, isVisualChannel}} {
       
@@ -478,15 +471,15 @@ export class Mark {
     }
 
 
-    checkValidFkConstraint(c: FKConstraint, currSearchkey: string[]) {
+    checkValidFkConstraint(c: FKConstraint, currSearchkey: string[] | null = null) {
       if ((c.card != Cardinality.ONEMANY) && (c.card != Cardinality.ONEONE))
         return false
 
-      if (c.t1 == this.src && this.eqSearchKey(currSearchkey, c.X))
-        return true
-      else if (c.t2 == this.src && this.eqSearchKey(currSearchkey, c.Y))
-        return true
-
+      if (c.t1 == this.src) {
+        return !currSearchkey || this.eqSearchKey(currSearchkey, c.X)
+      } else if (c.t2 == this.src) {
+        return !currSearchkey || this.eqSearchKey(currSearchkey, c.Y)
+      }
       return false
     }
 
@@ -506,28 +499,30 @@ export class Mark {
        * If both marks share the same source table, then skip checking and create a new FKConstraint
        */
       if (othermark.src == this.src) {
-        /**
-         * Search currently available constraints so that we don't add redundant constraints
-         */
-        for (let constraint of Object.values(this.c.db.constraints)) {
-          if (!(constraint instanceof FKConstraint))
-            continue
+        if (searchkeys) {
+          /**
+           * Search currently available constraints so that we don't add redundant constraints
+           */
+          for (let constraint of Object.values(this.c.db.constraints)) {
+            if (!(constraint instanceof FKConstraint))
+              continue
 
-          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
-            continue
-          
-          if ((constraint.X.length != searchkeys.length) || (constraint.Y.length != searchkeys.length))
-            continue
+            if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
+              continue
+            
+            if ((constraint.X.length != searchkeys.length) || (constraint.Y.length != searchkeys.length))
+              continue
 
-          if (!(constraint.X.every((value, index) => value == searchkeys[index])))
-            continue
+            if (!(constraint.X.every((value, index) => value == searchkeys[index])))
+              continue
 
-          if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
-            continue
+            if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
+              continue
 
-          return {othermark, constraint, othervattr, callback, isVisualChannel}
+            return {othermark, constraint, othervattr, callback, isVisualChannel}
+          }
         }
-
+        searchkeys ??= [IDNAME]
         let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
 
         this.c.db.addConstraint(constraint)
@@ -546,6 +541,7 @@ export class Mark {
         let validFkConstraint = this.checkValidFkConstraint(constraint, searchkeys)
 
         if (validFkConstraint) {
+          console.log("valid constraint", constraint)
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
            * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
@@ -555,14 +551,10 @@ export class Mark {
            */
 
           let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
-          if (!path)
-            throw new Error("No possible path!")
 
-          
-          // for (let i = 1; i < path.length; i++) {
-          //   if (path[i].card != Cardinality.ONEONE)
-          //     throw new Error("No possible path!")
-          // }
+          if (!path)
+            continue
+
           return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
       }
