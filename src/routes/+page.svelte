@@ -197,7 +197,7 @@
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
-        if (1) {
+        if (0) {
             /**
              * TIMECARD:
              * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
@@ -1040,7 +1040,7 @@
         }
 
 
-        if (0) {
+        if (1) {
             let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
 
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
@@ -1150,10 +1150,9 @@
             c.nest(vattributes, vtables, "tid")
 
             let vfkeys = c.link("fkeys", {
-                                    x1: vattributes.get(["tid1", "col1"], ['x']), 
-                                    y1: vattributes.get(["tid1", "col1"], ['y']), 
-                                    x2: vattributes.get(["tid2", "col2"], ['x']), 
-                                    y2: vattributes.get(["tid2", "col2"], ['y'])})
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
             await c.erDiagram(vtables, vattributes, vfkeys)
         }
 

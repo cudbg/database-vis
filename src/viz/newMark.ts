@@ -394,35 +394,20 @@ export class Mark {
       if (desc) this.orderByDesc = true
     }
 
-    /**
-     * For getting cols that have a valid fk path. valid fk paths are checked during render
-     * @param usrSearchkeys
-     *                Data attributes in the referring table.
-     *                ie. For example VB = c.dot(vb_src, {x: VA.get("aid", ["x"]) ...})
-     *                aid is an attribute in vb_src.
-     *                Checking if aid is a N-1 foreign key from vb_src to va_src occurs only in processGet 
-     * @param usrVattr 
-     *                The desired visual attribute to get from this mark
-     * @param callback 
-     *                A callback function that is run over usrVattr during render
-     */
-    get(usrSearchkeys: String | String[], usrAttr: String | String[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
-      let searchkeys = null
+    getHelper(filter: string | string[], props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
+      filter = Array.isArray(filter) ? filter : [filter]
 
-      if (usrSearchkeys)
-        searchkeys = Array.isArray(usrSearchkeys) ? usrSearchkeys : [usrSearchkeys]
-
-      let otherAttr = Array.isArray(usrAttr) ? usrAttr : [usrAttr]
+      props = Array.isArray(props) ? props : [props]
   
       let valid = true
-      for (let attr of otherAttr) {
+      for (let attr of props) {
         if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present to this.mappings
           valid = false
         }
       }
 
       if (valid) {
-        let obj = {othermark: this, searchkeys: searchkeys, otherAttr, callback: callback, isVisualChannel: true}
+        let obj = {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: true}
         return obj
       }
 
@@ -431,7 +416,7 @@ export class Mark {
        */
       valid = true
 
-      if (!otherAttr.every((attr) => this.src.schema.attrs.includes(attr))) {
+      if (!props.every((attr) => this.src.schema.attrs.includes(attr))) {
         valid = false
       }
 
@@ -439,8 +424,40 @@ export class Mark {
         throw new Error(`Give me valid columns to get!`)
       }
 
-      let obj = {othermark: this, searchkeys: searchkeys, otherAttr: otherAttr, callback: callback, isVisualChannel: false}
+      let obj = {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
       return obj
+    }
+
+    get(filter: string | string[], sugar: Record<string, string>): {[key: string]: {othermark, searchkeys, otherAttr, callback, isVisualChannel}};
+    get(filter: string | string[], props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel};
+    /**
+     * For getting cols that have a valid fk path. valid fk paths are checked during render
+     * @param arg1
+     *                Attributes to filter by, or your foreign key reference
+     *                Data attributes in the referring table.
+     *                ie. For example VB = c.dot(vb_src, {x: VA.get("aid", ["x"]) ...})
+     *                aid is an attribute in vb_src.
+     *                Checking if aid is a N-1 foreign key from vb_src to va_src occurs only in processGet 
+     * @param arg2
+     *                Properties to get from this mark you are referring to.
+     *                Can be either visual attributes and data attributes
+     * @param callback 
+     *                A callback function that is run over usrVattr during render
+     */
+    get(
+      arg1: string | string[],
+      arg2: Record<string, string> | string | string[], 
+      arg3?: any): {othermark, searchkeys, otherAttr, callback, isVisualChannel} | {[key: string] : {othermark, searchkeys, otherAttr, callback, isVisualChannel}} {
+      
+        if (Array.isArray(arg2) || typeof(arg2) == "string") {
+          return this.getHelper(arg1, arg2, arg3)
+        } else {
+          let res: {[key: string] : {othermark, searchkeys, otherAttr, callback, isVisualChannel}} = {}
+          for (const [vattr, prop] of Object.entries(arg2)) {
+            res[vattr] = this.getHelper(arg1, prop)
+          }
+          return res
+        }
     }
 
     eqSearchKey(searchKey1: string[], searchKey2: string[]) {
@@ -742,6 +759,7 @@ export class Mark {
           let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
           let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
+          console.log("markInfo", markInfo)
         
           let tmpOuterMark = this.outermark
           let outerID = outerMarkRow[IDNAME]
@@ -1025,6 +1043,8 @@ export class Mark {
 
       let pathCounter = 1
       let srcTableAliasIndex = 0
+
+      console.log("pathQueryItemMap", pathQueryItemMap)
 
       for (let [path, queryItemSet] of pathQueryItemMap.entries()){
         /**

@@ -319,19 +319,21 @@ export class Database {
     let visited = new Set<string>()
     visited.add(source.internalname)
     let path = [searchConstraint]
-    let start = source.internalname
+    let start
 
-
-    // if (searchConstraint.card == Cardinality.ONEMANY) {
-    //   start = searchConstraint.t1.internalname
-    //   visited.add(searchConstraint.t1.internalname)
-    // } else if (searchConstraint.t1.internalname != source.internalname) {
-    //   start = searchConstraint.t1.internalname
-    //   visited.add(searchConstraint.t1.internalname)
-    // } else {
-    //   start = searchConstraint.t2.internalname
-    //   visited.add(searchConstraint.t2.internalname)
-    // }
+    /**
+     * Start is set to the side of the FKConstraint that is not source
+     */
+    if (searchConstraint.card == Cardinality.ONEMANY) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else if (searchConstraint.t1.internalname != source.internalname) {
+      start = searchConstraint.t1.internalname
+      visited.add(searchConstraint.t1.internalname)
+    } else {
+      start = searchConstraint.t2.internalname
+      visited.add(searchConstraint.t2.internalname)
+    }
 
     if (start == destination.internalname)
       return path
