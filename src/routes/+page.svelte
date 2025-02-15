@@ -13,6 +13,7 @@
     import { IDNAME } from "../viz/table";
     import { attr } from "svelte/internal";
     import { symbol } from "d3";
+    import { FKConstraint } from "../viz/constraint";
 
 
     let innerWidth = 10000;
@@ -785,6 +786,44 @@
             let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
         }
 
+        /* TABLE */
+        if (1) {
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs =  ["target", "cp", "thalach", "age", "sex"]
+            await db.normalize("heart_csv", attrs, "heart_reduced")
+
+            let table = db.table("heart_reduced")
+
+            let targetTable = await table.project({ 
+                target: "target", 
+                rowid: IDNAME }, "target", "rowid")
+
+            for (let i = 1; i < attrs.length; i++) {
+                let attrTable = await table.project({ 
+                [`${attrs[i]}`]: attrs[i], 
+                rowid: IDNAME }, `${attrs[i]}`, "rowid")
+
+                c.db.addConstraint(new FKConstraint({t1: targetTable, X: ["rowid"], t2: attrTable, Y: ["rowid"]}))
+            }
+
+            let s = c.linear("scale1")
+            let targetText = c.text("target", {x: 0, y: s("rowid"), text: "target"})
+            
+            targetText.filter({operator: "<=", col: "rowid", value: 5})
+            
+            for (let i = 1; i < attrs.length; i++) {
+                let textMark = c.text(attrs[i], {y: s("rowid"), text: attrs[i], x: targetText.get("rowid", "x", (d) => d.x + (i * 100))})
+                //textMark.filter({operator: "<=", col: "rowid", value: 5})
+            }
+            
+        }
+
         /**END OF ANALYSIS*/
 
         if (0) {
@@ -1040,7 +1079,7 @@
         }
 
 
-        if (1) {
+        if (0) {
             let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
 
             await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)

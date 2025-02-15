@@ -176,14 +176,17 @@ export class Table {
   }
 
   // { alias: expr, ... }   // '*' not allowed
-  async project(o, displayname=null) {
+  async project(o, displayname=null, newkeys=null) {
     o[IDNAME] ??= idexpr;
     displayname ??= Table.newname()
     let q = Query.from(this.internalname).select(o).toString()
     let t = await Table.fromSql(this.db, q, displayname);
     let keptAttrs = this.schema.pick(R.values(o)).attrs
     let newKeys = this._keys.filter((key) => unorderedEquals(keptAttrs, key))
-    t.keys(newKeys);
+    if (newkeys)
+      t.keys(newkeys)
+    else
+      t.keys(newKeys);
     t.name(displayname)
 
     // TODO: propogate FK a.X->b.Y from this to new table if:
