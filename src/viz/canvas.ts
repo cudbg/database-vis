@@ -190,7 +190,6 @@ export class Canvas implements IMark {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    console.log("all constraints", this.db.constraints)
     let path = this.db.getFkPath(innerTable, outerTable)
 
     if (!path)
@@ -521,7 +520,6 @@ export class Canvas implements IMark {
     let prevTable = null
     let prevKeys = null
     let rest = currTable.schema.except([...attrHierarchy, IDNAME]).attrs
-    console.log("rest hier", rest)
 
     for (let i = 0; i < attrHierarchy.length; i++) {
       let currAttrs = attrHierarchy.slice(0, i + 1)
@@ -542,7 +540,6 @@ export class Canvas implements IMark {
       prevTable = newTable
       prevKeys = currAttrs
     }
-    console.log("all constraints", this.db.constraints)
     return newTableNames
   }
 
@@ -602,6 +599,84 @@ export class Canvas implements IMark {
     let c = new FKConstraint({t1: newTable, X: groupBy, t2: t, Y: groupBy})
     this.db.addConstraint(c)
 
+    return newTableName
+  }
+
+  async createDescriptionTable(tablename: string, newTableName?) {
+    let t = this.db.table(tablename)
+
+    if (!t)
+      throw new Error(`No such table ${tablename}`)
+
+    newTableName ??= `${tablename}_description`
+
+    let query = new Query()
+    query = query.select({
+      column_name: "column_name",
+      [IDNAME]: idexpr
+    })
+    
+    query = query.from(sql`information_schema.columns`)
+    query = query.where(sql`table_name = '${tablename}' AND column_name <> '${IDNAME}'`)
+
+    let newTable = await this.db.fromSql(query, newTableName)
+
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+
+    return newTableName
+  }
+
+  async createCorrTable(basetableName: string, descriptiontableName: string, newTableName?) {
+    let basetable = this.db.table(basetableName)
+
+    if (!basetable)
+      throw new Error(`No such table ${basetableName}`)
+
+    let descriptionTable = this.db.table(descriptiontableName)
+
+    if (!descriptionTable)
+      throw new Error(`No such table ${descriptiontableName}`)
+
+    newTableName ??= `${basetableName}_corr`
+
+    let query = `CREATE TABLE ${newTableName} (xaxis int, yaxis int, corrvalue float)`
+    await this.db.conn.exec(query)
+
+    query = `INSERT INTO ${newTableName} (xaxis, yaxis, corrvalue)\n`
+    for (let i = 0; i < basetable.schema.attrs.length; i++) {
+      let leftAttr = basetable.schema.attrs[i]
+      if (leftAttr == IDNAME)
+        continue
+
+      for (let j = 0; j < basetable.schema.attrs.length; j++) {
+        let rightAttr = basetable.schema.attrs[j]
+
+        if (rightAttr == IDNAME)
+          continue
+
+        query += `SELECT
+        (SELECT ${IDNAME} FROM ${descriptiontableName} WHERE column_name = '${leftAttr}') as xaxis,
+        (SELECT ${IDNAME} FROM ${descriptiontableName} WHERE column_name = '${rightAttr}') as yaxis,
+        CORR(${leftAttr}, ${rightAttr}) as corrvalue
+        FROM ${basetableName}\nUNION\n`
+      }
+    }
+    query = query.slice(0, query.length - 7)
+
+    await this.db.conn.exec(query)
+    const newTable = await this.db.tableFromConnection(newTableName)
+    this.db.setTable(newTable)
+
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+
+
+    let c1 = new FKConstraint({t1: newTable, X: ["xaxis"], t2: descriptionTable, Y: [IDNAME]})
+    let c2 = new FKConstraint({t1: newTable, X: ["yaxis"], t2: descriptionTable, Y: [IDNAME]})
+    this.db.addConstraint(c1)
+    this.db.addConstraint(c2)
+    
     return newTableName
   }
 

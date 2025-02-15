@@ -298,7 +298,14 @@ export class Mark {
             rawChannelItem.isGet = true
             rawChannelItem.isVisualChannel = isVisualChannel
 
-            if (isVisualChannel) {
+            if (isVisualChannel
+                && (this.mark.aria == "dot"
+                || this.mark.aria == "point"
+                || this.mark.aria == "line"
+                || this.mark.aria == "link"
+                || this.mark.aria == "text"
+                || this.mark.aria == "arrow")
+            ) {
               /**
                * Currently hard coding scales, need to fix!!!!!!
                */
@@ -556,7 +563,6 @@ export class Mark {
           //   if (path[i].card != Cardinality.ONEONE)
           //     throw new Error("No possible path!")
           // }
-
           return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
       }
@@ -759,7 +765,6 @@ export class Mark {
           let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
           let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
-          console.log("markInfo", markInfo)
         
           let tmpOuterMark = this.outermark
           let outerID = outerMarkRow[IDNAME]
@@ -792,7 +797,6 @@ export class Mark {
 
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
-        console.log("markInfo", markInfo)
         // select(root)
   
         root
@@ -1043,8 +1047,6 @@ export class Mark {
 
       let pathCounter = 1
       let srcTableAliasIndex = 0
-
-      console.log("pathQueryItemMap", pathQueryItemMap)
 
       for (let [path, queryItemSet] of pathQueryItemMap.entries()){
         /**
@@ -1378,25 +1380,6 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
-
-      // if (this.marktype == "dot" || this.marktype == "point") {
-      //   this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
-      //   //Set up x domain, range
-      //   // if (typeof this.mappings?.x == "number")
-      //   //   this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
-        
-      //   //this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
-
-        
-      //   // this.options["x"] = this.options["x"] == null ? {range: [crow.x, crow.x + crow.width]} : {...this.options["x"], range: [crow.x, crow.x + crow.width]}
-      //   // console.log("options", this.options)
-      //   //Set up y domain, range
-      //   // if (typeof this.mappings?.y == "number")
-      //   //   this.options["y"] = this.options["y"] == null ? {domain: [crow.y, crow.y + crow.height]} : {...this.options["y"], domain: [crow.y, crow.y + crow.height]}
-        
-      //   // this.options["y"] = this.options["y"] == null ? {range: [crow.y, crow.y + crow.height]} : {...this.options["y"], range: [crow.y, crow.y + crow.height]}
-      // }
-
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),

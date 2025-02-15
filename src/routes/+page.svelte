@@ -747,47 +747,50 @@
             })
         }
 
-        /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 2 */
-        if (0) {
+        /* HEATMAP */
+        if (1) {
             /**
-             * TIMECARD:
-             * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
-             * DATA TRANSFORMATIONS:
-             * Normalize all columns in heart to get:
-             * target(id, target)
-             * cp(id, cp)
-             * thalach(id, thalach)
-             * age(id, age)
-             * sex(id, sex)
-             * combined(target, cp, thalach, age, sex)
-             * combined.target is a foreign key reference to target.id, combined.cp to cp.id, and so on and so forth
+             * Data transformation process
              * 
-             * There appears to be some correlation between cp and thalach because the dots are not evenly distributed.
-             * However, the timecard does not say much more. 
-             * In addition, the timecard design is limited by the number of variables it can visualize
+             * Create heart_attrs with all the column names eg. heart_attrs(_rav_id, column_name)
              * 
-             * What we really need is a number...(will demonstrate in FIG 5E via heatmap)
-             */
+             * CREATE TABLE heart_attrs AS 
+             * SELECT "column_name", ((row_number() OVER ())::int-1) AS "_rav_id" 
+             * FROM information_schema.columns WHERE table_name = 'heart_reduced'
+             * 
+             * Create correlation table eg. correlationtable(id, xAxis, yAxis, corrValue)
+             * 
+             * CREATE TABLE corrtable (_rav_id int primary key, xaxis int, yaxis int, corrvalue float, FOREIGN KEY (xaxis) references heart_attrs(rowid), FOREIGN KEY (yaxis) references heart_attrs(rowid))
+             * 
+             * INSERT INTO corrtable (_rav_id, xaxis, yaxis, corrvalue)
+                SELECT <some expression to generate _rav_id>,
+                (SELECT _rav_id FROM heart_attrs WHERE column_name = 'age') as xaxis,
+                (SELECT _rav_id FROM heart_attrs WHERE column_name = 'cholesterol') as yaxis,
+                CORR(age, cholesterol) as corrvalue
+                FROM heart_reduced;
+             * UNION
+             * 
+             * 
+            */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 600, height: 600}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
             
-            await db.normalizeMany("heart_reduced", ["target", "cp", "thalach", "age", "sex"].map(a => [a]),
-                {dimnames: ["target", "cp", "thalach", "age", "sex"], factname: "combined"})
+            await c.createDescriptionTable("heart_reduced", "heart_attrs")
+            await c.createCorrTable("heart_reduced", "heart_attrs", "heart_corr")
 
-            let sa = c.linear("sa")
-            let sb = c.linear("sb")
-            let dots = c.dot("combined", { x: sa('cp'), y: sb('thalach'), fill:'target'})
-            let cpLabel = c.text("cp", {x: sa(IDNAME), y: 0, text: 'cp'}, {textAnchor: "bottom"})
-            let thalachLabel = c.text("thalach", {x: 0, y: sb(IDNAME), text: 'thalach'}, {textAnchor: "left"})
+            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name"}, {textAnchor: "left"})
+            let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
+            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}, fill: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}})
+            let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
         }
 
         /* TABLE */
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
