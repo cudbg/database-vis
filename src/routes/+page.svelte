@@ -746,7 +746,7 @@
         }
 
         /* HEATMAP */
-        if (1) {
+        if (0) {
             /**
              * Data transformation process
              * 
@@ -2081,7 +2081,7 @@
             await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
 
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE T (id int primary key, a int, b int)`)
             await db.conn.exec(`CREATE TABLE S (id int primary key, c int, d int, FOREIGN KEY (c) REFERENCES T(id))`)
 

@@ -289,11 +289,22 @@ export class Mark {
               rawChannelItem.dataAttr = dattr.dattrs
               rawChannelItem.refLayout = dattr
           }
-          else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
-            let {othermark, constraint, othervattr, callback, isVisualChannel} = this.processGet(dattr)
+          else if (dattr instanceof Object && (('othermark' in dattr) || ('othertable' in dattr))) { //there's a call to get
+            let {othermark, constraint, otherattr, callback, isVisualChannel} = this.processGet(dattr)
+
+            if ('othermark' in dattr) {
+              this.c.registerRefMark(othermark, this)
+              this.c.taskGraph.addDependency(this, othermark, true)
+              rawChannelItem.mark = othermark
+            }
+            else
+              rawChannelItem.src = othermark
+
+
             rawChannelItem.mark = othermark
+
             rawChannelItem.constraint = constraint
-            rawChannelItem.dataAttr = othervattr
+            rawChannelItem.dataAttr = otherattr
             rawChannelItem.callback = callback
             rawChannelItem.isGet = true
             rawChannelItem.isVisualChannel = isVisualChannel
@@ -314,10 +325,6 @@ export class Mark {
               else if (va == "y1" || va == "y2" || va == "y")
                 this._scales.y = {type: "identity"}
             }
-
-            
-            this.c.registerRefMark(othermark, this)
-            this.c.taskGraph.addDependency(this, othermark, true)
           }
           else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
@@ -340,14 +347,6 @@ export class Mark {
           } else if (dattr instanceof Object && "constant" in dattr) {
             rawChannelItem.dataAttr = [dattr.constant]
             rawChannelItem.isConstant = true
-          } else if (dattr instanceof Object && "othertable" in dattr) {
-            let {otherTable, constraint, otherAttr, callback} = this.processForeignAttribute(dattr)
-            rawChannelItem.src = otherTable
-            rawChannelItem.constraint = constraint
-            rawChannelItem.callback = callback
-            rawChannelItem.dataAttr = otherAttr
-            rawChannelItem.isGet = true
-
           }
           this.channels.push(rawChannelItem)
       }
@@ -489,16 +488,17 @@ export class Mark {
      */
 
     processGet(getObj) {
-      let othermark = getObj.othermark
+      let othermark = !getObj.othermark ? getObj.othertable : getObj.othermark
+      let othersrc = !getObj.othermark ? getObj.othertable : getObj.othermark.src
       let searchkeys = getObj.searchkeys
-      let othervattr = getObj.otherAttr
+      let otherattr = getObj.otherAttr
       let callback = getObj.callback
       let isVisualChannel = getObj.isVisualChannel
 
       /**
        * If both marks share the same source table, then skip checking and create a new FKConstraint
        */
-      if (othermark.src == this.src) {
+      if (othersrc == this.src) {
         if (searchkeys) {
           /**
            * Search currently available constraints so that we don't add redundant constraints
@@ -519,7 +519,7 @@ export class Mark {
             if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
               continue
 
-            return {othermark, constraint, othervattr, callback, isVisualChannel}
+            return {othermark, constraint, otherattr, callback, isVisualChannel}
           }
         }
         searchkeys ??= [IDNAME]
@@ -527,7 +527,7 @@ export class Mark {
 
         this.c.db.addConstraint(constraint)
         
-        return {othermark, constraint, othervattr, callback, isVisualChannel}
+        return {othermark, constraint, otherattr, callback, isVisualChannel}
       }
 
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
@@ -541,7 +541,6 @@ export class Mark {
         let validFkConstraint = this.checkValidFkConstraint(constraint, searchkeys)
 
         if (validFkConstraint) {
-          console.log("valid constraint", constraint)
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
            * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
@@ -550,77 +549,15 @@ export class Mark {
            * As such, We only create the path in constructQuery
            */
 
-          let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
+          let path = this.c.db.getFKPath(this.src, othersrc, constraint)
 
           if (!path)
             continue
 
-          return {othermark, constraint, othervattr, callback, isVisualChannel}
+          return {othermark, constraint, otherattr, callback, isVisualChannel}
         }
       }
 
-      throw new Error("No possible path")
-    }
-
-    processForeignAttribute(foreignObj) {
-      let otherTable = foreignObj.othertable
-      let searchKeys = foreignObj.searchkeys
-      let otherAttr = foreignObj.otherAttr
-      let callback = foreignObj.callback
-      /**
-       * If both marks share the same source table, then skip checking and create a new FKConstraint
-       */
-      if (otherTable == this.src) {
-        /**
-         * Search currently available constraints so that we don't add redundant constraints
-         */
-        for (let constraint of Object.values(this.c.db.constraints)) {
-          if (!(constraint instanceof FKConstraint))
-            continue
-          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
-            continue
-          
-          if ((constraint.X.length != searchKeys.length) || (constraint.Y.length != searchKeys.length))
-            continue
-          if (!(constraint.X.every((value, index) => value == searchKeys[index])))
-            continue
-          if (!(constraint.Y.every((value, index) => value == searchKeys[index])))
-            continue
-          return {otherTable, constraint, otherAttr, callback}
-        }
-        let constraint = new FKConstraint({t1: this.src, X: searchKeys, t2: this.src, Y: searchKeys})
-        this.c.db.addConstraint(constraint)
-        
-        return {otherTable, constraint, otherAttr, callback}
-      }
-      for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
-        if (!(constraint instanceof FKConstraint))
-          continue
-        /**
-         * Check if there is a valid foreign key reference from this.src to othermark.src for the given searchkey
-         * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
-         * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
-         */
-        let validFkConstraint = this.checkValidFkConstraint(constraint, searchKeys)
-        if (validFkConstraint) {
-          /**
-           * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
-           * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
-           * 
-           * We theoretically could create the path right here but I feel it would become messy
-           * As such, We only create the path in constructQuery
-           */
-          let path = this.c.db.getFKPath(this.src, otherTable, constraint)
-          if (!path)
-            throw new Error("No possible path!")
-          
-          // for (let i = 1; i < path.length; i++) {
-          //   if (path[i].card != Cardinality.ONEONE)
-          //     throw new Error("No possible path!")
-          // }
-          return {otherTable, constraint, otherAttr, callback}
-        }
-      }
       throw new Error("No possible path")
     }
 

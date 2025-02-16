@@ -214,7 +214,7 @@ export class Table {
     return t;
   }
 
-  get(filter: string | string[] | null = null, props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback} {
+  get(filter: string | string[] | null = null, props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback, isVisualChannel} {
     props = Array.isArray(props) ? props : [props]
 
     if (!props.every((attr) => this.schema.attrs.includes(attr))) {
@@ -223,11 +223,11 @@ export class Table {
     
 
     if (!filter) {
-      return {othertable: this, searchkeys: null, otherAttr: props, callback: callback}
+      return {othertable: this, searchkeys: null, otherAttr: props, callback: callback, isVisualChannel: false}
     } else {
       filter = Array.isArray(filter) ? filter : [filter]
   
-      let obj = {othertable: this, searchkeys: filter, otherAttr: props, callback: callback}
+      let obj = {othertable: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
       return obj
     }    
   }
