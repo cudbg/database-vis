@@ -590,23 +590,43 @@ export class Mark {
      *            See dynamicScale.ts. 
      */
     setScaleForVA(va, scaleObj: ScaleObject) {
+      console.log("setScale for va")
+      console.log("va", va)
+      console.log("scaleObj", scaleObj)
       let {col, scale} = scaleObj
       if (!this.src.schema.attrs.includes(col))
         throw new Error(`Trying to scale invalid column: ${col}`)
 
       let range = scale.range
       let type = scale.type
+      let domainType = scale.domainType
+      let attrIndex = this.src.schema.attrs.indexOf(scaleObj.col)
+      let attrType = this.src.schema.types[attrIndex]
+
+      if (domainType) {
+
+
+        if (attrType != domainType) {
+          throw new Error(`Type of ${scaleObj.col} is ${attrType}, does not match scale domain type of ${domainType}`)
+        }
+      } else {
+        scale.domainType = attrType
+      }
 
       this._scales[va] = {}
       if (type) {
+        console.log("scale type", type)
         this._scales[va] = {type: type}
       }
       if (range) {
+        console.log("scale range", range)
         this._scales[va] = {...this._scales[va], range: range}
       }
 
       
-      this.scaling_fns.push({va: va, scale: scaleObj})
+
+      
+      this.scaling_fns.push({va: va, scale: scaleObj.scale})
     }
 
     /**
@@ -857,7 +877,6 @@ export class Mark {
 
       for (let i = 0; i < queryItems.length; i++) {
         let {source, columns, constraint, isConstant} = queryItems[i]
-        console.log("currColumn", columns)
 
         /**
         * Check if column is a numeric value. the user could have entered x: 5 

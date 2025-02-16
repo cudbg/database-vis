@@ -12,11 +12,13 @@ export class Scale {
     range;
     type;
     callback;
+    domainType;
 
     constructor(callback) {
         this.domain = null;
         this.range = null;
         this.type = null;
+        this.domainType = null;
         this.callback = callback
 
     }

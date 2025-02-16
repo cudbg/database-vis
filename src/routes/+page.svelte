@@ -746,7 +746,7 @@
         }
 
         /* HEATMAP */
-        if (1) {
+        if (0) {
             /**
              * Data transformation process
              * 
@@ -788,7 +788,7 @@
         }
 
         /* TABLE */
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
