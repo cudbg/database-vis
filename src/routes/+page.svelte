@@ -746,7 +746,7 @@
         }
 
         /* HEATMAP */
-        if (0) {
+        if (1) {
             /**
              * Data transformation process
              * 
@@ -778,17 +778,18 @@
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
             
+
             await c.createDescriptionTable("heart_reduced", "heart_attrs")
             await c.createCorrTable("heart_reduced", "heart_attrs", "heart_corr")
 
-            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name"}, {textAnchor: "left"})
+            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
             let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
             let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}, fill: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}})
             let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
         }
 
         /* TABLE */
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
@@ -804,6 +805,9 @@
              */
             let table = db.table("heart_reduced")
 
+            /**
+             * selecting target, id from heart_reduced and putting this new information in target table
+            */
             /**
              * Create table called target with columns target and rowid
              * 

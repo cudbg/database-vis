@@ -1409,6 +1409,10 @@ export class Mark {
         this.setEqualWidthAndHeight(mark, data)
       }
 
+      if (this.marktype == "text" && 'rotate' in this.mappings) {
+        this.setRotate(mark)
+      }
+
       if (this.marktype != "text" && this.marktype != "dot") {
         this.setXY(mark, data, crow)
       }
@@ -1418,6 +1422,24 @@ export class Mark {
       }
     }
 
+    /**
+     * This function handles rotation
+     */
+    setRotate(mark) {
+      console.log("called setRotate")
+      let rotateVal = this.mappings['rotate']
+
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll("*")
+        .each(function (d, i) {
+          let el = d3.select(this);
+          let val = el.attr('transform')
+          console.log("val", val)
+          console.log("type", typeof(val))
+          el.attr('transform', `${val} rotate(${rotateVal})`)
+      })
+    }
     /**
      * This function is used for sorting text svgs because observable doesn't maintain
      * order even when we use an orderby clause
