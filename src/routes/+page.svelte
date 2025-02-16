@@ -242,7 +242,7 @@
             cpLabel.orderBy("cp")
             let thalachLabel = c.text("thalach", {x: 0, y: IDNAME, text: "thalach"}, {textAnchor: "left"})
             thalachLabel.orderBy("thalach",true)
-            let dots = c.dot("combined", {x: cpLabel.get("cp", "x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
+            let dots = c.dot("combined", {x: cpLabel.get(null, "x"), y: thalachLabel.get(null, "y"), fill: "target"})
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 1 */
@@ -324,7 +324,7 @@
                 //NOTE: THIS IS ACTUALLY WRONG AND WE NEED TO FIX THIS AT SOME POINT.
                 //THIS CREATES REPLICAS OF TEXT SVGS
                 let mark = c.dot(attr, {x: i * 200, y: attr}, {x: {domain: [10, 990]}})
-                let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
+                let label = c.text(attr, {x: mark.get(null, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
 
                 dotMarks.push(mark)
             })
@@ -746,7 +746,7 @@
         }
 
         /* HEATMAP */
-        if (0) {
+        if (1) {
             /**
              * Data transformation process
              * 
@@ -877,10 +877,10 @@
             let target = c.dot("heart_target", {x: 20, y: "target"}, dom)
 
             let links = c.link("heart_fact", {
-                                        x1: age.get("age", ['x']), 
-                                        y1: age.get("age", ['y']), 
-                                        x2: target.get("target", ['x']), 
-                                        y2: target.get("target", ['y']), 
+                                        x1: age.get(null, ['x']), 
+                                        y1: age.get(null, ['y']), 
+                                        x2: target.get(null, ['x']), 
+                                        y2: target.get(null, ['y']), 
                                     }, 
                                     {curve: true})
             let ageLabels = c.text(bucketedAgeTable, 
@@ -1249,7 +1249,7 @@
 
 
 
-            await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
+            //await db.normalizeMany("heart_disease", ["Gender", "Family_Heart_Disease", "Alcohol_Consumption", "Exercise_Habits", "Stress_Level", "Age", "High_Blood_Pressure","Status","Smoking","BMI", "Sleep_Hours", "Sugar_Consumption","CRP_Level","Blood_Pressure"].map((a) => [a]))
 
             await db.normalizeMany("heart", ["exang", "thalach", "cp", "target","sex","fbs","slope","ca","thal","age","oldpeak","trestbps","chol"].map((a) => [a]))
 
@@ -1265,25 +1265,31 @@
             c.nest( smallRect, bigRect)
             */
 
-            await c.hier("heart", ["sex", "cp"])
+            await c.hier("heart", ["sex", "cp"], ["sexTable", "cpTable"])
 
 
-            let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
-            let smallRect = c.square("cp", {
-                    x: (3)* (canvasWidth/8) + (canvasWidth/8)/2 - 50/2, 
-                    y: "cp", 
-                    fill: "none", 
-                    stroke: "black", 
-                    width: 50})
+            // let bigRect = c.rect("sex", {y: "sex", fill: "none", stroke: "black"})
+            // let smallRect = c.square("cp", {
+            //         x: (3)* (canvasWidth/8) + (canvasWidth/8)/2 - 50/2, 
+            //         y: "cp", 
+            //         fill: "none", 
+            //         stroke: "black", 
+            //         width: 50})
 
             
-            let target = c.rect("sex", {...sq("sex")("x", "y"), fill: "none", stroke: "black"})
+            let sex = c.rect("sexTable", {...sq("sex")("x", "y"), fill: "none", stroke: "black"})
 
-            let cp = c.dot("cp", {fill : "cp", y: "exang", x: "thalach"})
+            let cp = c.dot("cpTable", {fill : "cp", y: "exang", x: "thalach"})
 
-            let targetLabel = c.text("sex", {x: target.get("sex", "x"), y: target.get("sex", "y"), text: {cols: "sex", func: (d) => d.target == "0" ? "NA" : "Present"}})
+            let sexLabel = c.text("sexTable",
+            {x: 10, 
+            y: 20,
+            text: "sex"})
+            /*
+             * NOTE: setting text to sex.get(null, "sex", (d) => d.sex == 0 ? "Male" : "Female") throws a bug see github issue
+             */
 
-            c.nest(cp, target)
+            c.nest(cp, sex)
         }
         
 
@@ -2081,7 +2087,7 @@
             await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
 
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE T (id int primary key, a int, b int)`)
             await db.conn.exec(`CREATE TABLE S (id int primary key, c int, d int, FOREIGN KEY (c) REFERENCES T(id))`)
 

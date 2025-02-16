@@ -475,9 +475,9 @@ export class Mark {
         return false
 
       if (c.t1 == this.src) {
-        return !currSearchkey || this.eqSearchKey(currSearchkey, c.X)
+        return !currSearchkey || R.intersection(c.X, currSearchkey).length == currSearchkey.length
       } else if (c.t2 == this.src) {
-        return !currSearchkey || this.eqSearchKey(currSearchkey, c.Y)
+        return !currSearchkey || R.intersection(c.Y, currSearchkey).length == currSearchkey.length
       }
       return false
     }
@@ -487,7 +487,7 @@ export class Mark {
      * @param getObj the object that was created from a get method 
      */
 
-    processGet(getObj) {
+    processGet(getObj): {othermark, constraint, otherattr, callback, isVisualChannel}{
       let othermark = !getObj.othermark ? getObj.othertable : getObj.othermark
       let othersrc = !getObj.othermark ? getObj.othertable : getObj.othermark.src
       let searchkeys = getObj.searchkeys
@@ -513,16 +513,35 @@ export class Mark {
             if ((constraint.X.length != searchkeys.length) || (constraint.Y.length != searchkeys.length))
               continue
 
-            if (!(constraint.X.every((value, index) => value == searchkeys[index])))
+            if (!R.intersection(constraint.X, searchkeys).length == searchkeys.length)
               continue
 
-            if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
+            if (!R.intersection(constraint.Y, searchkeys).length == searchkeys.length)
               continue
 
             return {othermark, constraint, otherattr, callback, isVisualChannel}
           }
         }
+
         searchkeys ??= [IDNAME]
+        for (let c of Object.values(this.c.db.constraints)) {
+          if (!(c instanceof FKConstraint))
+            continue
+
+          if ((c.t1 != this.src) || (c.t2 != this.src))
+            continue
+          
+          if ((c.X.length != 1) || (c.Y.length != 1))
+            continue
+
+          if (c.X[0] != IDNAME)
+            continue
+          if (c.Y[0] != IDNAME)
+            continue
+
+          return {othermark, constraint: c, otherattr, callback, isVisualChannel}
+        }
+
         let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
 
         this.c.db.addConstraint(constraint)
@@ -838,6 +857,7 @@ export class Mark {
 
       for (let i = 0; i < queryItems.length; i++) {
         let {source, columns, constraint, isConstant} = queryItems[i]
+        console.log("currColumn", columns)
 
         /**
         * Check if column is a numeric value. the user could have entered x: 5 
@@ -851,6 +871,7 @@ export class Mark {
          * This is a foreign key reference
          */
         if (constraint) {
+          console.log("column with constraint", columns)
           let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
             let pathInMap = null
 
@@ -945,6 +966,7 @@ export class Mark {
         }
       }
 
+      console.log("pathQueryitem", pathQueryItemMap)
       /**
        * Actual construction of query
        */

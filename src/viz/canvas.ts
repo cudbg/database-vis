@@ -514,8 +514,8 @@ export class Canvas implements IMark {
     return this.node.node();
   }
 
-  async hier(tablename: string, attrHierarchy: string[]) {
-    let newTableNames = attrHierarchy.slice()
+  async hier(tablename: string, attrHierarchy: string[], dimnames: string[]) {
+    let newTableNames = !dimnames ? attrHierarchy.slice() : dimnames
     let currTable = this.db.table(tablename)
     let prevTable = null
     let prevKeys = null
