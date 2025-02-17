@@ -718,6 +718,7 @@ The cleanupTask is mainly about creating a new marktable using the markInfo we g
 TBD
 
 ### Function List
+<<<<<<< HEAD
 TBD
 
 ### Execution
@@ -726,3 +727,6 @@ TBD
 src/routes/+page.svelte
 ```
 
+=======
+TBD
+>>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9

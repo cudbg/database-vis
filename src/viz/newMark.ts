@@ -1,12 +1,12 @@
 import * as R from "ramda";
 import { creator, select } from "d3";
 import * as d3 from "d3";
-import { Query, sql, agg, and, eq, column, literal, loadObjects } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, neq, lt, gt, lte, gte, column, literal } from "@uwdata/mosaic-sql";
 import * as OPlot from "@observablehq/plot";
 
 import { IDNAME, Table, createView } from "./table";
 import { idexpr } from "./id";
-import { FKConstraint } from "./constraint";
+import { Cardinality, FKConstraint } from "./constraint";
 import type {  Canvas } from "./canvas";
 import type {Schema} from "./schema";
 import { MarkNest, RootNest, type Nest } from "./nest";
@@ -14,7 +14,10 @@ import { markof, RefColumn, RefLayout, RefMark } from "./ref";
 import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
-import { Scale } from "./newScale";
+import { Scale, ScaleObject } from "./newScale";
+import { HOOK_PLACE } from "./task_graph/task_graph";
+import { mgg } from "./uapi/mgg";
+
 
 /**
  * Used in QueryItem
@@ -27,24 +30,23 @@ interface ColumnObj {
   renameAs: string
 }
 
-/**
- * Used in QueryItem to build where clauses
- * WHERE leftTable.leftAttr = rightTable.rightAttr
- */
-interface ConditionObj {
-  leftTable: Table
-  leftAttr: string
-  rightTable: Table
-  rightAttr: string
+function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
+  if (columnObj1.dataAttr != columnObj2.dataAttr)
+    return false
+  if (columnObj1.renameAs != columnObj2.renameAs)
+    return false
+  return true
 }
+
 
 /**
  * An object in the this.channels array
  */
 interface RawChannelItem {
   mark: Mark
+  src: Table
   visualAttr: string
-  clauses: ConditionObj[] //will be null if there are no clauses ie. normal mapping like x: "a"
+  constraint: FKConstraint /* will be null if there are no clauses ie. normal mapping like x: "a" */
   /**
    * Underlying data attribute for visualAttribute
    * The type is an array because the user could do x: va.get(null, ["x", "width"], someCallback)
@@ -57,6 +59,8 @@ interface RawChannelItem {
   isGet: boolean
   refLayout: RefLayout
   callback: Function
+  isVisualChannel: boolean
+  isConstant: boolean
 }
 
 /**
@@ -64,17 +68,16 @@ interface RawChannelItem {
  * One QueryItem per RawChannelItem. We need to keep track of the data source, the column
  */
 interface QueryItem {
+  srcmark: Mark
   source: Table
   /**
    * Each ColumnObj has dataAttr to represent the column in the table and renameAs for what to select that column as
    * Used to construct the select statement
    */
   columns: ColumnObj[]
-  /**
-   * Each ConditionObj has leftTable, leftAttr, rightTable. rightAttr
-   * Used to construct where clauses: WHERE leftTable.leftAttr = rightTable.rightAttr
-   */
-  conditions: ConditionObj[]
+
+  constraint: FKConstraint
+  isConstant: boolean
 }
 
 /**
@@ -88,8 +91,10 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   let columns:ColumnObj[] = []
 
   //setting source to select from
-  if (item.isGet) {
-    source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
+  if (item.isGet && item.isVisualChannel) {
+      source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
+  } else if (item.src != item.mark.src) {
+    source = item.src
   } else {
     source = item.mark.src
   }
@@ -101,29 +106,31 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     }
   }
   else if (item.isGet) {
-    if (item.dataAttr.length > 1) {
-       /**
-        * more than 1 means we must select each column in dataAttr without any renaming
-        */
-      for (let i = 0; i < item.dataAttr.length; i++) {
-        columns.push({dataAttr: item.dataAttr[i], renameAs: item.dataAttr[i]})
-      }
-    } else {
-      /**
-       * Equal to 1 means we can and must rename each column when selecting
-       * We rename because the user may want to create a link ie.
-       * x1: va.get(null, ["x"]), y1: va.get(null, ["y"]), x2: vb.get(null, ["x"]), y2: vb.get(null, ["y"])
-       * However, the marktables for va and vy will have x and y columns, 
-       * we cannot select two different columns with the same name
-       */
-      columns = [{dataAttr: item.dataAttr[0], renameAs: item.visualAttr}]
-    }
+    item.dataAttr.forEach((attr) => {
+      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${item.visualAttr}_${attr}`})
+    })
   } else {
      //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
-    columns = [{dataAttr: item.dataAttr[0], renameAs: item.dataAttr[0]}]
+     item.dataAttr.forEach(dattr => {
+      columns.push({dataAttr: dattr, renameAs: dattr})
+     })
   }
-  return {source: source, columns: columns, conditions: item.clauses}
-  
+  return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint, isConstant: item.isConstant}
+
+}
+
+function eqPath(constraintArr1: FKConstraint[], constraintArr2: FKConstraint[]){
+  if (constraintArr1.length != constraintArr2.length)
+    return false
+
+  /**
+   * We assume that ordering does not matter in this case
+   */
+  for (let i = 0; i < constraintArr1.length; i++) {
+    if (constraintArr1[i] != constraintArr2[i])
+      return false
+  }
+  return true
 }
 
 
@@ -174,7 +181,43 @@ export class Mark {
     options;
     refmarks;
     layouts;
-    scaling_fns;
+    scaling_fns: {va, scale: Scale}[]
+    markInfoCache: Map<number, {}>;
+    outermark: Mark;
+    innerToOuter: Map<number, number>;
+    level: number;
+    idVisualAttrMap: Map<number, Set<string>>; /* for handling level differences between marks */
+
+    /**
+     * Other mark + visual attr of this mark + other id -> bag of ids for this mark
+     */
+    referencedMarks: Map<number, {}>;
+
+    /**
+     * Some filters to append onto the end of the SQL query when trying to get data
+     */
+    filters: any[]
+    ordering: string[]
+    orderByDesc: boolean
+
+    
+    /**
+     * Every mark has a pointer to its outermark
+     * Every mark has a inner id to outer id map
+     * 
+     * Every mark will have a id to x,y, width, height, data_xoffset, data_yoffset map. 
+     *  width and height are only for marks that have a width and height eg. rect
+     * 
+     * After you draw a mark
+     * - create the id to x,y,width, height map
+     * 
+     * To draw a nested mark
+     * - Look up the outer mark's id to x,y,width,height map to get the corresponding offsets
+     * 
+     * To draw a mark that has a foreign key reference
+     * 1. Look up the level of the mark you are getting a reference from
+     * 2. If the level you found is different, than 
+     */
 
     _scales;
     _markelsidx;  // IDNAME -> HTML mark element
@@ -188,6 +231,7 @@ export class Mark {
         let allMarks = marksbytype(plotConfig)
         this.mark = (allMarks[marktype] ?? marktype['dot']);
         this.src = source;
+        this.marktable = null
         this.mappings = mappings;
         this.options = options;
         this.layouts = {};
@@ -195,40 +239,66 @@ export class Mark {
         this.refmarks = []
         this._scales = {}
         this.scaling_fns = []
+        this.outermark = null
+        this.markInfoCache = new Map<number, {}>()
+        this.innerToOuter = null
+        this.idVisualAttrMap = new Map<number, Set<string>>()
+        this.referencedMarks = new Map<number, {}>()
+        this.filters = []
+        this.ordering = []
+        this.orderByDesc = false
 
+        this.c.taskGraph.addMark(this)
         this.init()
     }
 
     init() {
+      /**
+       * Loop through all the key value pairs in this.mappings.
+       * All keys are visual channels (eg. x, y, fill etc.)
+       * For any key, the value can be any of the following cases:
+       *    1. A string to represent a data attribute (eg. x: "a")
+       *    2. A foreign attribute. For this case, the value is an object returned by the get method
+       *    3. A scale object. Take for example x: sa("a"), where sa is a scaling function.
+       *       sa("a") indicates we want to scale the data attribute "a" and it returns a scale object.
+       *    4. Some layout algorithm. ...grid("a", 2) indicates we want to create a grid based 
+       *       on the data attribute "a" with 2 columns. ...grid("a",2) returns an object
+       *    5. An object that looks like this: {cols: "a", func: <some typescript function>}. This object indicates that
+       *       we want to run some function over "a"data attribute.
+       * 
+       * We need to handle all these different cases and convert each key,value mapping into a RawChannelItem so that
+       * there is a common interface to all of them
+       */
       for (const [va,dattr] of Object.entries(this.mappings)) {
           let mark = this
           let visualAttr = va
-          let clauses = null
+          let constraint = null
           let dataAttr = [dattr]
           let isGet = false
           let refLayout = null
           let callback = null
-          let rawChannelItem: RawChannelItem = {mark, visualAttr, clauses, dataAttr, isGet, refLayout, callback}
+          let src = this.src
+          let isVisualChannel = false
+          let isConstant = false
+
+          let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel, isConstant}
 
           if (dattr instanceof RefLayout) {
               dattr.add(va);
               this.addLayout(dattr);
-              /**
-               * For a reflayout, we select all columns from the table except for IDNAME
-               * The user should never select IDNAME!
-               */
-              dataAttr = this.src.schema.except([IDNAME]).attrs;
-              rawChannelItem.dataAttr = dataAttr
+              rawChannelItem.dataAttr = dattr.dattrs
               rawChannelItem.refLayout = dattr
           }
           else if (dattr instanceof Object && 'othermark' in dattr) { //there's a call to get
-              let {othermark, clauses, othervattr, callback} = this.processGet(dattr)
-              rawChannelItem.mark = othermark
-              rawChannelItem.clauses = clauses
-              rawChannelItem.dataAttr = othervattr
-              rawChannelItem.callback = callback
-              rawChannelItem.isGet = true
+            let {othermark, constraint, othervattr, callback, isVisualChannel} = this.processGet(dattr)
+            rawChannelItem.mark = othermark
+            rawChannelItem.constraint = constraint
+            rawChannelItem.dataAttr = othervattr
+            rawChannelItem.callback = callback
+            rawChannelItem.isGet = true
+            rawChannelItem.isVisualChannel = isVisualChannel
 
+            if (isVisualChannel) {
               /**
                * Currently hard coding scales, need to fix!!!!!!
                */
@@ -236,89 +306,335 @@ export class Mark {
                 this._scales.x =  {type: "identity"}
               else if (va == "y1" || va == "y2" || va == "y")
                 this._scales.y = {type: "identity"}
+            }
 
+            
+            this.c.registerRefMark(othermark, this)
+            this.c.taskGraph.addDependency(this, othermark, true)
           }
-          else if (dattr instanceof Scale) {
+          else if (dattr instanceof ScaleObject) {
               this.setScaleForVA(va, dattr)
-              rawChannelItem.dataAttr = [dattr.getCol()] // we scale a single column at a time, so this is ok
+
+              rawChannelItem.dataAttr = [dattr.col] // we scale a single column at a time, so this is ok
+
+              if (dattr.scale.callback)
+                rawChannelItem.callback = dattr.scale.callback
+          } else if (dattr instanceof Object && "cols" in dattr) {
+            if (!("func" in dattr))
+              throw new Error("Error in initialization: Give me a callback function!")
+
+            if (!(dattr.func instanceof Function))
+              throw new Error("Error initialization: This has to be a callback function!")
+
+            let {cols, func} = dattr
+
+            rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
+            rawChannelItem.callback = func
+          } else if (dattr instanceof Object && "constant" in dattr) {
+            rawChannelItem.dataAttr = [dattr.constant]
+            rawChannelItem.isConstant = true
+          } else if (dattr instanceof Object && "otherTable" in dattr) {
+            let {otherTable, constraint, otherAttr, callback} = this.processForeignAttribute(dattr)
+            rawChannelItem.src = otherTable
+            rawChannelItem.constraint = constraint
+            rawChannelItem.callback = callback
+            rawChannelItem.dataAttr = otherAttr
+            rawChannelItem.isGet = true
+
           }
           this.channels.push(rawChannelItem)
       }
     }
+
+    /**
+     * Use this function to filter over a column in the source table of this mark
+     * This function will append a WHERE clause to the query constructed in constructQuery()
+     * @param
+     */
+    filter({operator, col, value}: {operator: string; col: string, value: string|number}) {
+      if (!(Object.values(mgg.FilterOperators).includes(operator))) {
+        throw new Error(`Unsupported operator: ${operator}`)
+      }
+
+      if (!this.src.schema.attrs.includes(col)) {
+        throw new Error(`Cannot filter on ${col} as it is not in ${this.src.internalname}`)
+      }
+
+      switch (operator) {
+        case mgg.FilterOperators.EQUAL:
+          this.filters.push(eq(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.GREATER_EQUAL:
+          this.filters.push(gte(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.GREATER_THAN:
+          this.filters.push(gt(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.LESS_EQUAL:
+          this.filters.push(lte(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.LESS_THAN:
+          this.filters.push(lt(column(this.src.internalname, col), literal(value)))
+          break
+        case mgg.FilterOperators.NOT_EQUALS:
+          this.filters.push(neq(column(this.src.internalname, col), literal(value)))
+          break
+      }
+    }
+
+    /**
+     * Use this function to order output rows according to some data attribute
+     * This function will append an ORDER BY clause to the query constructed in constructQuery()
+     * @param
+     */
+    orderBy(cols: string | string[], desc: boolean = false) {
+      cols = Array.isArray(cols) ? cols : [cols]
+      cols.forEach((col) => this.ordering.push(col))
+
+      if (desc) this.orderByDesc = true
+    }
+
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
-     * @param usrDattr data attributes that have to be the same. Used when constructing where clause
-     * @param usrVattr the desired visual attribute to get from this mark
-     * @param callback a callback function that is run over usrVattr during render
-     * @returns object with format {mark: this, filter: ..., vattr: ...}
+     * @param usrSearchkeys
+     *                Data attributes in the referring table.
+     *                ie. For example VB = c.dot(vb_src, {x: VA.get("aid", ["x"]) ...})
+     *                aid is an attribute in vb_src.
+     *                Checking if aid is a N-1 foreign key from vb_src to va_src occurs only in processGet 
+     * @param usrVattr 
+     *                The desired visual attribute to get from this mark
+     * @param callback 
+     *                A callback function that is run over usrVattr during render
      */
-    get(usrDattr, usrVattr: String | String[], callback?): {othermark, otherdattrs, othervattr, callback} {
-      let otherdattrs = null
+    get(usrSearchkeys: String | String[], usrAttr: String | String[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
+      let searchkeys = null
 
-      if (usrDattr)
-        otherdattrs = Array.isArray(usrDattr) ? usrDattr : [usrDattr]
+      if (usrSearchkeys)
+        searchkeys = Array.isArray(usrSearchkeys) ? usrSearchkeys : [usrSearchkeys]
 
-      let othervattr = Array.isArray(usrVattr) ? usrVattr : [usrVattr]
+      let otherAttr = Array.isArray(usrAttr) ? usrAttr : [usrAttr]
   
-      for (let attr of othervattr) {
+      let valid = true
+      for (let attr of otherAttr) {
         if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present to this.mappings
-          throw new Error(`${attr} is not mapped in ${this.src.displayname}`)
+          valid = false
         }
       }
 
-      if (otherdattrs) {
-        for (let dattr of otherdattrs) { //dattr must be a column in src table for this mark
-          if (dattr && !R.includes(dattr, this.src.schema.attrs)) {
-            throw new Error(`${dattr} is not present in ${this.src.displayname}`)
-          }
-        }
+      if (valid) {
+        let obj = {othermark: this, searchkeys: searchkeys, otherAttr, callback: callback, isVisualChannel: true}
+        return obj
       }
 
-      let obj = {othermark: this, otherdattrs: otherdattrs, othervattr: othervattr, callback: callback}
+      /**
+       * Need to handle case where we want a data attribute and not a visual channel
+       */
+      valid = true
+
+      if (!otherAttr.every((attr) => this.src.schema.attrs.includes(attr))) {
+        valid = false
+      }
+
+      if (!valid) {
+        throw new Error(`Give me valid columns to get!`)
+      }
+
+      let obj = {othermark: this, searchkeys: searchkeys, otherAttr: otherAttr, callback: callback, isVisualChannel: false}
       return obj
+    }
+
+    eqSearchKey(searchKey1: string[], searchKey2: string[]) {
+      if (searchKey1.length != searchKey2.length)
+        return false
+
+      let tmp1 = [...searchKey1].sort()
+      let tmp2 = [...searchKey2].sort()
+
+      return tmp1.every((value, index) => value === tmp2[index])
+    }
+
+
+    checkValidFkConstraint(c: FKConstraint, othermark: Mark, currSearchkey: string[]) {
+      if ((c.card != Cardinality.ONEMANY) && (c.card != Cardinality.ONEONE))
+        return false
+
+      if (c.t1 == this.src && this.eqSearchKey(currSearchkey, c.X))
+        return true
+      else if (c.t2 == this.src && this.eqSearchKey(currSearchkey, c.Y))
+        return true
+
+      return false
     }
 
     /**
      * Called in the init method for handling a call to get method
      * @param getObj the object that was created from a get method 
      */
+
     processGet(getObj) {
       let othermark = getObj.othermark
-      let otherdattrs = getObj.otherdattrs
-      let othervattr = getObj.othervattr
-      let clauses = []
+      let searchkeys = getObj.searchkeys
+      let othervattr = getObj.otherAttr
       let callback = getObj.callback
+      let isVisualChannel = getObj.isVisualChannel
 
-      if (otherdattrs) {
-        for (let i = 0; i < otherdattrs.length; i++) {
-          let leftAttr = otherdattrs[i]
-          let leftTable = this.src
-          let rightAttr = otherdattrs[i]
-          let rightTable = othermark.src
-          clauses.push({leftTable, leftAttr, rightTable, rightAttr})
+      /**
+       * If both marks share the same source table, then skip checking and create a new FKConstraint
+       */
+      if (othermark.src == this.src) {
+        /**
+         * Search currently available constraints so that we don't add redundant constraints
+         */
+        for (let constraint of Object.values(this.c.db.constraints)) {
+          if (!(constraint instanceof FKConstraint))
+            continue
+
+          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
+            continue
+          
+          if ((constraint.X.length != searchkeys.length) || (constraint.Y.length != searchkeys.length))
+            continue
+
+          if (!(constraint.X.every((value, index) => value == searchkeys[index])))
+            continue
+
+          if (!(constraint.Y.every((value, index) => value == searchkeys[index])))
+            continue
+
+          return {othermark, constraint, othervattr, callback, isVisualChannel}
+        }
+
+        let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
+
+        this.c.db.addConstraint(constraint)
+        
+        return {othermark, constraint, othervattr, callback, isVisualChannel}
+      }
+
+      for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
+        if (!(constraint instanceof FKConstraint))
+          continue
+        /**
+         * Check if there is a valid foreign key reference from this.src to othermark.src for the given searchkey
+         * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
+         * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
+         */
+        let validFkConstraint = this.checkValidFkConstraint(constraint, othermark, searchkeys)
+
+        if (validFkConstraint) {
+          /**
+           * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
+           * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
+           * 
+           * We theoretically could create the path right here but I feel it would become messy
+           * As such, We only create the path in constructQuery
+           */
+
+          let path = this.c.db.getFKPath(this.src, othermark.src, constraint)
+          if (!path)
+            throw new Error("No possible path!")
+
+          
+          // for (let i = 1; i < path.length; i++) {
+          //   if (path[i].card != Cardinality.ONEONE)
+          //     throw new Error("No possible path!")
+          // }
+
+          return {othermark, constraint, othervattr, callback, isVisualChannel}
         }
       }
-      return {othermark, clauses, othervattr, callback}
+
+      throw new Error("No possible path")
+    }
+
+    processForeignAttribute(foreignObj) {
+      let otherTable = foreignObj.otherTable
+      let searchKeys = foreignObj.searchKeys
+      let otherAttr = foreignObj.otherAttr
+      let callback = foreignObj.callback
+      let isVisualChannel = foreignObj.isVisualChannel
+      /**
+       * If both marks share the same source table, then skip checking and create a new FKConstraint
+       */
+      if (otherTable == this.src) {
+        /**
+         * Search currently available constraints so that we don't add redundant constraints
+         */
+        for (let constraint of Object.values(this.c.db.constraints)) {
+          if (!(constraint instanceof FKConstraint))
+            continue
+          if ((constraint.t1 != this.src) || (constraint.t2 != this.src))
+            continue
+          
+          if ((constraint.X.length != searchKeys.length) || (constraint.Y.length != searchKeys.length))
+            continue
+          if (!(constraint.X.every((value, index) => value == searchKeys[index])))
+            continue
+          if (!(constraint.Y.every((value, index) => value == searchKeys[index])))
+            continue
+          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+        }
+        let constraint = new FKConstraint({t1: this.src, X: searchKeys, t2: this.src, Y: searchKeys})
+        this.c.db.addConstraint(constraint)
+        
+        return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+      }
+      for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
+        if (!(constraint instanceof FKConstraint))
+          continue
+        /**
+         * Check if there is a valid foreign key reference from this.src to othermark.src for the given searchkey
+         * In this current state, it must be a direct N-1 foreign key reference ie. from table A to table B.
+         * Indirect foreign key references such as from A to C, given a valid foreign key path A to B to C, would throw an error!
+         */
+        let validFkConstraint = this.checkValidFkConstraint(constraint, searchKeys)
+        if (validFkConstraint) {
+          /**
+           * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
+           * because we are missing the final edge from othermark.src to othermark.marktable because rendering has not occurred at this stage
+           * 
+           * We theoretically could create the path right here but I feel it would become messy
+           * As such, We only create the path in constructQuery
+           */
+          let path = this.c.db.getFKPath(this.src, otherTable, constraint)
+          if (!path)
+            throw new Error("No possible path!")
+          
+          // for (let i = 1; i < path.length; i++) {
+          //   if (path[i].card != Cardinality.ONEONE)
+          //     throw new Error("No possible path!")
+          // }
+          return {otherTable, constraint, otherAttr, callback, isVisualChannel}
+        }
+      }
+      throw new Error("No possible path")
     }
 
     /**
      * Called in the init method handle scaling
-     * @param va  The visual attribute to scale
-     * @param v   Has type Scale (need to come up with better name). 
+     * @param va  
+     *            The visual attribute to scale
+     * @param scaleObj
+     *            Has type Scale (need to come up with better name). 
      *            Contains information about domain, range, col
      *            See dynamicScale.ts. 
      */
-    setScaleForVA(va, scaleObj) {
-      let range = scaleObj.getRange()
-      let type = scaleObj.getType()
+    setScaleForVA(va, scaleObj: ScaleObject) {
+      let {col, scale} = scaleObj
+      if (!this.src.schema.attrs.includes(col))
+        throw new Error(`Trying to scale invalid column: ${col}`)
+
+      let range = scale.range
+      let type = scale.type
 
       this._scales[va] = {}
-      if (range) {
-        this._scales[va] = {range: range}
-      }
       if (type) {
-        this._scales[va] = {...this._scales[va], type: type}
+        this._scales[va] = {type: type}
       }
+      if (range) {
+        this._scales[va] = {...this._scales[va], range: range}
+      }
+
       
       this.scaling_fns.push({va: va, scale: scaleObj})
     }
@@ -332,8 +648,7 @@ export class Mark {
         let root = this.node = select(
             creator("svg:g").call(document.documentElement))
             .classed(`${this.marktype}-${this.id}`, true);
-        let nest = this.c.nestof(this)[0]
-        let mark = null;
+        let nest = this.c.nestof(this)
 
         /*
         mark was really appended to the root after doRootNest and doMarkNest
@@ -342,13 +657,12 @@ export class Mark {
         if (nest instanceof RootNest) {
           let crow = nest.parentmarkdata()
           let fixedCrow = this.handleCrow(crow)
-          mark = await this.doRootNest(root, fixedCrow)
+          await this.doWorkFlow(root, fixedCrow, false)
         } else {
-          mark = await this.doMarkNest(root, nest)
+          this.outermark = nest.outerMark
+          this.innerToOuter = new Map<number, number>()
+          await this.doWorkFlow(root, nest, true)
         }
-
-        if (!mark)
-          throw new Error("Uh oh! Couldn't make mark")
         return root.node()
     }
 
@@ -361,256 +675,444 @@ export class Mark {
         this.layouts[rl.id].add(rl.vattrs)
     }
 
-    /**
-     * 
-     * @param root 
-     * @param crow An object of format {width: ..., height: ..., x: ..., y: ....}
-     * @returns 
-     */
-    async doRootNest(root, crow) {
-      let query = this.constructQuery()
-      let dummyroot = this.makeDummyRoot()
-      let rows = await this.c.db.conn.exec(query)
-
+    async runQueryTask(outer, isNested) {
       /**
-       * The data from query has format [{}, {}, {}] where each object represents
-       * a single data point ie. each object looks like {x: ..., y: ...}
-       * We convert from rowsToCols so that the data looks like { x: [], y: []}
-       * The idea is to collect each visual attribute into an array
-       * This is to allow applychannels to work properly
-       * 
+       * If this mark is nested within some other mark, outer is a MarkNest object
+       * Pass outer to constructQuery so that we can get data about the outermark 
+       * such as the id of the outermark for each row in the source table of this mark
        */
-      let cols = this.rowsToCols(rows)
-
-      /**
-       * channels has format {x: [], y: [], ...}
-       * applychannels prepares the data for rendering
-       */
-      let channels = this.applychannels(cols)
-
-      channels = await this.doLayout(channels, crow, dummyroot)
-
-      // render final marks
-      let {mark, markInfo} = this.makemark(channels, crow)
-      root
-        .append("g")
-        .attr("transform", `translate(${crow.x}, ${crow.y})`)
-        .node().appendChild(mark);
-      
-      await this.createMarkTable(markInfo)
-
-      document.documentElement.removeChild(dummyroot.node());
-      this._markelsidx = markels(root, this.marktype);
-      return mark
+      let query
+      if (isNested)
+        query = this.constructQuery(outer)
+      else
+        query = this.constructQuery()
+      return query
     }
 
-    /**
-     * 
-     * @param root domain element to append mark to
-     * @param nest an instance of MarkNest
-     * @returns 1 on success
-     */
-    async doMarkNest(root, nest) {
-      let dummyroot = this.makeDummyRoot()
-      let outermark = nest.outerMark
-      let outermarkData = await outermark.src.data("col")
-      let outermarkVizData = await outermark.marktable.data()
-
+    runLayoutTask(rows, outer, dummyroot, isNested) {
       /**
-       * Query for child marks in a nest is a simple
-       * Need a loop to run through later
+       * If this mark is nested, then we need to partition the output of the query
+       * according to the corresponding id of the outermark
        * 
-       * Could we call doRootNest in here?
+       * Eg. Given 3 outer rectangles with ids 0, 1, 2 and that this mark is a dot mark,
+       * we want to nest the dots within the rectangles. We need loop from i = 0 to i = 2,
+       * for each iteration, pick out the rows that outermark.id = i
+       * 
+       * We then call applychannels and doLayout for each iteration
        */
-      for (let i = 0; i < outermarkData[IDNAME].length; i++) {
-        let crow = outermarkVizData[i]
-        let query = this.constructQuery(nest, crow)
-        let rows = await this.c.db.conn.exec(query)
+      if (isNested) {
+        let channelObj = {}
+        for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
+          let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
+
+          this.pickupReferences(children)
+
+          let cols = this.rowsToCols(children)
+          let channels = this.applychannels(cols)
+  
+          for (let i = 0; i < channels[IDNAME].length; i++)
+            this.innerToOuter.set(channels[IDNAME][i], outermarkInfo[IDNAME])
+          
+          channels = this.doLayout(channels, outermarkInfo, dummyroot)
+          channelObj[outermarkID] = channels 
+        }
+        return channelObj
+
+      } else {
+        this.pickupReferences(rows)
+
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
+  
+        channels = this.doLayout(channels, outer, dummyroot)
+  
+        return channels
+      }
+    }
 
-        channels = await this.doLayout(channels, crow, dummyroot)
+    runRenderTask(root, channels, crow, isNested) {
+      /**
+       * This is where we render the marks and get information from them
+       * This function appends the newly created mark onto the HTML display and returns information about mark as markInfo
+      */
+      if (isNested) {
+        let markInfoArr = []
 
-        // render final marks
+        for (let [outermarkID, currChannels] of Object.entries(channels)) {
+          let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
+          // render final marks
+          let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
+        
+          let tmpOuterMark = this.outermark
+          let outerID = outerMarkRow[IDNAME]
+          let xoffset = outerMarkRow.x
+          let yoffset = outerMarkRow.y
+
+          /**
+           * Walk upwards until you hit a non-nested mark
+           * Add to xoffset and yoffset as you walk upwards
+           */
+
+          while (tmpOuterMark && tmpOuterMark.innerToOuter) {
+            outerID = tmpOuterMark.innerToOuter.get(outerID)
+            tmpOuterMark = tmpOuterMark.outermark
+
+            let tmpCrow = tmpOuterMark.markInfoCache.get(outerID)
+            xoffset += tmpCrow.x
+            yoffset += tmpCrow.y
+          }
+
+          root
+            .append("g")
+            .attr("transform", `translate(${xoffset}, ${yoffset})`)
+            .node().appendChild(mark);
+
+          markInfoArr.push(...markInfo)
+          
+        }
+        return markInfoArr
+
+      } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
+        console.log("markInfo", markInfo)
+        // select(root)
+  
         root
           .append("g")
           .attr("transform", `translate(${crow.x}, ${crow.y})`)
           .node().appendChild(mark);
 
-        await this.createMarkTable(markInfo)
-        
-        this._markelsidx = markels(root, this.marktype);
-      }
-      document.documentElement.removeChild(dummyroot.node());
-      return 1
+        return markInfo
+      }        
     }
 
-    /**
-     * 
-     * @param nest optional argument of type MarkNest. Defined only when this function is called from doMarkNest
-     * @param crow optional argument of type object. This is the  markdata ie. visual attributes of the outermark
-     * @returns 
-     */
-    constructQuery(nest?, crow?) {
-      let tableColsMap = new Map<string, Set<string>>()
+    async runCleanupTask(root, dummyroot, markInfo) {
+      /**
+       * This function takes the markInfo from runRenderTask.
+       * It prepares markInfo for insertion into the database (and then creates a marktable and isnerts it)
+       */
+      this.prepareMarkInfo(markInfo)
+      await this.createMarkTable(markInfo)
+      this._markelsidx = markels(root, this.marktype);
+      document.documentElement.removeChild(dummyroot.node());
+    }
+
+    async doWorkFlow(root, outer, isNested) {
+      let dummyroot = this.makeDummyRoot()
+
+      let queryTask = await this.c.taskGraph.addTask(
+        HOOK_PLACE.QUERY, 
+        this, 
+        async () => {return await this.runQueryTask(outer, isNested)}, 
+        false)
+
+      let layoutTask = await this.c.taskGraph.addTask(
+        HOOK_PLACE.LAYOUT, 
+        this, 
+        async () => {
+          let query = queryTask.getOutput()
+          let rows = await this.c.db.conn.exec(query)
+          console.log("rows", rows)
+          let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
+          return channels
+        }, false)
+      
+      this.c.taskGraph.addDependency(layoutTask, queryTask, false)
+
+      let renderTask = await this.c.taskGraph.addTask(
+        HOOK_PLACE.RENDER, 
+        this, 
+        async () => {
+          let channels = layoutTask.getOutput()
+          let markInfo = this.runRenderTask(root, channels, outer, isNested)
+          return markInfo
+        }, false)
+      
+      this.c.taskGraph.addDependency(renderTask, layoutTask, false)
+
+      let cleanupTask = await this.c.taskGraph.addTask(
+          HOOK_PLACE.CREATE_MARKTABLE, 
+          this, 
+          async () => {
+            let markInfo = renderTask.getOutput()
+            await this.runCleanupTask(root, dummyroot, markInfo)
+          }, false)
+      
+      this.c.taskGraph.addDependency(cleanupTask, renderTask, false)
+    }
+
+    constructQuery(nest?) {
+      let idCounter = 0
+      let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
+      let pathIDMap = new Map<FKConstraint[], number>()
+      let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
+      let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
+
 
       /**
-       * An array of QueryItems.
-       * Each QueryItem has source: Table, columns: ColumnObj[], conditions: ConditionObj[]
-       * Each ColumnObj has dataAttr: string and renameAs: string
-       * Each ConditionObj has leftTable: Table, leftAttr: string, rightTable: Table, rightAttr: string
-       */
-      let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
-      let query = new Query()
+      * An array of possible aliases for this.src
+      * Usually contains a single alias
+      * Can contain more aliases if multiple marks have this.src as their source table
+      * and some mark has a foreign key reference to another mark,
+      * In this case, we need to rename this.src in the query 
+      */
+      let possibleSrcTableAliases = []
 
-      query = query.distinct()
+
+      /**
+       * If some table != this.src and it appears in different foreign key references, then we need to rename it
+       * 
+       * An example from the airport nodelink diagram:
+       * SELECT "am1"."x" as "x1", "am1"."y" as "y1", "am2"."x" as "x2", "am2"."y" as "y2"
+       * FROM "airport_marktable0" as "am1", "airport_marktable0" as "am2", "airport" as "a1", "airport" as "a2", routes
+       * WHERE "a1"."airport" = "routes"."ORIGIN"
+       *       AND "a1"."_rav_id" = "am1"."_rav_id" 
+       *       AND "a2"."airport" = "routes"."DEST"
+       *       AND "a2"."_rav_id" = "am2"."_rav_id"
+       * 
+       * Note how every table along the foreign key path also has to be renamed
+       */
+
+      /**
+       * 1. Iterate over all query items and group their dattrs by path or source in a Map mp.
+       *    dattrs that are derived from a table that is not this.src will have a path as the key
+       *    dattrs that are derived from this.src have this.src as the key
+       * 
+       * 2. Iterate over key,value pairs of mp. 
+       *    All tables in the FKPath besides this.src will need to be renamed. 
+       *    Each dattr in the value is added to the select part of query
+       * 
+       * 3. Handle nesting if needed
+       * 
+       */
 
       for (let i = 0; i < queryItems.length; i++) {
-        let currItem = queryItems[i]
+        let {source, columns, constraint, isConstant} = queryItems[i]
+
         /**
         * Check if column is a numeric value. the user could have entered x: 5 
         * and we wouldnt want to query for column 5
         */
-        if (!currItem.columns.some(column => currItem.source.schema.attrs.includes(column.dataAttr)))
+        if (!columns.some(column => source.schema.attrs.includes(column.dataAttr)))
           continue
+        if (isConstant)
+          continue
+        /**
+         * This is a foreign key reference
+         */
+        if (constraint) {
+          let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
+            let pathInMap = null
 
-        query = this.constructSelectStmt(query, currItem, tableColsMap)
+            if (!possibleNewPath)
+              throw new Error("No possible path")
 
-        query = this.constructWhereConditions(query, currItem, tableColsMap)
-      }
-      
-      /*
-      nest and crow are only valid when called from doMarkNest
-      */
-      if (nest && crow) {
-        let outermarkSrc = nest.outerMark.src
+            for (let path of pathQueryItemMap.keys()) {
+              if (eqPath(possibleNewPath, path)) {
+                pathInMap = path
+                break
+              }
+            }
 
-        if (!tableColsMap.has(outermarkSrc.internalname)) {
-          tableColsMap.set(outermarkSrc.internalname, new Set())
-          query = query.from(outermarkSrc.internalname)
+            if (!pathInMap) {
+              queryItems[i].columns.push({dataAttr: IDNAME, renameAs: `idcounter_${idCounter}`})
+              pathIDMap.set(possibleNewPath, idCounter)
+              this.idVisualAttrMap.set(idCounter, new Set(queryItems[i].columns.map(columnObj => columnObj.renameAs)))
+              idCounter++
+
+              pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
+
+              /**
+               * Create a path for each constraint and check if this new path is already present
+               */
+              if ((constraint.t1 == constraint.t2) && (constraint.t1 == this.src)) {
+                let currlen = possibleSrcTableAliases.length
+                possibleSrcTableAliases.push(`${this.src.internalname}_${currlen}`)
+              }
+
+            } else {
+              let queryItemSet = pathQueryItemMap.get(pathInMap)
+              let id = pathIDMap.get(pathInMap)
+              queryItems[i].columns.forEach(columnObj => this.idVisualAttrMap.get(id).add(columnObj.renameAs))
+  
+              queryItemSet.add(queryItems[i])
+
+            }
+        } else {
+          for (let i = 0; i < columns.length; i++) {
+            let foundColumn = false
+
+            for (const columnObj of noConstraintColumnObjSet) {
+              if (eqColumnObjs(columnObj, columns[i]))
+                foundColumn = true
+            }
+            if (!foundColumn)
+              noConstraintColumnObjSet.add(columns[i])
+          }
         }
-
-        query = query.where(eq(column(outermarkSrc.internalname, nest.fk.X), column(this.src.internalname, nest.fk.Y)))
-        query = query.where(eq(column(outermarkSrc.internalname,IDNAME), literal(crow[IDNAME])))
       }
-      return query;
-    }
-
-    /**
-     * 
-     * @param query 
-     *                      Query object. see MosaicSQL
-     * @param queryItem 
-     *                     QueryItem object. This function uses the conditions attribute in queryItem to construct WHERE conditions
-     * @param tableColsMap 
-     *                      a Map from tablename to a set of selected cols for that tablename.
-     *                      This function can add new tablenames to tableColsMap
-     * @returns the modified query with WHERE conditions
-     */
-    constructWhereConditions(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      if (queryItem.source != this.src)
-        query = this.constructFkWhereConditions(query, queryItem, tableColsMap)
 
       /**
-       * We don't return immediately after constructFkWhereConditions because
-       * the user might have specified more filters, which is stored in the conditions
-       * attribute of queryItem
+       * This handles nesting
+       * Create a new path
+       * Append a FKConstraint for the outermark
+       *  For example if outermark VRECT is a bunch of 3 rectangles with ids 0, 1, 2
+       *  We would need a FKConstraint where VRECT.id = 0 (could be any of the 3 ids above)
+       *  See how nesting works in doMarkNest for complete picture
+       * 
+       * Check if that new path is already present
+       * If present, remove the path that is currently present in the map and replace it with new path
+       * If not, we can just add new path to the map
+       * 
+       * Note: We do not support re-referencing this.src in nesting ie. the following is not possible
+       * let va = c.rect("A", ...)
+       * let vb = c.dot("A", ...)
+       * 
+       * nest(va, vb, <some_key>)
+       */
+      if (nest) {
+        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.src, nest.fk)
+        let pathInMap = null
+
+        if (!possibleNewPath)
+          throw new Error("No possible path")
+
+        for (let path of pathQueryItemMap.keys()) {
+          if (eqPath(possibleNewPath, path)) {
+            pathInMap = path
+            break
+          }
+        }
+
+        //possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
+        let nestQueryItem: QueryItem = {srcmark: nest.outerMark, source: nest.outerMark.src, columns: [{dataAttr: IDNAME, renameAs: `${IDNAME}_parent`}], constraint: nest.fk, isConstant: false}
+
+        if (!pathInMap) {
+          pathQueryItemMap.set(possibleNewPath, new Set([nestQueryItem])) /* empty set because this is a nest, no attributes are being selected */
+        } else {
+          let queryItemSet = pathQueryItemMap.get(pathInMap)
+          queryItemSet.add(nestQueryItem)
+        }
+      }
+
+      /**
+       * Actual construction of query
        */
 
-      let conditions = queryItem.conditions
-      conditions ??= []
+      let query = new Query()
 
-      for (let i = 0; i < conditions.length; i++) {
-        let currCondition = conditions[i]
-        let {leftTable, leftAttr, rightTable, rightAttr} = currCondition
+      query = query.distinct()
 
-        query = query.where(eq(column(leftTable.internalname, leftAttr), column(rightTable.internalname, rightAttr)))
+      for (let columnObj of noConstraintColumnObjSet.values()) {
+        let {dataAttr, renameAs} = columnObj
 
-        if (!tableColsMap.has(leftTable.internalname)) {
-          tableColsMap.set(leftTable.internalname, new Set())
-          query = query.from(leftTable.internalname)
+        query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
+      }
+
+      /**
+       * this.filters populated in filter function
+       */
+      this.filters.forEach((filter) => {
+        query = query.where(filter)
+      })
+
+      query = query.select(column(this.src.internalname, IDNAME))
+
+      if (this.ordering.length > 0)
+        query = query.orderby(this.ordering)
+
+      query = query.from(this.src.internalname)
+
+      let pathCounter = 1
+      let srcTableAliasIndex = 0
+
+      for (let [path, queryItemSet] of pathQueryItemMap.entries()){
+        /**
+         * tableRenameMap is a mapping from internal table names to in-query aliases
+         */
+        let tableRenameMap = new Map<string, string>()
+        let srcTableAlias = null
+        let startPathIterIndex = 0
+
+        if ((path[0].t1 == path[0].t2) && (path[0].t1 == this.src)) {
+          let {X, Y} = path[0]
+
+          srcTableAlias = possibleSrcTableAliases[srcTableAliasIndex]
+          srcTableAliasIndex++
+          startPathIterIndex = 1
+          query = query.from({[srcTableAlias]: this.src.internalname})
+
+          for (let i = 0; i < X.length; i++)
+            query = query.where(eq(column(this.src.internalname, X[i]), column(srcTableAlias, Y[i])))
         }
 
-        if (!tableColsMap.has(rightTable.internalname)) {
-          tableColsMap.set(rightTable.internalname, new Set())
-          query = query.from(rightTable.internalname)
+        for (let i = startPathIterIndex; i < path.length; i++) {
+          let constraint = path[i]
+          let {t1, t2, X, Y} = constraint
+          let renameT1 = null
+          let renameT2 = null
+
+          if (t1.internalname != this.src.internalname) {
+            if (!tableRenameMap.has(t1.internalname)) {
+              renameT1 = `${t1.internalname}_${pathCounter}`
+              query = query.from({[renameT1]: t1.internalname})
+              tableRenameMap.set(t1.internalname, renameT1)
+            } else {
+              renameT1 = tableRenameMap.get(t1.internalname)
+            }
+          } else if (srcTableAlias)
+            renameT1 = srcTableAlias
+          else {
+            renameT1 = this.src.internalname
+          }
+
+          if (t2.internalname != this.src.internalname) {
+            if (!tableRenameMap.has(t2.internalname)) {
+              renameT2 = `${t2.internalname}_${pathCounter}`
+              query = query.from({[renameT2]: t2.internalname})
+              tableRenameMap.set(t2.internalname, renameT2)
+            } else {
+              renameT2 = tableRenameMap.get(t2.internalname)
+            }
+          } else if (srcTableAlias) {
+            renameT2 = srcTableAlias
+          }
+          else {
+            renameT2 = this.src.internalname
+          }
+          for (let i = 0; i < X.length; i++)
+            query = query.where(eq(column(renameT1, X[i]), column(renameT2, Y[i])))
         }
+
+        for (let queryItem of queryItemSet) {
+          let {source, columns} = queryItem
+
+          for (let columnObj of columns) {
+            let {dataAttr, renameAs} = columnObj
+            let tableName = tableRenameMap.get(source.internalname)
+            query = query.select({[renameAs]: column(tableName, dataAttr)})
+
+            /**
+             * Experimental feature
+             */
+            query = query.select({[`${renameAs}_ref`]: column(tableName, IDNAME)})
+          }
+        }
+        pathCounter++
+      }
+
+      /**
+       * This part feels extremely hacky and unsafe
+       * But I am pretty sure we can gurantee that order by is the last thing in the sql query 
+       */
+      query = query.toString()
+
+      if (this.orderByDesc) {
+        query += " DESC"
       }
       return query
     }
-
-    /**
-     * 
-     * @param query 
-     *                Query object. See MosaicSQL
-     * @param queryItem 
-     *                QueryItem object. This function uses the source attribute of queryItem to construct a FkPath 
-     *                from this source to the source stated in the queryItem
-     * @param tableColsMap
-     *                a map from tablename to set of selected cols from that tablename. 
-     *                This function can add new tablenames to tableColsMap
-     * @returns 
-     */
-    constructFkWhereConditions(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      let {source, columns, conditions} = queryItem
-      let othermarktable = source
-      let path = this.c.db.getFkPath(this.src, othermarktable)
-
-      if (!path)
-        throw new Error("No path found!")
-
-      for (let i = 0; i < path.length; i++) {
-        let edge = path[i]
-        let leftCol = Array.isArray(edge.X) ? edge.X[0] : edge.X
-        let rightCol = Array.isArray(edge.Y) ? edge.Y[0] : edge.Y
-
-        query = query.where(eq(column(edge.t1.internalname, leftCol), column(edge.t2.internalname, rightCol)))
-
-        if (!tableColsMap.has(edge.t1.internalname)) {
-          tableColsMap.set(edge.t1.internalname, new Set())
-          query = query.from(edge.t1.internalname)
-        }
-
-        if (!tableColsMap.has(edge.t2.internalname)) {
-          tableColsMap.set(edge.t2.internalname, new Set())
-          query = query.from(edge.t2.internalname)
-        }
-      }
-      return query
-    }
-
-    /**
-     * 
-     * @param query
-     *                  Query object. See MosaicSQL
-     * @param queryItem
-     *                  QueryItem object. This function uses the source attribute of queryItem to construct a FkPath 
-     *                  from this source to the source stated in the queryItem
-     * @param tableColsMap 
-     *                  a map from tablename to set of selected cols from that tablename. 
-     *                  This function can add new tablenames and also add new columns to existing tablenames
-     * @returns 
-     */
-    constructSelectStmt(query, queryItem: QueryItem, tableColsMap: Map<string, Set<string>>) {
-      let {source, columns} = queryItem
-      let sourcename = source.internalname
-
-      if (!tableColsMap.has(sourcename)) {
-        tableColsMap.set(sourcename, new Set())
-        query = query.from(sourcename)
-      }
-
-      for (let i = 0; i < columns.length; i++) {
-        let {dataAttr, renameAs} = columns[i]
-        if (!tableColsMap.get(sourcename).has(renameAs)) {
-          query = query.select({[renameAs]: column(sourcename, dataAttr)})
-          tableColsMap.get(sourcename).add(renameAs)
-        }
-      }
-      return query
-    }
-
+ 
     /**
      * Create a dummy root so that layout works on dummy root
      * @returns 
@@ -640,42 +1142,82 @@ export class Mark {
         return []
       }
 
-      let valueArr = Object.values(data)[0]
-      let numDatapoints = valueArr.length;
-
-      data[IDNAME] = [...Array(numDatapoints).keys()]
-
-      let channels = {
+      let channels: {[key: string]: any[]} = {
         [IDNAME]: [...data[IDNAME]]
       };
 
       for (let i = 0; i < this.channels.length; i++) {
         let currItem = this.channels[i]
-        let {visualAttr, dataAttr, refLayout, callback} = currItem
+        let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
+        let queryItem = toQueryItem(currItem)
+
+
         if (currItem.isGet) {
-
-          /**
-           * First we check to see if the actual visual attribute or dom prop is different from visualAttr
-           * This is to cover cases like x -> cx. 
-           * Suppose we are plotting a dot where x -> cx, and the user does a get method to create x.
-           * In such a case, we don't want x to be changed ie. not scaling.
-           * We achieve this by setting visualAttr to cx, so OPlot will not scale it.
-           */
-          let va = this.mark[visualAttr]
-          if (va) {
-            visualAttr = va[0]
-          }
-
+          let arr = data[queryItem.columns[0].renameAs]
           /**
            * If callback exists, then we run the callback function and assign the resulting array
            * from handlecallback to channels[visualAttr]
            */
-          if (callback) {
-            channels[visualAttr] = this.handleCallback(currItem, data)
+          if (callback)
+            arr = this.handleCallback(currItem, queryItem, data)
+
+          /**
+           * BUGGY
+           */
+          if (mark.level != this.level){
+            if (visualAttr == "x1" 
+              || visualAttr == "x2" 
+              || visualAttr == "x"
+              || visualAttr == "y1"
+              || visualAttr == "y2"
+              || visualAttr == "y") {
+                let idcounter = null
+
+                for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
+                  visualAttrSet.forEach((attr) => {
+                    if (attr == queryItem.columns[0].renameAs) {
+                      idcounter = id
+                    }
+                  })
+                  if (idcounter != null) {
+                    break
+                  }
+                }
+
+                if (idcounter == null) {
+                  throw new Error("Cannot find visualAttr in applychannels")
+                }
+
+                let idcounterArr = data[`idcounter_${idcounter}`]
+
+                for (let j = 0; j < idcounterArr.length; j++) {
+                  let currOtherId = idcounterArr[j]
+                  let othermark = mark
+                  let othermarkInfoCache = mark.markInfoCache
+                  let otherlevel = mark.level
+
+                  while (othermark && (otherlevel > this.level)) {
+                    let obj = othermarkInfoCache.get(currOtherId)
+
+                    if (visualAttr == "x1" 
+                      || visualAttr == "x2" 
+                      || visualAttr == "x") {
+                        arr = arr.map(elem => elem + obj.data_xoffset)
+                      }
+                    else if (visualAttr == "y1" 
+                      || visualAttr == "y2" 
+                      || visualAttr == "y") {
+                        arr = arr.map(elem => elem + obj.data_yoffset)
+                      }
+                      othermark = othermark.outermark
+                      othermarkInfoCache = othermark.markInfoCache
+                    otherlevel--
+                  }
+                }
+            }
           }
-          else {
-            channels[visualAttr] = data[visualAttr]
-          }
+
+          channels[visualAttr] = arr
         }
         else if (refLayout) {
           /**
@@ -694,7 +1236,10 @@ export class Mark {
            * If the first element in dataAttr is present in the data, then we just assign it directly
            */
           if (Object.keys(data).includes(dataAttr[0])) {
-            channels[visualAttr] = data[dataAttr[0]]
+            if (callback)
+              channels[visualAttr] = this.handleCallback(currItem,queryItem, data)
+            else
+              channels[visualAttr] = data[dataAttr[0]]
           } else {
             /**
              * This runs in cases like x: 0, width: "5em"
@@ -703,6 +1248,14 @@ export class Mark {
             channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
           }
         }
+      }
+
+      if ("strokeWidth" in channels) {
+        let strokeWidths = channels["strokeWidth"]
+        let minimumWidth = Math.min(...strokeWidths)
+        let result = strokeWidths.map((width) => (width/minimumWidth) * 10)
+
+        channels["strokeWidth"] = result
       }
       return channels;
     }
@@ -718,18 +1271,12 @@ export class Mark {
      *                As such, this function must filter for the required data attributes to run callback on
      * @returns 
      */
-    handleCallback(channelItem: RawChannelItem, data) {
-      let foundStr = false
+    handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, data) {
       let resArr = []
-      let {callback, dataAttr} = channelItem
-
-      let datalen = data[dataAttr[0]].length
-
-      /**
-       * args is a 2D array. Each array within args corresponds to a visual attribute
-       * ie. if the callback is over ["x", "w"], then args has 2 arrays, one for x and one for w
-       */
-      let args = dataAttr.map(attr => data[attr])
+      let {mark, callback, dataAttr} = channelItem
+      let {columns} = queryItem
+      let src = mark == this ? this.src : mark.marktable
+      let datalen = data[columns[0].renameAs].length
 
       /**
        * For the number of datapoints available
@@ -740,17 +1287,22 @@ export class Mark {
        *    store the result of the callback function in res
        */
       for (let i = 0; i < datalen; i++) {
-        let currArgs = args.map(arr => arr[i])
-        for (let j = 0; j < currArgs.length; j++) {
-          if (typeof currArgs[j] == "string") { //em or px case
-            foundStr = true
+        let obj = {}
+        columns.forEach((column) => {
+          let attrIndex = src.schema.attrs.indexOf(column.dataAttr)
+
+          if (attrIndex == -1)
+            throw new Error(`Error in handleCallback: Could not find attribute ${column.dataAttr} in ${src.internalname}`)
+  
+          let attrType = src.schema.types[attrIndex]
+  
+          if (attrType == "num") {
+            obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
+          } else {
+            obj[column.dataAttr] = data[column.renameAs][i]
           }
-        }
-        currArgs = currArgs.map(elem => parseFloat(elem))
-        resArr.push(callback(...currArgs))
-      }
-      if (foundStr) {
-        resArr = resArr.map(elem => elem + "em") //hardcoded. need to handle both em and px case
+        })
+        resArr.push(callback(obj))
       }
       return resArr
     }
@@ -766,7 +1318,7 @@ export class Mark {
      * 
      * Look into mosaic and see how they do scales
      */
-    async doLayout(channels, crow, dummyroot) {
+    doLayout(channels, crow, dummyroot) {
       if (Object.keys(this.layouts).length == 0) {
         return channels
       }
@@ -782,14 +1334,15 @@ export class Mark {
       // run layouts
       let markrows = markdata(required, tmpMark, this.mark, channels);
       console.log("markrows", markrows)
+
       if (!R.all((a) => a in markrows, required)) {
         console.log("Missing required attr in markrows", required, R.keys(markrows))
       }
       for (const rl of rls) {
-        const layout = rl.layout(markrows, crow) 
+        const layout = rl.layout(markrows, crow)
         for (const va of rl.vattrs)  {
           channels[va] = { value: layout[va] }
-          this._scales[this.mark.alias2scale[va]] = { type: "identity" }
+          //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
       return channels
@@ -803,20 +1356,56 @@ export class Mark {
      * @returns
      * 
      * 
-     * 
-     * Construct a graph/DAG that is executed in order. Output of 1 node becomes input of following node
-     * 
      */
     makemark(data, crow, scales?) {
+
+      // if (this.marktype == "dot" || this.marktype == "point") {
+      //   this.options["x"] ??= {domain: [crow.x, crow.x + crow.width]}
+      //   //Set up x domain, range
+      //   // if (typeof this.mappings?.x == "number")
+      //   //   this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+        
+      //   //this.options["x"] = this.options["x"] == null ? {domain: [crow.x, crow.x + crow.width]} : {...this.options["x"], domain: [crow.x, crow.x + crow.width]}
+
+        
+      //   // this.options["x"] = this.options["x"] == null ? {range: [crow.x, crow.x + crow.width]} : {...this.options["x"], range: [crow.x, crow.x + crow.width]}
+      //   // console.log("options", this.options)
+      //   //Set up y domain, range
+      //   // if (typeof this.mappings?.y == "number")
+      //   //   this.options["y"] = this.options["y"] == null ? {domain: [crow.y, crow.y + crow.height]} : {...this.options["y"], domain: [crow.y, crow.y + crow.height]}
+        
+      //   // this.options["y"] = this.options["y"] == null ? {range: [crow.y, crow.y + crow.height]} : {...this.options["y"], range: [crow.y, crow.y + crow.height]}
+      // }
+
       let mark = OPlot.plot( {
-        ...this._scales, 
-        ...(scales??{}),
-        ...this.options,
         ...R.pick(['width', 'height'], crow),
+        ...(this.options),
         marks: [ 
           this.mark.klass(data[IDNAME], data)
-        ] })
-      
+        ],
+        ...(this._scales)})
+
+      this.overrideObservable(mark, data, crow)
+        
+      let markInfo = this.getMarkInfo(mark, data, crow)
+
+       /**
+        * we hide axes because each mark gets its own axis. 
+        * we don't want overlapping axes because that makes it hard to read
+        */
+      this.hideAxes(mark)
+
+
+      this.updateScales(mark)
+
+      return {mark, markInfo};
+    }
+
+    /**
+     * Observable does some strange things to our marks and sometimes we are better off
+     * modifying the svg elements returned by observable
+     */
+    overrideObservable(mark, data, crow) {
       if (this.marktype == "text" && ("textAnchor" in this.options)) {
         /**
          * check if this is a text mark and if the user specified textAnchor
@@ -835,24 +1424,66 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+        if (!("lineAnchor" in this.options)) {
+          mark.removeAttribute("text-anchor")
+        }
+
+        if ('textDecoration' in this.mappings) {
+          this.setTextDecoration(mark, data)
+        }
+      } else if (this.marktype == "link" && ("curve" in this.options)) {
+        this.setCurve(mark)
+      } else if (this.marktype == "square") {
+        this.setEqualWidthAndHeight(mark, data)
       }
-      
-      let markInfo = this.getMarkInfo(mark, data, crow)
 
-       /**
-        * we hide axes because each mark gets its own axis. 
-        * we don't want overlapping axes because that makes it hard to read
-        */
-      this.hideAxes(mark)
+      if (this.marktype != "text" && this.marktype != "dot") {
+        this.setXY(mark, data, crow)
+      }
 
+      if (this.marktype == "text" && this.ordering.length != 0) {
+        this.sortCoordinates(mark, data)
+      }
+    }
 
-      this.updateScales(mark)
+    /**
+     * This function is used for sorting text svgs because observable doesn't maintain
+     * order even when we use an orderby clause
+     */
+    sortCoordinates(mark, data) {
+      let thisref = this
 
-      return {mark, markInfo};
+      let coordinates = []
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll("*")
+        .each(function (d, i) {
+          let el = d3.select(this);
+          let elAttrs = el.node().attributes;
+          let {x,y} = thisref.getTransformInfo(el)
+          coordinates.push({x,y})
+      })
+
+      coordinates.sort((a,b) => {
+        if (a.x !== b.x) {
+          return a.x - b.x;
+        }
+        return a.y - b.y;
+      })
+
+      maybeselection(mark)
+      .selectAll(`g[aria-label='${this.mark.aria}']`)
+      .selectAll("*")
+      .each(function (d, i) {
+        let el = d3.select(this);
+        let newTransform = `translate(${coordinates[i].x}, ${coordinates[i].y})`
+
+        el.attr("transform", newTransform)
+    })
+
     }
 
     setXTranslate(mark, data) {
-      console.log("setXTranslate")
       let thisref = this
 
       maybeselection(mark)
@@ -893,8 +1524,8 @@ export class Mark {
       })
     }
 
-     setYTranslate(mark, data) {
-      console.log("setYTranslate")
+    setYTranslate(mark, data) {
+
       let thisref = this
 
       maybeselection(mark)
@@ -936,6 +1567,222 @@ export class Mark {
     }
 
     /**
+     * Observable does not support text-decoration
+     * @param mark 
+     * @param data 
+     */
+    setTextDecoration(mark, data) {
+      let channelItem: RawChannelItem = this.channels.find((item) => item.visualAttr == 'textDecoration')
+      let queryItem: QueryItem = toQueryItem(channelItem)
+      let dataAttr = channelItem.dataAttr
+      let callback = channelItem.callback
+      let thisref = this
+
+      maybeselection(mark)
+      .selectAll(`g[aria-label='${this.mark.aria}']`)
+      .selectAll("*")
+      .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let id = parseInt(el.attr("data__rav_id"))
+        let idIdx = data[IDNAME].indexOf(id)
+
+        el.attr("text-decoration", data["textDecoration"][idIdx])
+
+      })
+    }
+
+    setCurve(mark) {
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll("*")
+        .each(function (d, i) {
+          let el = d3.select(this);
+          let elAttrs = el.node().attributes;
+
+          for (let j = 0; j < elAttrs.length; j++) {
+              let attrName = elAttrs[j].name;
+              let attrValue = elAttrs[j].value;
+
+              if (attrName == "d") {
+                const regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                const match = attrValue.match(regex)
+
+                if (match) {
+                  let x1 = parseFloat(match[1])
+                  let y1 = parseFloat(match[2])
+                  let x2 = parseFloat(match[3])
+                  let y2 = parseFloat(match[4])
+
+                  //let {p1x, p1y} = calculateQuadraticBezierControlPoint(x1, y1, x2, y2)
+                  //let {p1x, p1y, p2x, p2y} = calculateCubicBezierControlPoints(x1, y1, x2, y2)
+                  let {p1x, p1y, p2x, p2y} = curveFunction(x1, y1, x2, y2)
+
+
+                  let curvedPath = `M${x1},${y1} C ${p1x},${p1y}, ${p2x},${p2y}, ${x2},${y2}`
+
+                  el.attr("d", `${curvedPath}`)
+                } else {
+                  /**
+                   * Should never end up here
+                   */
+                  throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                }
+              }
+          }
+      })
+    }
+
+    /**
+     * Assumes thar you want to make a square mark
+     * @param mark svg element
+     * @param data {x: [...], y: [...]} <- data was passed to observable
+     */
+    setEqualWidthAndHeight(mark, data) {
+      let width = null
+      let height = null
+
+      let defaultLen = 100
+
+      if ("width" in data) {
+        width = data.width[0]
+      } else {
+        width = defaultLen
+      }
+
+      if ("height" in data) {
+        height = data.height[0]
+      } else {
+        height = defaultLen
+      }
+
+      if (width != height) {
+        width = defaultLen
+        height = defaultLen
+      }
+
+      let selection = maybeselection(mark)
+        .selectAll(`g[aria-label="rect"]`)
+        .selectAll("*")
+
+      selection
+        .attr("width", width)
+        .attr("height", height)
+    }
+
+    /**
+     * This function takes care of setting x and y if the user has defined a constant for them
+     * This function also sets x and y only if the mark has not been passed through layout
+     * @param mark 
+     * @param data 
+     */
+    setXY(mark, data, crow) {
+      /**
+       * If this mark is going through some layout algorithm, we do not want to touch it
+       */
+      if (Object.keys(this.layouts).length > 0) {
+        return
+      }
+
+      if (!("x" in this.mappings) && !("y" in this.mappings))
+        return
+
+      let x = null
+      let y = null
+
+      if (("x" in this.mappings) && (typeof this.mappings.x === "number")) {
+        x = this.mappings.x
+      }
+
+      if (("y" in this.mappings) && (typeof this.mappings.y === "number")) {
+        y = this.mappings.y
+      }
+
+      let marktype = this.marktype == "square" ? "rect"  : this.marktype
+      let selection = maybeselection(mark)
+        .selectAll(`g[aria-label="${marktype}"]`) //hardcoded to deal only with rects for now. will need to make it generic later
+        .selectAll("*")
+      
+      if (x !== null) {
+        selection.attr("x", x)
+      }
+
+      if (y !== null) {
+        selection.attr("y", y)
+      }
+
+
+      if (x !== null && y !== null)
+        return
+
+      /**
+       * TODO: Center along x-axis
+       */
+
+      /**
+       * Center along y-axis
+       */
+      let coords = []
+      selection
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let markAttributes = {id: 0, x: 0, y: 0, width: null, height: null }
+
+        markAttributes.id = data[IDNAME][i]
+        markAttributes.x = parseFloat(el.attr("x"))
+        markAttributes.y = parseFloat(el.attr("y"))
+
+        if (el.attr("width"))
+          markAttributes.width = parseFloat(el.attr("width"))
+
+        if (el.attr("height"))
+          markAttributes.height = parseFloat(el.attr("height"))
+
+        coords.push(markAttributes)
+      })
+
+      let grouped = new Map<number, any[]>()
+
+      coords.forEach(coord => {
+        if (!grouped.has(coord.x)) {
+          grouped.set(coord.x, [])
+        }
+        grouped.get(coord.x).push(coord)
+      })
+
+
+
+      let centeredPoints = []
+      grouped.forEach((group, x) => {
+        let minY = -1
+        let maxY = -1
+
+        group.forEach(coord => {
+          if (minY == -1) {
+            minY = coord.y
+          } else {
+            minY = Math.min(minY, coord.y)
+          }
+          maxY = Math.max(maxY, coord.y + (coord.height ? coord.height : 0))
+          
+        })
+
+        let paddingTop = (crow.height - (maxY - minY))/2
+        let offset = ((paddingTop - minY) > 0) ? (paddingTop - minY) : 0
+        group.forEach(coord => {
+          centeredPoints.push({id: coord.id, x: coord.x, y: coord.y + offset})
+        })
+      })
+
+      selection
+      .each(function (d, i) {
+        let el = d3.select(this)
+        let newPoint = centeredPoints.find(p => p.id == data[IDNAME][i])
+        el.attr("y", newPoint.y)
+      })
+    }
+
+    /**
      * 
      * @param mark mark that was created in makemark
      * @param data has format {x: [...], y: [...], ...}
@@ -969,6 +1816,8 @@ export class Mark {
           let el = d3.select(this);
           let elAttrs = el.node().attributes;
           let markAttributes = {};
+          let value = el.text()
+          markAttributes["text"] = value
 
           for (let j = 0; j < elAttrs.length; j++) {
               let attrName = elAttrs[j].name;
@@ -980,16 +1829,21 @@ export class Mark {
                 let {x,y} = thisref.getTransformInfo(el)
                 markAttributes["x"] = x
                 markAttributes["y"] = y
-              } else {
-                markAttributes[attrName] = attrValue;
-              }
+              } else if (attrName == `data_${IDNAME}`) {
+                markAttributes[IDNAME] = parseInt(attrValue);
+              } else if (attrName == "font-size") {
+                markAttributes["fontSize"] = attrValue
+              } else if (attrName == "text-decoration") {
+                markAttributes["textDecoration"] = attrValue
+              } else
+                markAttributes[attrName] = attrValue
           }
           markInfo.push(markAttributes)
       })
       return markInfo
     }
 
-/**
+    /**
      * 
      * @param mark mark that was created in makemark
      * @param data has format {x: [...], y: [...], ...}
@@ -998,30 +1852,59 @@ export class Mark {
      */
     getMarkInfoNormal(mark, data, crow) {
       let markInfo = []
+      let marktype = this.marktype
+      let thisref = this
+      let ariaLabel = this.mark.aria == "square" ? "rect" : this.mark.aria
       
       maybeselection(mark)
-        .selectAll(`g[aria-label='${this.mark.aria}']`)
+        .selectAll(`g[aria-label='${ariaLabel}']`)
         .selectAll("*")
-        .attr(`data_${IDNAME}`, (d,i) => {data[IDNAME][i];})
+        .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
         .attr(`data_xoffset`, crow.x)  // TODO: this will not work for recursively nested data
         .attr(`data_yoffset`, crow.y)
         .each(function (d, i) {
-
           let el = d3.select(this);
-
-
           let elAttrs = el.node().attributes;
           let markAttributes = {};
 
           for (let j = 0; j < elAttrs.length; j++) {
               let attrName = elAttrs[j].name;
-              if (attrName == "transform") {
-                continue
-              }
-
               let attrValue = elAttrs[j].value;
 
-              markAttributes[attrName] = attrValue;
+              if (attrName == "transform")
+                continue
+              else if (attrName == `data_${IDNAME}`)
+                markAttributes[IDNAME] = parseInt(attrValue);
+              else if (attrName == "d" && marktype == "link") {
+                let regex
+                if ("curve" in thisref.options) {
+                  regex = /M([-\d.]+),([-\d.]+)\s+C\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+)/
+                  //regex = /M([-\d.]+),([-\d.]+)\s+Q([-\d.]+),([-\d.]+)\s+([-\d.]+),([-\d.]+)/
+                } else {
+                  regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                }
+                const match = attrValue.match(regex)
+
+                if (match) {
+                  let x1 = parseFloat(match[1])
+                  let y1 = parseFloat(match[2])
+                  let x2 = parseFloat(match[3])
+                  let y2 = parseFloat(match[4])
+
+                  markAttributes["x1"] = x1
+                  markAttributes["x2"] = x2
+                  markAttributes["y1"] = y1
+                  markAttributes["y2"] = y2
+                } else {
+                  /**
+                   * Should never end up here
+                   */
+                  throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                }
+              } else if (attrName) {
+                attrName = attrName.replace(/-/g, "_")
+                markAttributes[attrName] = attrValue;
+              }
           }
           markInfo.push(markAttributes)
       })
@@ -1148,22 +2031,92 @@ export class Mark {
         let va = curr_scaling_fn.va
         let scale = curr_scaling_fn.scale
 
-        //bookkeeping purposes?
-        if (!scale.getDomain()) {
-          let va_domain = mark.scale(va)?.domain
-          scale.setDomain(va_domain)
-        }
-
-        if (!scale.getType()) {
+        if (!scale.type) {
           let va_type = mark.scale(va)?.type
-          scale.setType(va_type)
+          scale.type = va_type
         }
 
         // this is the update we actually care about because range affects the position on screen
-        if (!scale.getRange()) {
+        if (!scale.range) {
           let va_range = mark.scale(va)?.range
-          scale.setRange(va_range)
+          scale.range = va_range
         }
+      }
+    }
+
+    prepareMarkInfo(markInfo) {
+      for (let i = 0; i < markInfo.length; i++) {
+        for (let [key,value] of Object.entries(markInfo[i])) {
+          /**
+           * Turn cx, x1 into x, cy, y1 into y etc.
+           * We don't want to insert a cx column into the marktable
+           * Eg.
+           * because some other mark may want to get x attribute from this mark
+           * and we want that other mark to find x attribute
+           */
+          if (key == "cx") {
+            markInfo[i]["x"] = value
+            key = "x"
+            delete markInfo[i]["cx"]
+          }
+
+          if (key == "cy") {
+            markInfo[i]["y"] = value
+            key = "y"
+            delete markInfo[i]["cy"]
+          }
+
+          if (parseFloat(value) || key == "x" || key == "y" || key == "data_xoffset" || key == "data_yoffset") {
+            let numValue = parseFloat(value)
+            markInfo[i][key] = numValue
+          }
+        }
+         /**
+         * Populate markInfoCache here so that other marks can reference it if needed
+         */
+
+        let obj = {}
+        let data_xoffset = markInfo[i]["data_xoffset"]
+        let data_yoffset = markInfo[i]["data_yoffset"]
+
+        if (this.marktype == "link") {
+          let x1 = markInfo[i]["x1"]
+          let x2 = markInfo[i]["x2"]
+          let y1 = markInfo[i]["y1"]
+          let y2 = markInfo[i]["y2"]
+
+          obj = {x1, y1, x2, y2}
+        } else {
+          let x = markInfo[i]["x"]
+          let y = markInfo[i]["y"]
+          obj = {x,y}
+        }
+
+        if (this.marktype == "text") {
+          obj["text"] = markInfo[i]["text"]
+
+          if ("textDecoration" in markInfo[i]) {
+            obj["textDecoration"] = markInfo[i]["textDecoration"]
+          }
+        }
+
+        obj["data_xoffset"] = data_xoffset
+        obj["data_yoffset"] = data_yoffset
+
+        if (markInfo[i]["width"])
+          obj["width"] = markInfo[i]["width"]
+
+        if (markInfo[i]["height"])
+          obj["height"] = markInfo[i]["height"]
+
+        obj[IDNAME] = markInfo[i][IDNAME]
+        this.markInfoCache.set(markInfo[i][IDNAME], obj)
+
+        /**
+         * Delete data_xoffset and data_yoffset as they do not need to be stored in database
+         */
+        delete markInfo[i]["data_xoffset"]
+        delete markInfo[i]["data_yoffset"]
       }
     }
 
@@ -1174,39 +2127,20 @@ export class Mark {
      * @returns 
      */
     async createMarkTable(markInfo) {
-      if (markInfo.length == 0)
-        return
+      const tname = this.src.internalname + "_marktable" + this.id;
 
-      /**
-       * values is a 2d array. each inner array represents a row to insert into the marktable
-       */
-      let values = this.valuesFromMarkInfo(markInfo)
-
-      /**
-       * This fills up the rav_id column
-       */
-      for (let i = 0; i < values.length; i++) {
-        values[i].push(i)
-      }
-
-      /**
-       * tuples is now in sql query format (...), (...), (...)
-       */
-      let tuples = values.map((row) => `(${row.join(", ")})`).join(", ")
-      let q = `${tuples}`
-      const tname = this.src.internalname + "_marktable" + this.id++;
-
-      if (!this.c.db.tables.has(tname)) { //create non existent table
+      if (!this.marktable) {
         await this.createNewMarkTable(markInfo, tname)
-      } else { //check if schema has changed. If yes, recreate the marktable
-        let table = this.c.db.tables.get(tname)
-
-        if (table.schema.attrs.length != values[0].length) {
-          await this.c.db.conn.exec(`DROP TABLE ${tname}`)
-          await this.createNewMarkTable(markInfo, tname)
-        }
+      } else {
+        /**
+         * This is specifically for ER diagram where we rerender and get fresh markinfo, so we drop all the old information
+         */
+        await this.c.db.conn.exec(`TRUNCATE ${tname}`)
       }
-      await this.c.db.insertIntoTable(q, tname)
+
+      let tuples = this.valuesFromMarkInfo(markInfo).map((row) => `(${row.join(", ")})`).join(", ")
+
+      await this.c.db.conn.exec(`INSERT INTO ${tname} VALUES ${tuples}`)
     }
 
     /**
@@ -1222,18 +2156,6 @@ export class Mark {
           columnNames.push(`${k} int primary key`)
         } else {
 
-          /*
-          turns cx, x1 into x, cy, y1 into y etc.
-          We don't want to insert a cx column into the marktable
-          Eg.
-          because some other mark way want to get x attribute from this mark
-          and we want that other mark to find x attribute
-          */
-          let aliasObj = this.mark.alias2scale
-          if (Object.keys(aliasObj).includes(k)) {
-            k = aliasObj[k] 
-          }
-
           if (isNaN(Number(v))) {
             columnNames.push(`${k} string`)
           } else {
@@ -1245,7 +2167,7 @@ export class Mark {
       let marktable = await this.c.db.createTable(q, tname)
 
       marktable.keys(IDNAME)
-      let fkConstraint = new FKConstraint({t1: marktable, X: IDNAME, t2: this.src, Y: IDNAME})
+      let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
       this.c.db.addConstraint(fkConstraint)
       this.marktable = marktable
     }
@@ -1257,10 +2179,8 @@ export class Mark {
      */
     valuesFromMarkInfo(markInfo) {
       let values = []
-
       for (const obj of markInfo) {
         let rowValues = []
-
         for (const [k,v] of Object.entries(obj)) {
             if (k == IDNAME) {
               rowValues.push(parseInt(obj[k]));
@@ -1276,6 +2196,29 @@ export class Mark {
       }
       return values
     }
+
+    pickupReferences(rows) {
+      for (let i = 0; i < this.channels.length; i++) {
+        let {mark, visualAttr, isGet} = this.channels[i]
+        let queryItem = toQueryItem(this.channels[i])
+
+        if (isGet) {
+          let ref = `${queryItem.columns[0].renameAs}_ref`
+          /**
+           * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
+           */
+          for (let i = 0; i < rows.length; i++) {
+            if (this.referencedMarks.has(rows[i][IDNAME])) {
+              let obj = this.referencedMarks.get(rows[i][IDNAME])
+              obj[`${visualAttr}_ref`] = rows[i][ref]
+            } else {
+              this.referencedMarks.set(rows[i][IDNAME], {[`${visualAttr}_ref`]: rows[i][ref]})
+            }
+          }
+        }
+      }
+    }
+
 
     /**
      * data has format [{}, {}, {}], where each object represents attributes for a single row.
@@ -1325,4 +2268,73 @@ export class Mark {
       }
       return res
     }
+}
+
+function curveFunction(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+) {
+  let p1x = x1+(x2-x1)/2
+  let p2x = p1x
+  let p1y = y1
+  let p2y = y2
+
+  return {p1x, p1y, p2x, p2y}
+}
+
+function calculateCubicBezierControlPoints(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+  offsetFactor: number = 1
+): { p1x: number, p1y: number, p2x: number, p2y: number } {
+  const midX = (x1 + x2) / 2;
+  const midY = (y1 + y2) / 2;
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  const perpendicularDx = -dy;
+  const perpendicularDy = dx;
+
+  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
+  const normalizedPerpendicularDx = perpendicularDx / length;
+  const normalizedPerpendicularDy = perpendicularDy / length;
+
+  const p1x = midX + offsetFactor * 2 * normalizedPerpendicularDx;
+  const p1y = midY + offsetFactor * 2 * normalizedPerpendicularDy;
+
+
+  const p2x = midX + offsetFactor * 2 * -normalizedPerpendicularDx;
+  const p2y = midY + offsetFactor * 2 * -normalizedPerpendicularDy;
+
+  return { p1x, p1y, p2x, p2y };
+}
+
+function calculateQuadraticBezierControlPoint(
+  x1: number, y1: number, 
+  x2: number, y2: number, 
+  offsetFactor: number = 0.7
+): { p1x: number, p1y: number } {
+  // Calculate the midpoint between x1, y1 and x2, y2
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+
+  // Calculate a perpendicular direction (rotate by 90 degrees)
+  const perpendicularDx = -dy;
+  const perpendicularDy = dx;
+
+  // Normalize this perpendicular vector
+  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
+  const normPerpendicularDx = perpendicularDx / length;
+  const normPerpendicularDy = perpendicularDy / length;
+
+  // Place the control point off-center by offsetFactor
+  const midpointX = (x1 + x2) / 2;
+  const midpointY = (y1 + y2) / 2;
+
+  // Apply the perpendicular offset
+  const p1x = midpointX + offsetFactor * normPerpendicularDx;
+  const p1y = midpointY + offsetFactor * normPerpendicularDy;
+
+  return { p1x, p1y };
 }

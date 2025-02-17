@@ -103,53 +103,6 @@ export class Table {
       keys: this._keys })
   }
 
-  async chainjoin(tables: Table[], 
-                  ons: Array<{ left: string; right: string, leftname: string, rightname: string }>, 
-                  select = null, displayname = null, 
-                  refmarks: Map<string,Map<string, string>>) {
-  
-    let query = Query.from({[this.internalname]: this.internalname})
-    
-    for (let i = 0; i < tables.length; i++) {
-        const table = tables[i];
-        const on = ons[i];
-        
-        const where = and(eq(column(on.leftname, on.left), column(on.rightname, on.right)))
-
-        query = query.from({[table.internalname]: table.internalname}).where(where);
-    }
-    
-    // Build select fields if not provided
-    if (select == null) {
-        select = {};
-        this.schema.attrs.forEach((a) => {
-            select[a] = column([this.internalname], a);
-        });
-        
-        tables.forEach((table, i) => {
-          for (let i = 0; i < table.schema.attrs.length; i++) {
-            let a = table.schema.attrs[i]
-            if (a == "data_id" || a == "data__rav_id") 
-              continue
-            if (refmarks.has(table.internalname) && refmarks.get(table.internalname).has(a)) {
-              select[refmarks.get(table.internalname).get(a)] = column([table.internalname], a)
-            } else {
-              select[a] = column([table.internalname], a)
-            }
-          }
-        });
-    }
-
-    query.select(select)
-
-    let resultTable = await Table.fromSql(this.db, query, displayname ?? `${this.internalname}_${tables.map(t => t.tbl.internalname).join('_')}`);
-    
-    resultTable.name(displayname);
-    resultTable.keys(IDNAME);
-
-    return resultTable;
-}
-
   isEmpty(obj: Object): boolean {
     return Object.keys(obj).length === 0;
   }

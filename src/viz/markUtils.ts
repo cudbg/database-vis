@@ -135,10 +135,6 @@ export function markels(root, nodetype) {
 *         The attribute `cols.n` contains the cardinality.
 */
 export function markdata(attrs, root, markinfo, data={}) {
-    console.log("attrs", attrs)
-    console.log("root", root)
-    console.log("markInfo", markinfo)
-    console.log("data", data)
     const spatialAttrs = markinfo.domprops;
     attrs ??= [];
     attrs = R.uniq(attrs.concat(spatialAttrs))
@@ -146,8 +142,11 @@ export function markdata(attrs, root, markinfo, data={}) {
     cols[IDNAME] = [];
     cols['data_xoffset'] = []
     cols['data_yoffset'] = []
+
+    let ariaLabel = markinfo.aria == "square" ? "rect" : markinfo.aria
+
     let g = maybeselection(root)
-        .selectAll(`g[aria-label='${markinfo.aria}']`)
+        .selectAll(`g[aria-label='${ariaLabel}']`)
         .selectAll("*").each(function() {
         let sel = select(this);
         let i = sel.datum() as number;
@@ -163,7 +162,6 @@ export function markdata(attrs, root, markinfo, data={}) {
                 sel.attr(a) ?? 
                 (sel.style(a)!=''?sel.style(a):null))))
     })
-    console.log("cols markdata", cols)
 
     // spatial attributes should be rounded to ints
     spatialAttrs.forEach((a) => {
@@ -173,7 +171,8 @@ export function markdata(attrs, root, markinfo, data={}) {
         : markinfo.alias2scale[a]=='y'
         ? cols['data_yoffset']
         : null);
-        cols[a] = cols[a].map((v,i) => (offset? +offset[i]:0) + (v? Math.round(v) : v))
+
+        cols[a] = cols[a].map((v,i) => (offset? +offset[i]:0) + (v? Math.round(v) : v))        
     })
     delete cols['data_xoffset']
     delete cols['data_yoffset']

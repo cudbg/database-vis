@@ -151,12 +151,12 @@ export class Database {
     return t;
   }
 
-  async insertIntoTable(q, name: string) {
-    let sql = `INSERT INTO ${name} VALUES ${q}`
-    await this.conn.exec(sql)
-    const ret = await this.tableFromConnection(name)
-    return ret
-  }
+  // async insertIntoTable(q, name: string) {
+  //   let sql = `INSERT INTO ${name} VALUES ${q}`
+  //   await this.conn.exec(sql)
+  //   const ret = await this.tableFromConnection(name)
+  //   return ret
+  // }
 
   async loadFromConnection(...tablenames) {
     (await this.tablesFromConnection(tablenames))
@@ -184,13 +184,10 @@ export class Database {
     let schemas = {};
     let res = await this.conn.exec(q);
 
-    console.log("res tablesFromConnection", res)
     res.forEach(({table_name, column_name, data_type}) => {
       schemas[table_name] ??= new Schema();
       schemas[table_name].push(column_name, coercetype(data_type));
     })
-
-    console.log("schemas", schemas)
 
     for (const [name, schema] of Object.entries(schemas)) {
       if (!schema.attrs.includes(IDNAME)) {
@@ -243,12 +240,20 @@ export class Database {
     for (const [cname, c] of Object.entries(this.constraints)) {
       if (!(c instanceof FKConstraint)) continue
       let {t1,t2,card} = c;
-      if (card == Cardinality.ONEONE || card == Cardinality.ONEMANY) {
+      if (card == Cardinality.ONEONE) {
         edges[t1.internalname] ??= [];
         edges[t2.internalname] ??= [];
         edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
-      } else {
+      } else if (card == Cardinality.ONEMANY) {
+        edges[t1.internalname] ??= [];
+        edges[t2.internalname] ??= [];
+        /**
+         * honestly unsure about whether to include this line
+         * Ideally we always want to go from N to 1, but this line goes from 1 to N, which can lead to row explosion
+         */
+        //edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
     }
@@ -268,11 +273,11 @@ export class Database {
    
     let edges = this.getFkDependencyGraph();
 
+
     // bfs to search from src to dst and return path of constraints
     let paths = [];
     let seen = {};
     let queue = [{ src: source, dst: destination, path: [] }];
-    console.log({ src: source, dst: destination, path: [] })
 
     while (queue.length > 0) {
       let { src, dst, path } = queue.shift();
@@ -285,6 +290,62 @@ export class Database {
     }
     paths = R.uniqBy((path) => R.pluck("id",path).join("--"), paths)
     return paths;
+  }
+
+
+  dfs(edges, curr: string, destination: string, visited: Set<string>, path: FKConstraint[], currEdge: FKConstraint) {
+    visited.add(curr)
+    path.push(currEdge)
+
+    if (curr == destination)
+      return path
+
+
+    for (let { dst:_dst, c } of (edges[curr]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination, visited, path, c)
+        if (result)
+          return result
+      }
+    }
+    path.pop()
+    visited.delete(curr)
+    return null
+  }
+
+  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    let edges = this.getFkDependencyGraph()
+
+    let visited = new Set<string>()
+    visited.add(source.internalname)
+    let path = [searchConstraint]
+    let start = source.internalname
+
+
+    // if (searchConstraint.card == Cardinality.ONEMANY) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else if (searchConstraint.t1.internalname != source.internalname) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else {
+    //   start = searchConstraint.t2.internalname
+    //   visited.add(searchConstraint.t2.internalname)
+    // }
+
+    if (start == destination.internalname)
+      return path
+
+    for (let { dst:_dst, c } of (edges[start]??[])) {
+      if (!visited.has(_dst)) {
+        let result = this.dfs(edges, _dst, destination.internalname, visited, path, c)
+        if (result)
+          return result
+      }
+    }
+
+    return null
+
   }
 
   constraint(name) {
@@ -363,15 +424,6 @@ export class Database {
     let rest = t.schema.except([...attrs, IDNAME]).attrs;
     const fkattr = (attrs.length==1)? attrs[0] : `${dimname}_id`;
 
-    if (!t.schema.attrs.includes(fkattr)) {
-      await this.conn.exec(`ALTER TABLE ${t.internalname} ADD COLUMN ${fkattr} INTEGER;`)
-      let where_clauses = attrs.map((a) => `${t.internalname}.${a} = ${newDim.internalname}.${a}`)
-      let where_stmt = where_clauses.join(" AND ")
-      await this.conn.exec(`UPDATE ${t.internalname}
-                            SET ${fkattr} = ${newDim.internalname}.${IDNAME}
-                            FROM ${newDim.internalname}
-                            WHERE ${where_stmt}`)
-    }
     let q = Query
       .from({l:t.internalname, r:newDim.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column('r',a)))))
@@ -381,32 +433,34 @@ export class Database {
     let newFact = await this.fromSql(q, factname)
     newFact.name(factname)
     newFact.keys(IDNAME)
-    //let c1 = new FKConstraint({t1: t, X: fkattr, t2: newDim, Y: IDNAME})
-    let c2 = new FKConstraint({t1: newFact, X: fkattr, t2: newDim, Y: IDNAME})
+
+    let c1 = new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]})
+    let c2 = new FKConstraint({t1: newFact, X: [fkattr], t2: newDim, Y: [IDNAME]})
     this.setTable(newDim)
     this.setTable(newFact)
-    //this.addConstraint(c1)
+    this.addConstraint(c1)
     this.addConstraint(c2)
 
-    let intertablename = `${t.internalname}_inter_${fkattr}`
-    q = Query
-      .from({a:newDim.internalname, b:newFact.internalname, c:t.internalname})
-      .where(and(attrs.map((a) => eq(column('a',a),column('c',a)))))
-      .where(and(rest.map((a) => eq(column('b',a),column('c',a)))))
-      .select({leftid: column('a', IDNAME)})
-      .select({rightid: column('b', IDNAME)})
-      .select({[IDNAME]: column('c',IDNAME)})
-    
-    let interTable = await this.fromSql(q, intertablename)
-    interTable.name(intertablename)
-    interTable.keys(IDNAME)
-    let c3 = new FKConstraint({t1: t, X: IDNAME, t2: interTable, Y: IDNAME})
-    this.addConstraint(c3)
-    let c4 = new FKConstraint({t1: interTable, X: "leftid", t2: newDim, Y: IDNAME})
-    this.addConstraint(c4)
-    let c5 = new FKConstraint({t1: interTable, X: "rightid", t2: newFact, Y: IDNAME})
-    this.addConstraint(c5)
-    return [newDim, newFact, interTable]
+    /**
+     * If there exists constraints from base table with attrs that were normalized out,
+     * we need to create constraints from newDim to the table that is related to base table
+     * 
+     * We do not need do this for newFact because newFact does not contain attrs
+     */
+    for (const [cname, constraint] of Object.entries(this.constraints)) {
+      if (constraint.t2.internalname == name) {
+        if (constraint.Y.every(col => attrs.includes(col))) {
+          let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newDim, Y: constraint.Y})
+          this.addConstraint(c)
+        }
+      } else if (constraint.t1.internalname == name) {
+        if (constraint.X.every(col => attrs.includes(col))) {
+          let c = new FKConstraint({t1: newDim, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
+          this.addConstraint(c)
+        }
+      }
+    }
+
   }
 
 
@@ -428,7 +482,7 @@ export class Database {
 
       this.setTable(new_table)
       new_table.keys(IDNAME)
-      constraints.push({t1: null, X: fkattr, t2: new_table, Y: IDNAME})
+      constraints.push({t1: null, X: [fkattr], t2: new_table, Y: [IDNAME]})
       q
       .from({[dimname as string]: new_table.internalname})
       .where(and(attrs.map((a) => eq(column('l',a),column(dimname,a)))))
@@ -443,21 +497,93 @@ export class Database {
       c.t1 = newFact;
       this.addConstraint(new FKConstraint(c))
     }
+
+    this.addConstraint(new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]}))
+  }
+
+    /**
+   * It would be really nice if we had a function that allowed the user to combine columns 
+   * from different tables to create a new table
+   * Something like
+   * db.join({t1, t2}, {tablename: column, ...}, {x: y, ...} <new table name>)
+   * 
+   * t1: left table name
+   * t2: right table name
+   * 
+   * {x: y, ...}: obj that specifies what columns to join on. x is a column in t1. y is a column in t2
+   * 
+   * {tablename: column}: obj that specify what columns to select from what table.
+   *                        tablename must be either t1 or t2
+  */
+  async join({t1, t2}, selectCols: {t1Cols: {renameAs: string, col: string}[], t2Cols: {renameAs: string, col: string}[]}, joinKeys: string[][], newTableName: string) {
+    let table1 = this.table(t1)
+    let table2 = this.table(t2)
+
+    if (!table1) {
+      throw new Error(`t1 ${t1} does not exist`)
+    }
+
+    if (!table2) {
+      throw new Error(`t2 ${t2} does not exist`)
+    }
+
+    let query = new Query()
+    query = query.distinct()
+
+    let {t1Cols, t2Cols} = selectCols
+
+    t1Cols.forEach((obj,i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table1.internalname, col)})
+    })
+
+    t2Cols.forEach((obj, i) => {
+      let {renameAs, col} = obj
+      query = query.select({[renameAs]: column(table2.internalname, col)})
+    })
+
+    joinKeys.forEach((join) => {
+      let left = join[0]
+      let right = join[1]
+
+      query = query.where(eq(column(table1.internalname, left), column(table2.internalname, right)))
+    })
+
+    query = query.select({[IDNAME]: idexpr})
+    query = query.from(table1.internalname)
+    query = query.from(table2.internalname)
+
+    let newTable = await this.fromSql(query, newTableName)
+    newTable.name(newTableName)
+    newTable.keys(IDNAME)
+    this.setTable(newTable)
+
+    t1Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table1, X: [col], t2: newTable, Y: [renameAs]})
+      this.addConstraint(c)
+    })
+
+    t2Cols.forEach((obj) => {
+      let {renameAs, col} = obj
+      let c = new FKConstraint({t1: table2, X: [col], t2: newTable, Y: [renameAs]})
+      this.addConstraint(c)
+    })
   }
 
 
-  async appendID(name) {
-    await this.conn.exec(`ALTER TABLE ${name} ADD COLUMN ${IDNAME} INTEGER;`)
+  async appendID(tablename) {
+    await this.conn.exec(`ALTER TABLE ${tablename} ADD COLUMN ${IDNAME} INTEGER;`)
     await this.conn.exec(`CREATE TEMPORARY TABLE temp_table AS
                           SELECT
                               *,
                               row_number() OVER () - 1 AS new_id
-                          FROM ${name};`)
+                          FROM ${tablename};`)
     
-    await this.conn.exec(`UPDATE ${name}
+    await this.conn.exec(`UPDATE ${tablename}
                           SET ${IDNAME} = temp_table.new_id
                           FROM temp_table
-                          WHERE ${name}.rowid = temp_table.rowid;`)
+                          WHERE ${tablename}.rowid = temp_table.rowid;`)
     await this.conn.exec("DROP TABLE temp_table")
   }
 }

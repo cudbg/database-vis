@@ -30,6 +30,7 @@ export function propX(attr) { return makelayoutspecs(RLX, attr) }
 export function eqY() { return makelayoutspecs(RLY) }
 export function propY(attr) { return makelayoutspecs(RLY, attr) }
 export function sq(attr) { return makelayoutspecs(RLSQ, attr) }
+export function grid(attr, numCols) { return makelayoutspecs(RLGRID, [attr,numCols]) }
 
 class RefBase {
   t: Table;
@@ -200,8 +201,11 @@ export class RLSQ extends RLSpaceFilling {
     treemap.size([width, height])
     treemap.padding(this.padding)
 
-    let root = d3.hierarchy({ children: data[this.dattrs[0]] })
-    root.sum((d)=>+d)
+    let hierarchyData = { children: data[this.dattrs[0]].map((elem) => ({"name": elem, "value": 1})) }
+
+    let root = d3.hierarchy(hierarchyData)
+
+    root.sum((d)=>d.value)
     treemap(root)
 
     let x1 = R.pluck("x0", root.children as any[])
@@ -216,6 +220,43 @@ export class RLSQ extends RLSpaceFilling {
     })
   }
 }
+
+export class RLGRID extends RLSpaceFilling {
+  static fills = ["x", "y", "width", "height", 'x1', 'x2', 'y1', 'y2'];
+  numCols: number
+
+  constructor(dattrs, vattrs?) {
+    if (Array.isArray(dattrs) && dattrs.length > 2) 
+      throw new Error("Expects 1 data attribute");
+    if (typeof dattrs[1] != "number") {
+      throw new Error("Needs a number for number of columns");
+    }
+    super(dattrs[0], vattrs);
+    this.numCols = dattrs[1]
+    this.required = dattrs;
+  }
+
+  layout(data, {width, height, minx=0, miny=0}) {
+    console.log("layout data", data)
+    console.log("width", width)
+    console.log("height", height)
+    /**
+     * Need null guard
+     */
+    let length = data["x"].length
+    let baseWidth = width/this.numCols
+    let baseHeight = height / Math.ceil(length/this.numCols)
+    let res = {}
+    for (let i = 0; i < length; i++) {
+      let col = i % this.numCols
+      let row = Math.floor(i / this.numCols)
+      data["x"][i] = col * baseWidth
+      data["y"][i] = row * baseHeight
+    }
+    return data
+  }
+}
+
 
 class RLPhysics extends RefLayout {
   constructor(dattrs, vattrs) {

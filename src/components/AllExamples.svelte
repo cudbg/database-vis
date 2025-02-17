@@ -37,11 +37,6 @@
         picture: 'layout',
         route: 'layout'
       },
-      // {
-      //   title: 'Callback Example',
-      //   picture: 'callback_example',
-      //   route: 'callback_example'
-      // },
       {
         title: 'Taxonomy Hierarchy',
         picture: 'taxonomy_hier',

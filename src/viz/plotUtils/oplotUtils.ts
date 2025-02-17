@@ -32,7 +32,14 @@ export class oplotUtils {
           klass: OPlot.frame,
         },
         line: {
-          klass: OPlot.line,
+          klass: OPlot.lineY,
+
+          x: ['x1', 'x2'],
+          y: ['y1', 'y2'],
+          shortcuts: {
+            start: ['x1', 'y1'],
+            end: ['x2', 'y2']
+          }
         },
         link: {
           klass: OPlot.link,
@@ -48,6 +55,12 @@ export class oplotUtils {
           x: ['cx'],
           y: ['cy'],
           domprops: ['cx', 'cy']
+        },
+        square: {
+          klass: OPlot.rect,
+          x: ['x1', 'x2'],
+          y: ['y1', 'y2'],
+          domprops: ['x', 'y', 'width', 'height']
         },
         rect: {
           klass: OPlot.rect,
