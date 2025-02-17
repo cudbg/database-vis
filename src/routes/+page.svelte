@@ -150,21 +150,13 @@
         await db.loadFromConnection();
         let canvas
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
+
         let c = new Canvas(db, {width: 800, height: 500})
-=======
-=======
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
         /**START OF ANALYSIS */
 
         /**
          * GOAL:
-<<<<<<< HEAD
-         * Concretely use the dataset you have to showcase an analysis that goes through 
-=======
          * Concretely use thr dataset you have to showcase an analysis that goes through 
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
          * each of the example types in the main normalization vis example figure in the paper 
          * along with data transform, filter, and highlight
          * 
@@ -203,7 +195,6 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-<<<<<<< HEAD
             let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r:"cp"}, {x: {range: [10, 990]}})
             let ageLabel = c.text("heart_reduced", {x: "age", y: 0, text: "age", fontSize: 10}, {textAnchor: "bottom"})
             let thalachlabel = c.text("heart_reduced", {x: 0, y: "thalach", text: "thalach", fontSize: 5}, {textAnchor: "left"})
@@ -211,13 +202,13 @@
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
         if (0) {
-=======
+
             let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"}, {x: {range: [10, 990]}})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
-        if (1) {
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
+        if (0) {
+
             /**
              * TIMECARD:
              * To see the correlations between the columns in the table, we can use a timecard/ punchcard design
@@ -259,17 +250,9 @@
             // let sb = c.linear("sb")
             let cpLabel = c.text("cp", {x: IDNAME, y: 0, text: "cp", fontSize: 20}, {textAnchor: "bottom"})
             cpLabel.orderBy("cp")
-<<<<<<< HEAD
-            // let ageLabel = c.text("age", {x: IDNAME, y: 0, text: "age", fontSize: 10}, {textAnchor: "bottom"})
-            // ageLabel.orderBy("age")
-            let thalachLabel = c.text("thalach", {x: 0, y: IDNAME, text: "thalach"}, {textAnchor: "left"})
-            thalachLabel.orderBy("thalach",true)
-            let dots = c.dot("combined", {x: cpLabel.get("cp","x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
-=======
             let thalachLabel = c.text("thalach", {x: 0, y: IDNAME, text: "thalach"}, {textAnchor: "left"})
             thalachLabel.orderBy("thalach",true)
             let dots = c.dot("combined", {x: cpLabel.get("cp", "x"), y: thalachLabel.get("thalach", "y"), fill: "target"})
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 1 */
@@ -298,11 +281,7 @@
             let dotMarks = []
 
             attrs.forEach((attr, i) => {
-<<<<<<< HEAD
-                let mark = c.dot(attr, {x: i * 250, y: attr}, {x:{domain: [10, 1090]}})
-=======
                 let mark = c.dot(attr, {x: i * 200, y: attr}, {x:{domain: [10, 990]}})
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
                 let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
                 dotMarks.push(mark)
             })
@@ -389,11 +368,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-<<<<<<< HEAD
         if (1) {
-=======
-        if (0) {
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -418,11 +393,7 @@
             await db.normalizeMany("heart_reduced", attrs.map(a => [a]),
                 {dimnames: attrs, factname: "combined"})
             
-<<<<<<< HEAD
-            let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize:8})
-=======
             let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
             let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
             
             await c.createCountTable("combined", ["age", "thalach"], "age_thalach_count")
@@ -430,6 +401,18 @@
             await c.createCountTable("combined", ["cp", "target"], "cp_target_count")
 
             let squareMarks = []
+
+            // function getMaxCount(tableName: string): number {
+            //     return Math.max(db.tables.get(tableName).map(d => d.count));
+            // }
+
+            // function scaleStrokeWidth(count: number, tableName: string): number {
+            //     const maxCount = getMaxCount(tableName);
+            //     console.log(`Max count is ${maxCount}`)
+            //     const baseWidth = 1; // Minimum stroke width
+            //     const maxWidth = 5;  // Maximum stroke width
+            //     return maxCount > 0 ? baseWidth + (count / maxCount) * (maxWidth - baseWidth) : baseWidth;
+            // }
 
             attrs.forEach((attr, i) => {
                 let table = attr
@@ -449,10 +432,6 @@
                         text: attr
 
                     }, {lineAnchor: "middle"})
-<<<<<<< HEAD
-                let xlabel = c.text(table, {x: mark.get(attr, ["x","width"],(d) => d.x + d.width/2), y: 0, text: {constant: attr}, fontSize:15}, {textAnchor: "bottom"})
-=======
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
                 if (attr == "age_bucket") {
                     mark.filter({operator: ">=", col: "min_age", value: 40})
                     mark.filter({operator: "<=", col: "max_age", value: 63})
@@ -464,32 +443,12 @@
                 squareMarks.push(mark)
             })
 
-<<<<<<< HEAD
-            function getMaxCount(tableName: string): number {
-                return Math.max(db.tables.get(tableName).map(d => d.count));
-            }
-
-            function scaleStrokeWidth(count: number, tableName: string): number {
-                const maxCount = getMaxCount(tableName);
-                console.log(`Max count is ${maxCount}`)
-                const baseWidth = 1; // Minimum stroke width
-                const maxWidth = 5;  // Maximum stroke width
-                return maxCount > 0 ? baseWidth + (count / maxCount) * (maxWidth - baseWidth) : baseWidth;
-            }
-
-=======
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
             for (let i = 0; i < attrs.length - 1; i++) {
                 let leftMark = squareMarks[i]
                 let rightMark = squareMarks[i + 1]
                 let leftAttr = attrs[i]
                 let rightAttr = attrs[i + 1]
                 let table = "combined"
-<<<<<<< HEAD
-            
-=======
-
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
                 let mappingObj = 
                 {
                     x1: leftMark.get(leftAttr, ["x", "width"], (d) => d.x + d.width),
@@ -506,39 +465,22 @@
                     mappingObj["stroke"] = "count"
                 } else if (leftAttr == "age") {
                     table = "age_thalach_count"
-<<<<<<< HEAD
-                    mappingObj["strokeWidth"] = "(d: any) => scaleStrokeWidth(d.count, table)"
-=======
                     mappingObj["strokeWidth"] = "count"
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
                     mappingObj["opacity"] = "count"
                     mappingObj["stroke"] = "count"
                 } else if (leftAttr == "cp") {
                     table = "cp_target_count"
-<<<<<<< HEAD
-                    mappingObj["strokeWidth"] = "(d: any) => scaleStrokeWidth(d.count, table)"
-=======
                     mappingObj["strokeWidth"] = "count"
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
                     mappingObj["opacity"] = "count"
                     mappingObj["stroke"] = "count"
                 }
 
-<<<<<<< HEAD
-                let linkMark = c.link(table, mappingObj, {curve: "True"})
-=======
                 let linkMark = c.link(table, mappingObj, {curve: true})
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
 
                 // if (leftAttr == "thalach" || leftAttr == "age") {
                 //     linkMark.filter({operator: ">=", col: "count", value: 2})
                 // } 
             }
-<<<<<<< HEAD
-            
-=======
-
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
         }
 
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
@@ -769,11 +711,7 @@
             await c.hier("heart_reduced", ["target", "cp", "sex"])
 
             let targetRects = c.rect("target", {x: "target", y: 0, stroke: "black", fill: "none"})
-<<<<<<< HEAD
-            let cpRects = c.rect("cp", {...grid("cp", 1)("x","y"), stroke: "black", fill: "none"})
-=======
             let cpRects = c.rect("cp", {...grid("cp", 2)("x","y"), stroke: "black", fill: "none"})
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
             let dots = c.dot("sex", {x: "thalach", y: "age", symbol: "sex"})
 
             c.nest(cpRects, targetRects)
@@ -797,22 +735,8 @@
                 }
             )
 
-<<<<<<< HEAD
-            // let ageLabel = c.text("age",
-            //     {
-            //         x: dots.get(["target","cp","sex"],"x"),
-            //         y: dots.get(["target","cp","sex"],"y"), 
-            //         text:"age",
-            //         fontSize: 10
-            //     }
-            // )
-
-            c.nest(cpLabel, targetRects)
-            // c.nest(ageLabel, cpRects)
-=======
             c.nest(cpLabel, targetRects)
 
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
         }
 
         /* CATEGORICAL SCATTERPLOT FIG 5E */
@@ -947,10 +871,6 @@
         let canvasHeight = 800;
         let c = new Canvas(db, {width: canvasWidth, height: canvasHeight}) //setting up canvas
         canvas = c
-<<<<<<< HEAD
->>>>>>> Stashed changes
-=======
->>>>>>> aea98f9c374d28821086565adfd68f73dd5d74b9
         window.c = c;
         window.db = db;
 
