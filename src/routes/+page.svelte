@@ -194,7 +194,7 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: "cp"}, {x: {range: [10, 990]}})
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: {cols: "cp", func: d => d.cp + 1}}, {x: {range: [10, 990]}})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
@@ -1209,8 +1209,41 @@
                                     ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
                                     ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
                                 })
-            await c.erDiagram(vtables, vattributes, vfkeys)
+            await c.erDiagram(vtables, vattributes, vfkeys, {strength: -5, steps: 30})
         }
+
+        /**
+         * ER DIAGRAM BUT BETTER
+        */
+       if (0) {
+            await db.loadFromConnection()
+
+            let c = new Canvas(db, {width: 3000, height: 3000})
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await c.createTablesMetadata()
+            await c.createColumnsMetadata()
+            await c.createForeignKeysMetadata()
+
+            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            let vlabels = c.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            x: 0
+                            })
+
+            c.nest(vattributes, vtables)
+
+            let vfkeys = c.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
+            await c.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
+       }
 
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
             await db.normalize("heart_disease_csv", ["Gender", "Blood_Pressure", "Cholesterol_Level", "Exercise_Habits", "BMI", "Status", "Age", "Alcohol_Consumption"], "heart_disease2")

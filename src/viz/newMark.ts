@@ -590,9 +590,6 @@ export class Mark {
      *            See dynamicScale.ts. 
      */
     setScaleForVA(va, scaleObj: ScaleObject) {
-      console.log("setScale for va")
-      console.log("va", va)
-      console.log("scaleObj", scaleObj)
       let {col, scale} = scaleObj
       if (!this.src.schema.attrs.includes(col))
         throw new Error(`Trying to scale invalid column: ${col}`)
@@ -615,11 +612,9 @@ export class Mark {
 
       this._scales[va] = {}
       if (type) {
-        console.log("scale type", type)
         this._scales[va] = {type: type}
       }
       if (range) {
-        console.log("scale range", range)
         this._scales[va] = {...this._scales[va], range: range}
       }
 
@@ -694,6 +689,9 @@ export class Mark {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
+
+          console.log("outerMarkID", outermarkID)
+          console.log("children", children)
 
           this.pickupReferences(children)
 
@@ -1426,7 +1424,6 @@ export class Mark {
      * This function handles rotation
      */
     setRotate(mark) {
-      console.log("called setRotate")
       let rotateVal = this.mappings['rotate']
 
       maybeselection(mark)
@@ -1435,8 +1432,6 @@ export class Mark {
         .each(function (d, i) {
           let el = d3.select(this);
           let val = el.attr('transform')
-          console.log("val", val)
-          console.log("type", typeof(val))
           el.attr('transform', `${val} rotate(${rotateVal})`)
       })
     }
@@ -2223,7 +2218,7 @@ export class Mark {
     rowsToCols(data) {
       if (data.length == 0) { //check if no data has been returned and set up an empty res object to return. This is for applychannels to work properly
         let res = {}
-
+        console.log("data.length", data.length)
         for (let i = 0; i < data.columns.length; i++) {
           res[data.columns[i]] = []
         }

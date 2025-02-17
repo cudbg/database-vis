@@ -680,7 +680,7 @@ export class Canvas implements IMark {
     return newTableName
   }
 
-  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, options?) {
     let placeholder = "COMPOSITE_erdiagram"
     this.taskGraph.addMark(placeholder)
     this.taskGraph.addDependency(placeholder, tablesMark, true)
@@ -690,19 +690,34 @@ export class Canvas implements IMark {
     let erDiagram = await this.taskGraph.addTask(
         HOOK_PLACE.COMPOSITE, 
         placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark)}, 
+        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark, options)}, 
         false)
   }
 
-  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
+  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, options?) {
     let tablesMarkInfo = tablesMark.markInfoCache
     let attributesMarkInfo = attributesMark.markInfoCache
-    let g = new dagre.graphlib.Graph({compound: true})
-    
-    g.setGraph({rankdir: "LR"})
+    let baseTableWidth = 200
+    let baseTableHeight = 40
+    let attributeHeight = 20
+    let data = {nodes: [], links: []}
+    let steps = null
+    let strength = null
 
-    //g.setDefaultEdgeLabel(function() { return {}; });
+    if (options?.steps && (typeof(options.steps) == "number")) {
+      steps = options.steps
+    } else {
+      steps = 300
+    }
 
+    if (options?.strength && typeof(options.strength) == "number" && options.strength < 0) {
+      strength = options.strength
+    } else {
+      strength = -750
+    }
+
+    console.log("strength", strength)
+    console.log("steps", steps)
     /**
      * First get number of attrbutes per table
      */
@@ -721,23 +736,14 @@ export class Canvas implements IMark {
     /**
      * Create dagre rectangle nodes for each table
      */
-    let baseTableWidth = 200
-    let baseTableHeight = 40
-    let attributeHeight = 20
-
     for (let [id, markInfo] of tablesMarkInfo.entries()) {
       let attributeCount = 0
       if (countMap.has(id))
         attributeCount = countMap.get(id)
 
-
       let height = attributeCount * attributeHeight + baseTableHeight
-      let label = `${tablesMark.marktype}_${id}`
-    
-      g.setNode(label, {label: label, width: baseTableWidth, height: height, shape: "rect"})
+      data.nodes.push({id: id, width: baseTableWidth, height: height})
     }
-
-
 
     /**
      * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
@@ -752,24 +758,54 @@ export class Canvas implements IMark {
       let leftEntityId = attributesMark.innerToOuter.get(leftAttributeId)
       let rightEntityId = attributesMark.innerToOuter.get(rightAttributeId)
 
-      g.setEdge(`${tablesMark.marktype}_${leftEntityId.toString()}`, `${tablesMark.marktype}_${rightEntityId.toString()}`, {label: `${x1_ref}#${x2_ref}#${key}`})
+      data.links.push({source: leftEntityId, target: rightEntityId, label: `${x1_ref}#${x2_ref}#${key}`})
     }
+    /**
+     * Make copies because forceSimulation modifies in place
+     */
+    let links = data.links.map(d => ({...d}))
+    let nodes = data.nodes.map(d => ({...d}))
 
-    dagre.layout(g)
+    console.log("nodes", nodes)
+    console.log("links", links)
 
+    let thisref = this
+
+    const simulation = d3.forceSimulation(nodes)
+      .force("collide", d3.forceCollide()
+                          .radius(d => Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 50))
+      .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+      .force("charge", d3.forceManyBody().strength(strength))
+      .force("boundingBox", function() {
+          nodes.forEach(function(node) {
+            // Constrain x position
+            if (node.x < node.width / 2) {
+              node.vx = Math.abs(node.vx);  // Push right if out of bounds on the left
+            }
+            if (node.x > thisref.options.width - node.width / 2) {
+              node.vx = -Math.abs(node.vx);  // Push left if out of bounds on the right
+            }
+            
+            // Constrain y position
+            if (node.y < node.height / 2) {
+              node.vy = Math.abs(node.vy);  // Push down if out of bounds on the top
+            }
+            if (node.y > thisref.options.height - node.height / 2) {
+              node.vy = -Math.abs(node.vy);  // Push up if out of bounds on the bottom
+            }
+          })
+        })
+      .stop()
+      .tick(steps)
+
+    console.log("AFTER")
+    console.log("nodes", nodes)
+    console.log("links", links)
 
     let tableRows = []
 
-    g.nodes().forEach(id => {
-      const rect = g.node(id);
-        let match = id.match(/^rect_(\d+)$/)
-        if (!match) {
-          //Should never end up here
-          throw new Error("Error in erDiagram: Could not parse id of texts!")
-        }
-
-        let parsedId = parseInt(match[1], 10)
-        tableRows.push({ [IDNAME]: parsedId, x: rect.x, y: rect.y, width: baseTableWidth, height: rect.height, stroke: "black", fill: "none"})
+    nodes.forEach(node => {
+        tableRows.push({ [IDNAME]: node.id, x: node.x, y: node.y, width: node.width, height: node.height, stroke: "black", fill: "none"})
     });
   
     let rowCounts = new Map<number, number>()
@@ -803,8 +839,8 @@ export class Canvas implements IMark {
       attributesRows.push(obj)
     })
 
-    let edges = g.edges().map(edge => {
-      let label: string = g.edge(edge).label
+    let edges = links.map(link => {
+      let label: string = link.label
       let ids = label.split("#",3)
       let leftId = parseInt(ids[0])
       let rightId = parseInt(ids[1])
@@ -813,14 +849,14 @@ export class Canvas implements IMark {
       let leftAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == leftId)
       let rightAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == rightId)
 
-      const source = g.node(edge.v);
-      const target = g.node(edge.w);
+      const source = link.source.id;
+      const target = link.target.id;
 
-      let leftEntityId = parseFloat(source.label.split("_",2)[1])
-      let rightEntityId = parseFloat(target.label.split("_",2)[1])
+      // let leftEntityId = parseFloat(source.label.split("_",2)[1])
+      // let rightEntityId = parseFloat(target.label.split("_",2)[1])
 
-      let leftEntityInfo = tableRows.find((table) => table[IDNAME] == leftEntityId)
-      let rightEntityInfo = tableRows.find((table) => table[IDNAME] == rightEntityId)
+      let leftEntityInfo = tableRows.find((table) => table[IDNAME] == source)
+      let rightEntityInfo = tableRows.find((table) => table[IDNAME] == target)
 
 
       let x1 = leftAttrInfo.x
@@ -840,7 +876,7 @@ export class Canvas implements IMark {
         x1: x1, y1: y1,
         x2: x2, y2: y2
         };
-    });
+    })
 
     /**
      * Time to make calls to functions in newMark to create new svg stuff
@@ -1007,22 +1043,118 @@ export class Canvas implements IMark {
 
   }
 
-  foreignAttribute(otherTable: string | Table, otherAttr: string | string[], searchKeys: string | string[], callback?) {
-    let table : Table
-    if (typeof otherTable == "string") {
-        let t = this.db.table(otherTable)
-        if (!t)
-            throw new Error(`No such table ${otherTable}`)
-        table = t
-    } else {
-        table = otherTable
-    }
-    otherAttr = Array.isArray(otherAttr) ? otherAttr : [otherAttr]
-    if (!otherAttr.every((attr) => table.schema.attrs.includes(attr))) {
-        throw new Error (`${otherAttr} not found in ${table.internalname}`)
-    }
-    searchKeys = Array.isArray(searchKeys) ? searchKeys : [searchKeys]
-    return {otherTable: table, searchKeys: searchKeys, otherAttr, callback: callback, isVisualChannel: false}
+  async createTablesMetadata() {
+    await this.db.conn.exec(`CREATE TABLE tables (id int primary key, table_name string)`)
+    await this.db.conn.exec(`INSERT INTO tables SELECT (ROW_NUMBER() OVER ()) - 1 AS id, table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'main'`)
+    let t = await this.db.tableFromConnection("tables")
+    this.db.setTable(t)
+    t.name("tables")
+    t.keys("id")
+    t.keys(IDNAME)
+    return t;
+  }
+
+  async createColumnsMetadata() {
+    await this.db.conn.exec("CREATE TABLE columns(id int unique, tid int, colname string, is_key bool, type string, ord_pos int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables(id))")
+    await this.db.conn.exec(
+      `INSERT INTO columns (id, tid, colname, is_key, type, ord_pos)
+      SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+       t.id AS tid,
+       c.column_name AS colname,
+       CASE WHEN c.column_name IN (
+                SELECT k.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage k
+                    ON tc.constraint_name = k.constraint_name
+                WHERE tc.table_name = t.table_name
+                  AND tc.constraint_type = 'PRIMARY KEY'
+             )
+            THEN TRUE ELSE FALSE END AS is_key,
+       c.data_type AS type,
+       c.ordinal_position AS ord_pos
+      FROM information_schema.columns c
+      JOIN tables t
+          ON c.table_name = t.table_name
+      WHERE c.table_schema = 'main';
+      `)
+      let columnTable = await this.db.tableFromConnection("columns")
+      this.db.setTable(columnTable)
+      columnTable.name("columns")
+      columnTable.keys("id")
+      columnTable.keys(IDNAME)
+      columnTable.keys(["tid", "colname"])
+
+      let c = new FKConstraint({t1: columnTable, X: ["tid"], t2: this.db.table("tables"), Y: ["id"]})
+      this.db.addConstraint(c)
+
+      return columnTable;
+  }
+
+  async createForeignKeysMetadata() {
+    await this.db.conn.exec("CREATE TABLE fkeys (id int primary key, pos int, tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))")
+    await this.db.conn.exec(
+      `
+      WITH fk_columns AS (
+          SELECT ccu.constraint_name AS fk_name,
+                ccu.table_name AS from_table,
+                ccu.column_name AS from_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+      ),
+      pk_columns AS (
+          SELECT ccu.constraint_name AS pk_name,
+                ccu.table_name AS to_table,
+                ccu.column_name AS to_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+      ),
+      referential AS (
+          SELECT rc.constraint_name, rc.unique_constraint_name
+          FROM information_schema.referential_constraints rc
+      ),
+      joined_fkeys AS (
+          SELECT fk.from_table, fk.from_column, pk.to_table, pk.to_column, fk.fk_name, pk.pk_name
+          FROM fk_columns fk
+          JOIN referential r ON fk.fk_name = r.constraint_name
+          JOIN pk_columns pk ON r.unique_constraint_name = pk.pk_name
+      ),
+      mapped_fkeys AS (
+          SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+                (ROW_NUMBER() OVER ()) - 1 AS pos,
+                t1.id AS tid1,
+                joined_fkeys.from_column AS col1,
+                t2.id AS tid2,
+                joined_fkeys.to_column AS col2
+          FROM joined_fkeys
+          JOIN tables t1 ON joined_fkeys.from_table = t1.table_name
+          JOIN tables t2 ON joined_fkeys.to_table = t2.table_name
+          JOIN columns fk_col ON fk_col.tid = t1.id AND fk_col.colname = joined_fkeys.from_column
+          JOIN columns pk_col ON pk_col.tid = t2.id AND pk_col.colname = joined_fkeys.to_column
+          WHERE t1.table_name NOT IN ('tables', 'columns')
+            AND t2.table_name NOT IN ('tables', 'columns')
+      )
+      INSERT INTO fkeys (id, pos, tid1, col1, tid2, col2)
+      SELECT id, pos, tid1, col1, tid2, col2
+      FROM mapped_fkeys;
+      `)
+      let fkeysTable = await this.db.tableFromConnection("fkeys")
+      this.db.setTable(fkeysTable)
+      fkeysTable.name("fkeys")
+      fkeysTable.keys("id")
+      fkeysTable.keys(IDNAME)
+
+      let c1 = new FKConstraint({t1: fkeysTable, X:["tid1", "col1"], t2: this.db.table("columns"), Y:["tid", "colname"]})
+      let c2 = new FKConstraint({t1: fkeysTable, X:["tid2", "col2"], t2: this.db.table("columns"), Y:["tid", "colname"]})
+
+      this.db.addConstraint(c1)
+      this.db.addConstraint(c2)
+      return fkeysTable;
   }
 
 }
