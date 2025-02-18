@@ -578,10 +578,10 @@ export class Database {
   }
 
   // decompose given functional dependency X->Y
-  async decompose(name, X:string|string[], Y:string|string[], newname1, newname2) {
+  async decompose(tablename, X:string|string[], Y:string|string[], newname1, newname2) {
     X = isArray(X)? X : [X];
     Y = isArray(Y)? Y : [Y];
-    let t = this.table(name);
+    let t = this.table(tablename);
     let t1 = await t.project(t.schema.except(Y).asObject(), newname1)
     let t2 = await t.project(new Schema(R.concat(X,Y)).asObject(), newname2)
     t2.keys(X)
@@ -599,13 +599,13 @@ export class Database {
   // let A be the schema of base table
   //   dim(dim_id, attrs)
   //   fact(A-attrs, dim_id)
-  async normalize(name, attrs:string|string[], dimname=null, factname=null) {
+  async normalize(tablename, attrs:string|string[], dimname=null, factname=null) {
     
     attrs = isArray(attrs)? attrs : [attrs];
-    dimname ??= `${name}_dim`;
-    factname ??= `${name}_fact`;
+    dimname ??= `${tablename}_dim`;
+    factname ??= `${tablename}_fact`;
 
-    let t = this.table(name);
+    let t = this.table(tablename);
     let select = t.schema.pick(attrs).asObject();
     let newDim = await t.distinctproject(select, dimname) //newDim contains only attrs
     newDim.keys(IDNAME)
@@ -639,13 +639,13 @@ export class Database {
      * We do not need do this for newFact because newFact does not contain attrs
      */
     for (const [cname, constraint] of Object.entries(this.constraints)) {
-      if (constraint.t2.internalname == name) {
+      if (constraint.t2.internalname == tablename) {
         if (constraint.Y.every(col => attrs.includes(col))) {
           let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newDim, Y: constraint.Y})
           this.addConstraint(c)
           await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
-      } else if (constraint.t1.internalname == name) {
+      } else if (constraint.t1.internalname == tablename) {
         if (constraint.X.every(col => attrs.includes(col))) {
           let c = new FKConstraint({t1: newDim, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
           this.addConstraint(c)
@@ -657,11 +657,11 @@ export class Database {
   }
 
 
-  async normalizeMany(name, list_of_attrs:string[][], { dimnames, factname}={}) {
-    dimnames ??= list_of_attrs.map((a) => `${name}_${a}`)
-    factname ??= `${name}_fact`
+  async normalizeMany(tablename, list_of_attrs:string[][], { dimnames, factname}={}) {
+    dimnames ??= list_of_attrs.map((a) => `${tablename}_${a}`)
+    factname ??= `${tablename}_fact`
 
-    let t = this.table(name)
+    let t = this.table(tablename)
     let rest = t.schema.except([...list_of_attrs.flat(), IDNAME]).attrs
     let q = Query
       .from({l: t.internalname})

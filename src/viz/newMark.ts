@@ -582,6 +582,11 @@ export class Mark {
           if (!path)
             continue
 
+          path.forEach(edge => {
+            this.c.tablesUsed.add(edge.t1.internalname)
+            this.c.tablesUsed.add(edge.t2.internalname)
+          })
+
           return {othermark, constraint, otherattr, callback, isVisualChannel}
         }
       }
@@ -732,7 +737,6 @@ export class Mark {
         let markInfoArr = []
 
         for (let [outermarkID, currChannels] of Object.entries(channels)) {
-          console.log("currChannels", currChannels)
           let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
           let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)

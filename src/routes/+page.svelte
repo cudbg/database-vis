@@ -362,7 +362,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-        if (0) {
+        if (1) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -464,6 +464,29 @@
                     linkMark.filter({operator: ">=", col: "count", value: 2})
                 } 
             }
+
+            let c2 = new Canvas(db, {width: 1500, height: 1500})
+            erDiagramCanvas = c2
+
+
+            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            x: 0
+                            })
+
+            c2.nest(vattributes, vtables)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
+            await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -200, steps: 350})
 
         }
 
@@ -678,7 +701,6 @@
                 c.nest(link, targetRects)
             }
 
-
         }
 
         /* SMALL MULTIPLES FIG 5D */
@@ -720,12 +742,11 @@
             )
 
             c.nest(cpLabel, targetRects)
-
         }
 
         /* CATEGORICAL SCATTERPLOT FIG 5E */
         if (0) {
-            await db.loadFromConnection()
+            // await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
@@ -850,7 +871,7 @@
         /**END OF ANALYSIS*/
 
         /* EXPERIMENT: VISUALIZING DATA TRANSFORMATION */
-        if (1) {
+        if (0) {
             let c = new Canvas(db, {width: 600, height: 600}) //setting up canvas
             canvas = c
             window.c = c;
@@ -870,17 +891,8 @@
             let c2 = new Canvas(db, {width: 800, height: 500})
             erDiagramCanvas = c2
 
-            // await c2.createTablesMetadata()
-            // await c2.createColumnsMetadata()
-            // await c2.createForeignKeysMetadata()
-
-            /**
-             select c1.id as leftid, c2.id as rightid
-             from columns c1, columns c2, fkeys fk
-             where fk.tid1 = c1.tid and fk.col1 = c1.colname and fk.tid2 = c2.tid and fk.col2 = c2.colname
-             */
             let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            vtables.filter("table_name IN ('heart_attrs', 'heart_corr')")
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
             let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
             let vattributes= c2.text("columns", {
@@ -1150,123 +1162,6 @@
             )
             }
             
-        }
-
-
-        if (0) {
-            let specificAttributes: string[] = ["exang", "age", "cp", "target","sex","fbs","slope","ca","chol","thal"]
-
-            await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-
-            let tablesToAttributes: Map<string, string[]> = new Map<string, string[]>()
-            let tableToId: Map<string, number> = new Map<string, number>()
-            let fkeysMap = {}
-
-            fkeysMap[0] = {leftTable: "heart", leftAttr: "id", rightTable: "heart_fact", rightAttr: "id"}
-            fkeysMap[1] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
-            fkeysMap[2] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
-            fkeysMap[3] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
-            fkeysMap[4] = {leftTable: "heart_age", leftAttr: "bucket_id", rightTable: "bucketed_heart_age", rightAttr: "id"}
-
-            fkeysMap[5] = {leftTable: "heart_fact", leftAttr: "exang", rightTable: "exang_age_count", rightAttr: "exang"}
-            fkeysMap[6] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "exang_age_count", rightAttr: "age"}
-
-            fkeysMap[7] = {leftTable: "heart_fact", leftAttr: "age", rightTable: "age_cp_count", rightAttr: "age"}
-            fkeysMap[8] = {leftTable: "heart_fact", leftAttr: "cp", rightTable: "age_cp_count", rightAttr: "cp"}
-
-            fkeysMap[9] = {leftTable: "exang_age_count", leftAttr: "exang", rightTable: "heart_exang", rightAttr: "id"}
-            fkeysMap[10] = {leftTable: "exang_age_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
-
-
-            fkeysMap[11] = {leftTable: "age_cp_count", leftAttr: "age", rightTable: "heart_age", rightAttr: "id"}
-            fkeysMap[12] = {leftTable: "age_cp_count", leftAttr: "cp", rightTable: "heart_cp", rightAttr: "id"}
-            
-
-            tablesToAttributes.set("heart", ["id", "exang", "age", "cp"])
-            tablesToAttributes.set("heart_fact", ["id", "exang", "age", "cp"])
-            tablesToAttributes.set("heart_exang", ["id", "exang"])
-            tablesToAttributes.set("heart_age", ["id", "age", "bucket_id"])
-            tablesToAttributes.set("bucketed_heart_age", ["id", "age_bucket", "min_age", "max_age"])
-            tablesToAttributes.set("heart_cp", ["id", "cp"])
-            tablesToAttributes.set("exang_age_count", ["id", "count", "exang", "age"])
-            tablesToAttributes.set("age_cp_count", ["id", "count", "age", "cp"])
-
-            let idcounter = 0
-            let sqlstring = "INSERT INTO tables VALUES "
-            for (let [table, attributes] of tablesToAttributes.entries()) {
-                tableToId.set(table, idcounter)
-                sqlstring += `(${idcounter}, '${table}')`
-                if (idcounter != 7)
-                    sqlstring += ", "
-                idcounter += 1
-            }
-
-            console.log("create tables", sqlstring)
-            await db.conn.exec(sqlstring)
-
-            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
-
-            sqlstring = "INSERT INTO columns VALUES "
-
-            for (let [table, attributes] of tablesToAttributes.entries()) {
-                let tid = tableToId.get(table)
-
-                for (let i = 0; i < attributes.length; i++) {
-                    if (i == 0) {
-                        let tmp = `(${tid},'${attributes[i]}', 1, 'int', ${i}), `
-                        sqlstring += tmp 
-                    } else {
-                        let tmp = `(${tid}, '${attributes[i]}', 0, 'int', ${i}), `
-                        sqlstring += tmp 
-                    }
-
-                }
-            }
-            console.log("create columns", sqlstring)
-
-            await db.conn.exec(sqlstring)
-
-            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
-
-            sqlstring = "INSERT INTO fkeys VALUES "
-
-            for (let [key, obj] of Object.entries(fkeysMap)) {
-                // console.log("wtf is happening")
-                // console.log("obj", obj)
-                let {leftTable, leftAttr, rightTable, rightAttr} = obj
-
-                let leftId = tableToId.get(leftTable)
-                let rightId = tableToId.get(rightTable)
-
-                sqlstring += `(${leftId}, '${leftAttr}', ${rightId}, '${rightAttr}'), `
-            }
-
-            console.log("fkeys string", sqlstring)
-
-            await db.conn.exec(sqlstring)
-            await db.loadFromConnection()
-
-            let c = new Canvas(db, {width: 1600, height: 1000})
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c.text("columns", {
-                                            y: 'ordinal_position',
-                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
-                                            x: 0
-                            })
-
-            c.nest(vattributes, vtables, "tid")
-
-            let vfkeys = c.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
-            await c.erDiagram(vtables, vattributes, vfkeys, {strength: -5, steps: 30})
         }
 
         /**
@@ -2209,7 +2104,8 @@
             let dots = c.dot("S", {x: "d", y: c.db.table("T").get(null, "a")})
         }
         (await canvas.render({ document, svg, graphSvg, IsERDiagram: false }));
-        (await erDiagramCanvas.render({document, erDiagramSvg, erDiagramGraphSvg, IsErDiagram: true}))
+        if (erDiagramCanvas)
+            await erDiagramCanvas.render({document, erDiagramSvg, erDiagramGraphSvg, IsErDiagram: true})
 
         /*
         c1: T -1-n- S

@@ -65,6 +65,7 @@ export class Canvas implements IMark {
   refmarks:{rm:Mark,m:Mark}[];
   plotConfig;
   available_scales;
+  tablesUsed: Set<string>
 
   node;
   private _parent;
@@ -92,6 +93,7 @@ export class Canvas implements IMark {
     } = options;
     this.options = { ...options, x, y, width, height }
 
+    this.tablesUsed = new Set<string>()
     this.taskGraph = new TaskGraph(true)
   }
 
@@ -154,6 +156,10 @@ export class Canvas implements IMark {
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
     let srcTable = this.db.table(source)
+    if (!srcTable) {
+      throw new Error("Invalid source table!")
+    }
+    this.tablesUsed.add(srcTable.internalname)
     let canvas = findcanvas(this, srcTable);
     if (marktype == "square") {
       if (("width" in mapping ) && !("height" in mapping)) {
@@ -222,6 +228,11 @@ export class Canvas implements IMark {
         if (!path)
           continue
 
+        path.forEach(edge => {
+          this.tablesUsed.add(edge.t1.internalname)
+          this.tablesUsed.add(edge.t2.internalname)
+        })
+
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         innerMark.outermark = outerMark
         return
@@ -239,6 +250,11 @@ export class Canvas implements IMark {
         if (!path)
           continue
   
+        path.forEach(edge => {
+          this.tablesUsed.add(edge.t1.internalname)
+          this.tablesUsed.add(edge.t2.internalname)
+        })
+
         this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         innerMark.outermark = outerMark
         return
@@ -552,7 +568,7 @@ export class Canvas implements IMark {
     return newTableNames
   }
 
-  async createCountTable(tablename: string, groupBy: string|string[], newTableName?) {
+  async createCountTable(tablename: string, groupBy: string|string[], newtableName?) {
     let t = this.db.table(tablename)
 
     if (!t)
@@ -560,8 +576,8 @@ export class Canvas implements IMark {
 
     groupBy = groupBy instanceof Array ? groupBy : [groupBy]
     let groupByObj = {}
-    newTableName ??= groupBy.forEach((col) => {
-      newTableName += `${col}_`
+    newtableName ??= groupBy.forEach((col) => {
+      newtableName += `${col}_`
     }) + "count"
 
     groupBy.forEach((col) => {
@@ -578,9 +594,9 @@ export class Canvas implements IMark {
     query = query.groupby(groupBy)
     query = query.from(tablename)
 
-    let newTable = await this.db.fromSql(query, newTableName)
+    let newTable = await this.db.fromSql(query, newtableName)
 
-    newTable.name(newTableName)
+    newTable.name(newtableName)
     newTable.keys(IDNAME)
     newTable.keys(groupBy)
 
@@ -604,16 +620,16 @@ export class Canvas implements IMark {
     this.db.addConstraint(c)
     await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
 
-    return newTableName
+    return newtableName
   }
 
-  async createDescriptionTable(tablename: string, newTableName?) {
+  async createDescriptionTable(tablename: string, newtableName?) {
     let t = this.db.table(tablename)
 
     if (!t)
       throw new Error(`No such table ${tablename}`)
 
-    newTableName ??= `${tablename}_description`
+    newtableName ??= `${tablename}_description`
 
     let query = new Query()
     query = query.select({
@@ -624,15 +640,15 @@ export class Canvas implements IMark {
     query = query.from(sql`information_schema.columns`)
     query = query.where(sql`table_name = '${tablename}' AND column_name <> '${IDNAME}'`)
 
-    let newTable = await this.db.fromSql(query, newTableName)
+    let newTable = await this.db.fromSql(query, newtableName)
 
-    newTable.name(newTableName)
+    newTable.name(newtableName)
     newTable.keys(IDNAME)
 
-    return newTableName
+    return newtableName
   }
 
-  async createCorrTable(basetableName: string, descriptiontableName: string, newTableName?) {
+  async createCorrTable(basetableName: string, descriptiontableName: string, newtableName?) {
     let basetable = this.db.table(basetableName)
 
     if (!basetable)
@@ -643,12 +659,12 @@ export class Canvas implements IMark {
     if (!descriptionTable)
       throw new Error(`No such table ${descriptiontableName}`)
 
-    newTableName ??= `${basetableName}_corr`
+    newtableName ??= `${basetableName}_corr`
 
-    let query = `CREATE TABLE ${newTableName} (xaxis int, yaxis int, corrvalue float)`
+    let query = `CREATE TABLE ${newtableName} (xaxis int, yaxis int, corrvalue float)`
     await this.db.conn.exec(query)
 
-    query = `INSERT INTO ${newTableName} (xaxis, yaxis, corrvalue)\n`
+    query = `INSERT INTO ${newtableName} (xaxis, yaxis, corrvalue)\n`
     for (let i = 0; i < basetable.schema.attrs.length; i++) {
       let leftAttr = basetable.schema.attrs[i]
       if (leftAttr == IDNAME)
@@ -670,11 +686,11 @@ export class Canvas implements IMark {
     query = query.slice(0, query.length - 7)
 
     await this.db.conn.exec(query)
-    const newTable = await this.db.tableFromConnection(newTableName)
-    await this.db.updateMetadata(newTableName)
+    const newTable = await this.db.tableFromConnection(newtableName)
+    await this.db.updateMetadata(newtableName)
     this.db.setTable(newTable)
 
-    newTable.name(newTableName)
+    newTable.name(newtableName)
     newTable.keys(IDNAME)
 
 
@@ -685,7 +701,7 @@ export class Canvas implements IMark {
     await this.db.updateFkeysMetadata(c1.t1.internalname, c1.t2.internalname, c1.X, c1.Y)
     await this.db.updateFkeysMetadata(c2.t1.internalname, c2.t2.internalname, c2.X, c2.Y)
     
-    return newTableName
+    return newtableName
   }
 
   async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark, options?) {
@@ -968,28 +984,28 @@ export class Canvas implements IMark {
     let fkeySvg = select(newFkeysMark.mark)
     insertMarkers(fkeySvg, config)
 
-    fkeySvg
-    .selectAll(`g[aria-label='${fkeysMark.mark.aria}']`)
-    .selectAll("*")
-    .each(function (d, i) {
-      let el = d3.select(this);
-      let id = parseInt(el.attr("data__rav_id"))
-      let {x1_ref, x2_ref} = fkeysMark.referencedMarks.get(id)
-      let leftInfo = attributesMark.markInfoCache.get(x1_ref)
-      let rightInfo = attributesMark.markInfoCache.get(x2_ref)
+    // fkeySvg
+    // .selectAll(`g[aria-label='${fkeysMark.mark.aria}']`)
+    // .selectAll("*")
+    // .each(function (d, i) {
+    //   let el = d3.select(this);
+    //   let id = parseInt(el.attr("data__rav_id"))
+    //   let {x1_ref, x2_ref} = fkeysMark.referencedMarks.get(id)
+    //   let leftInfo = attributesMark.markInfoCache.get(x1_ref)
+    //   let rightInfo = attributesMark.markInfoCache.get(x2_ref)
 
-      if (leftInfo["textDecoration"] == "underline") { //left side is a key
-        el.attr("marker-start", `url(#${ERMarkers.ONE})`)
-      } else {
-        el.attr("marker-start", `url(#${ERMarkers.MANY})`)
-      }
+    //   if (leftInfo["textDecoration"] == "underline") { //left side is a key
+    //     el.attr("marker-start", `url(#${ERMarkers.ONE})`)
+    //   } else {
+    //     el.attr("marker-start", `url(#${ERMarkers.MANY})`)
+    //   }
 
-      if (rightInfo["textDecoration"] == "underline") { //left side is a key
-        el.attr("marker-end", `url(#${ERMarkers.ONE})`)
-      } else {
-        el.attr("marker-end", `url(#${ERMarkers.MANY})`)
-      }
-    })
+    //   if (rightInfo["textDecoration"] == "underline") { //left side is a key
+    //     el.attr("marker-end", `url(#${ERMarkers.ONE})`)
+    //   } else {
+    //     el.attr("marker-end", `url(#${ERMarkers.MANY})`)
+    //   }
+    // })
 
     fkeysMark.node
     .append("g")
@@ -1041,6 +1057,21 @@ export class Canvas implements IMark {
                             WHERE
                             ${table}.${col} >= ${newTableName}.min_${col} AND
                             ${table}.${col} <= ${newTableName}.max_${col};`)
+    
+    await this.db.conn.exec(
+      `INSERT INTO columns (tid, colname, is_key, type, ord_pos, _rav_id)
+      VALUES (
+      (SELECT id FROM tables WHERE table_name = '${table}'),      
+      '${col}_bucket_id',
+      FALSE,                                                 
+      'INTEGER',
+      (SELECT COALESCE(MAX(ord_pos), 0) + 1
+      FROM columns 
+      WHERE tid = (SELECT id FROM tables WHERE table_name = '${table}')),
+
+      (SELECT COALESCE(MAX(_rav_id), 0) + 1 
+      FROM columns )
+      );`)
 
     let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
     this.db.addConstraint(c)
@@ -1048,6 +1079,10 @@ export class Canvas implements IMark {
 
     return newTableName
 
+  }
+
+  getTablesUsed(): string {
+    return "(" + Array.from(this.tablesUsed).map(t => `'${t}'`).join(",") + ")"
   }
 
   async createTablesMetadata() {
