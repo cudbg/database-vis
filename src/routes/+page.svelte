@@ -21,7 +21,12 @@
     let db_up = null;
     let rootelement = null;
     let svg = null;
+    let erDiagramSvg = null
+
+
     let graphSvg = null;
+    let erDiagramGraphSvg = null
+
     let inspector = null;
 
     onMount(async () => {
@@ -150,6 +155,7 @@
         await db.init();
         await db.loadFromConnection();
         let canvas
+        let erDiagramCanvas
 
         /**START OF ANALYSIS */
 
@@ -746,7 +752,7 @@
         }
 
         /* HEATMAP */
-        if (1) {
+        if (0) {
             /**
              * Data transformation process
              * 
@@ -842,6 +848,57 @@
         }
 
         /**END OF ANALYSIS*/
+
+        /* EXPERIMENT: VISUALIZING DATA TRANSFORMATION */
+        if (1) {
+            let c = new Canvas(db, {width: 600, height: 600}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
+            
+
+            await c.createDescriptionTable("heart_reduced", "heart_attrs")
+            await c.createCorrTable("heart_reduced", "heart_attrs", "heart_corr")
+
+            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
+            let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
+            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}, fill: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}})
+            let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
+
+            let c2 = new Canvas(db, {width: 800, height: 500})
+            erDiagramCanvas = c2
+
+            // await c2.createTablesMetadata()
+            // await c2.createColumnsMetadata()
+            // await c2.createForeignKeysMetadata()
+
+            /**
+             select c1.id as leftid, c2.id as rightid
+             from columns c1, columns c2, fkeys fk
+             where fk.tid1 = c1.tid and fk.col1 = c1.colname and fk.tid2 = c2.tid and fk.col2 = c2.colname
+             */
+            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            vtables.filter("table_name IN ('heart_attrs', 'heart_corr')")
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ordinal_position',
+                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            x: 0
+                            })
+
+            c2.nest(vattributes, vtables)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
+            await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
+        }
+
 
         if (0) {
             await db.loadFromConnection()
@@ -2151,7 +2208,8 @@
 
             let dots = c.dot("S", {x: "d", y: c.db.table("T").get(null, "a")})
         }
-        (await canvas.render({ document, svg, graphSvg }));
+        (await canvas.render({ document, svg, graphSvg, IsERDiagram: false }));
+        (await erDiagramCanvas.render({document, erDiagramSvg, erDiagramGraphSvg, IsErDiagram: true}))
 
         /*
         c1: T -1-n- S
@@ -2198,6 +2256,16 @@ loading...
         <div class="col">
             <div bind:this={rootelement}>
                 <svg bind:this={graphSvg}/>
+            </div>
+        </div>
+        <div class="col">
+            <div bind:this={rootelement}>
+                <svg bind:this={erDiagramSvg}/>
+            </div>
+        </div>
+        <div class="col">
+            <div bind:this={rootelement}>
+                <svg bind:this={erDiagramGraphSvg}/>
             </div>
         </div>
     </div>

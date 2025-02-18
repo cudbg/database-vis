@@ -352,12 +352,21 @@ export class Mark {
       }
     }
 
+    filter(sqlExpr: string);
+    filter(simpleExpr: {operator: string; col: string, value: string|number});
+    filter(arg1: {operator: string; col: string, value: string|number} | string) {
+      if (typeof(arg1) == "string") {
+        this.filters.push(arg1)
+      } else {
+        this.filterSimpleExpr(arg1)
+      }
+    }
     /**
      * Use this function to filter over a column in the source table of this mark
      * This function will append a WHERE clause to the query constructed in constructQuery()
      * @param
      */
-    filter({operator, col, value}: {operator: string; col: string, value: string|number}) {
+    filterSimpleExpr({operator, col, value}: {operator: string; col: string, value: string|number}) {
       if (!(Object.values(mgg.FilterOperators).includes(operator))) {
         throw new Error(`Unsupported operator: ${operator}`)
       }
@@ -689,10 +698,6 @@ export class Mark {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
-
-          console.log("outerMarkID", outermarkID)
-          console.log("children", children)
-
           this.pickupReferences(children)
 
           let cols = this.rowsToCols(children)
@@ -727,6 +732,7 @@ export class Mark {
         let markInfoArr = []
 
         for (let [outermarkID, currChannels] of Object.entries(channels)) {
+          console.log("currChannels", currChannels)
           let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
           let {mark, markInfo} = this.makemark(currChannels, outerMarkRow)
@@ -888,7 +894,6 @@ export class Mark {
          * This is a foreign key reference
          */
         if (constraint) {
-          console.log("column with constraint", columns)
           let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
             let pathInMap = null
 
@@ -983,7 +988,6 @@ export class Mark {
         }
       }
 
-      console.log("pathQueryitem", pathQueryItemMap)
       /**
        * Actual construction of query
        */
@@ -997,13 +1001,6 @@ export class Mark {
 
         query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
       }
-
-      /**
-       * this.filters populated in filter function
-       */
-      this.filters.forEach((filter) => {
-        query = query.where(filter)
-      })
 
       query = query.select(column(this.src.internalname, IDNAME))
 
@@ -1089,6 +1086,13 @@ export class Mark {
         }
         pathCounter++
       }
+
+    /**
+     * this.filters populated in filter function
+     */
+      this.filters.forEach((filter) => {
+        query = query.where(filter)
+      })
 
       /**
        * This part feels extremely hacky and unsafe
@@ -2158,6 +2162,7 @@ export class Mark {
       marktable.keys(IDNAME)
       let fkConstraint = new FKConstraint({t1: marktable, X: [IDNAME], t2: this.src, Y: [IDNAME]})
       this.c.db.addConstraint(fkConstraint)
+      await this.c.db.updateFkeysMetadata(fkConstraint.t1.internalname, fkConstraint.t2.internalname, fkConstraint.X, fkConstraint.Y)
       this.marktable = marktable
     }
 

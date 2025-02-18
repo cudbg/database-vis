@@ -481,6 +481,13 @@ export class Canvas implements IMark {
   async render(context) {
     context.document ??= document;
     let svg = context.svg;
+    let graphSvg = context.graphSvg
+
+    if (context.IsErDiagram) {
+      svg = context.erDiagramSvg
+      graphSvg = context.erDiagramGraphSvg
+    }
+
     this.node = svg? select(svg) : null;
     let g = null;
     if (svg == null && this._parent == null) {
@@ -496,6 +503,7 @@ export class Canvas implements IMark {
       g = this.node.append("svg:g")
         .classed("canvas", true);
     } else {
+      console.log("third")
       g = this.node = select(
         creator("svg:g").call(document.documentElement))
         .classed("canvas", true);
@@ -510,7 +518,7 @@ export class Canvas implements IMark {
     }
     
     await this.taskGraph.execute()
-    this.taskGraph.visualize(context.graphSvg)
+    this.taskGraph.visualize(graphSvg)
     return this.node.node();
   }
 
@@ -536,6 +544,7 @@ export class Canvas implements IMark {
       if (prevTable) {
         let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
         this.db.addConstraint(c)
+        await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
       }
       prevTable = newTable
       prevKeys = currAttrs
@@ -559,13 +568,6 @@ export class Canvas implements IMark {
       groupByObj[col] = col
     }) + "count"
 
-    // groupBy.forEach((col) => {
-    //   groupByObj[col] = col
-    //   newTableName += `${col}_`
-    // })
-
-    // newTableName += "count"
-
     let query = new Query()
     query = query.select({
       count: count(),
@@ -587,17 +589,20 @@ export class Canvas implements IMark {
         if (constraint.Y.every(col => groupBy.includes(col))) {
           let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newTable, Y: constraint.Y})
           this.db.addConstraint(c)
+          await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
       } else if (constraint.t1.internalname == tablename) {
         if (constraint.X.every(col => groupBy.includes(col))) {
           let c = new FKConstraint({t1: newTable, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
           this.db.addConstraint(c)
+          await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
       }
     }
 
     let c = new FKConstraint({t1: newTable, X: groupBy, t2: t, Y: groupBy})
     this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
 
     return newTableName
   }
@@ -666,6 +671,7 @@ export class Canvas implements IMark {
 
     await this.db.conn.exec(query)
     const newTable = await this.db.tableFromConnection(newTableName)
+    await this.db.updateMetadata(newTableName)
     this.db.setTable(newTable)
 
     newTable.name(newTableName)
@@ -676,6 +682,8 @@ export class Canvas implements IMark {
     let c2 = new FKConstraint({t1: newTable, X: ["yaxis"], t2: descriptionTable, Y: [IDNAME]})
     this.db.addConstraint(c1)
     this.db.addConstraint(c2)
+    await this.db.updateFkeysMetadata(c1.t1.internalname, c1.t2.internalname, c1.X, c1.Y)
+    await this.db.updateFkeysMetadata(c2.t1.internalname, c2.t2.internalname, c2.X, c2.Y)
     
     return newTableName
   }
@@ -716,8 +724,6 @@ export class Canvas implements IMark {
       strength = -750
     }
 
-    console.log("strength", strength)
-    console.log("steps", steps)
     /**
      * First get number of attrbutes per table
      */
@@ -1038,6 +1044,7 @@ export class Canvas implements IMark {
 
     let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
     this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
 
     return newTableName
 
@@ -1154,6 +1161,7 @@ export class Canvas implements IMark {
 
       this.db.addConstraint(c1)
       this.db.addConstraint(c2)
+
       return fkeysTable;
   }
 
