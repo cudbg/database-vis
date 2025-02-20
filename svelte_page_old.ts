@@ -13,6 +13,7 @@
     import { IDNAME } from "../viz/table";
     import { attr } from "svelte/internal";
     import { symbol } from "d3";
+  import { start } from "repl";
 
 
     let innerWidth = 10000;
@@ -195,11 +196,9 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target"}, {x: {range: [10, 990]}})
-            let thalachlabel = c.text("heart_reduced", {x: 0, y: 400, text: {constant: "thalach"}, fontSize: 20, rotate: 270},{textAnchor: "left"})
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r:"cp"}, {x: {range: [10, 990]}})
             let ageLabel = c.text("heart_reduced", {x: 500, y: 0, text: {constant: "age"}, fontSize: 15}, {textAnchor: "bottom"})
-            // let thalachlabel = c.text("heart_reduced", {x: 0, y: "thalach", text: "thalach", fontSize: 5}, {textAnchor: "left"})
-
+            let thalachlabel = c.text("heart_reduced", {x: 0, y: 400, text: {constant: "thalach"}, fontSize: 15}, {textAnchor: "left"})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
@@ -426,7 +425,16 @@
                     attr = "thalach_bucket"
                     table = bucketedThalachTable
                 }
-                let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
+                let mark = c.square(table, {x: (i+0.5) * 200, y: attr, width: 50, fill: "none", stroke: "black"})
+
+                let attrlabel = c.text(table, 
+                {
+                    x: mark.get(attr, ["x","width"] ,(d) => d.x + d.width/2),
+                    y: 0,
+                    text: {constant: `${attr}`},
+                    fontSize : 20
+                }, {textAnchor: "bottom"})
+               
                 let label = c.text(table,
                     {
                         x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
@@ -435,13 +443,6 @@
 
                     }, {lineAnchor: "middle"})
                 
-                let attrlabel = c.text(table, 
-                {
-                    x: mark.get(attr, ["x","width"] ,(d) => d.x + d.width/2),
-                    y: 0,
-                    text: {constant: `${attr}`},
-                    fontSize : 20
-                }, {textAnchor: "bottom"})
 
                 if (attr == "age_bucket") {
                     mark.filter({operator: ">=", col: "min_age", value: 40})
