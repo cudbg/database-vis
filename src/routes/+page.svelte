@@ -465,28 +465,28 @@
                 } 
             }
 
-            let c2 = new Canvas(db, {width: 1500, height: 1500})
-            erDiagramCanvas = c2
+            // let c2 = new Canvas(db, {width: 1500, height: 1500})
+            // erDiagramCanvas = c2
 
 
-            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+            // let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+            // vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
-            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c2.text("columns", {
-                                            y: 'ord_pos',
-                                            text: ({colname, type}) => `${colname} ${type}`,
-                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                            x: 0
-                            })
+            // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            // let vattributes= c2.text("columns", {
+            //                                 y: 'ord_pos',
+            //                                 text: ({colname, type}) => `${colname} ${type}`,
+            //                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+            //                                 x: 0
+            //                 })
 
-            c2.nest(vattributes, vtables)
+            // c2.nest(vattributes, vtables)
 
-            let vfkeys = c2.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
-            await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -200, steps: 350})
+            // let vfkeys = c2.link("fkeys", {
+            //                         ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+            //                         ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+            //                     })
+            // await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -200, steps: 350})
 
         }
 
@@ -813,6 +813,28 @@
             let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
             let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: ({corrvalue}) => Math.abs(corrvalue), fill: ({corrvalue}) => Math.abs(corrvalue)})
             let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
+
+            let c2 = new Canvas(db, {width: 800, height: 500})
+            erDiagramCanvas = c2
+
+            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black', height: c2.db.table("columns")})
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            // let vattributes= c2.text("columns", {
+            //                                 y: 'ordinal_position',
+            //                                 text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
+            //                                 textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+            //                                 x: 0
+            //                 })
+
+            // c2.nest(vattributes, vtables)
+
+            // let vfkeys = c2.link("fkeys", {
+            //                         ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+            //                         ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+            //                     })
+            // await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
         }
 
         /* TABLE */
@@ -885,7 +907,7 @@
 
             let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
             let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
-            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}, fill: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}})
+            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: ({corrvalue}) => Math.abs(corrvalue), fill: ({corrvalue}) => Math.abs(corrvalue)})
             let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
 
             let c2 = new Canvas(db, {width: 800, height: 500})

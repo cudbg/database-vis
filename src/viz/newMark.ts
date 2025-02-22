@@ -28,6 +28,7 @@ import { mgg } from "./uapi/mgg";
 interface ColumnObj {
   dataAttr: string
   renameAs: string
+  tablename: string
 }
 
 function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
@@ -100,8 +101,20 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   }
 
   if (item.isGet) {
+    if (item.dataAttr.length > 1) {
+      item.dataAttr.forEach((attr) => {
+        //renameAs is this really long string because we need to differentiate between attributes with the same name in the query
+        //Example: x1: [x, width], x2: [x, height]. We need to differentiate between the x used for x1 and x used for x2
+        columns.push({dataAttr: attr, renameAs: `${attr}_${item.visualAttr}`, tablename: source.internalname})
+      })
+    } else {
+      columns.push({dataAttr: String(item.dataAttr[0]), renameAs: `${item.visualAttr}`, tablename: source.internalname})
+    }
     item.dataAttr.forEach((attr) => {
-      columns.push({dataAttr: attr, renameAs: `${source.internalname}_${item.visualAttr}_${attr}`})
+    })
+  } else {
+    source.schema.attrs.forEach((attr) => {
+      columns.push({dataAttr: attr, renameAs: attr, tablename: source.internalname})
     })
   }
   return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint, isConstant: item.isConstant}
@@ -175,12 +188,14 @@ export class Mark {
     outermark: Mark;
     innerToOuter: Map<number, number>;
     level: number;
-    idVisualAttrMap: Map<number, Set<string>>; /* for handling level differences between marks */
 
     /**
-     * Other mark + visual attr of this mark + other id -> bag of ids for this mark
+     * row id of this mark to {x1: id of some other mark, x2: id of some other mark, etc.}
+     * You can replace x1, y1, (ie. visual attributes) with foreign data attributes
+     * yes, we are eating a lot of memory here
      */
     referencedMarks: Map<number, {}>;
+    pathAttrMap: Map<number, string[]>;
 
     /**
      * Some filters to append onto the end of the SQL query when trying to get data
@@ -231,8 +246,8 @@ export class Mark {
         this.outermark = null
         this.markInfoCache = new Map<number, {}>()
         this.innerToOuter = null
-        this.idVisualAttrMap = new Map<number, Set<string>>()
         this.referencedMarks = new Map<number, {}>()
+        this.pathAttrMap = new Map<number, string[]>()
         this.filters = []
         this.ordering = []
         this.orderByDesc = false
@@ -681,7 +696,7 @@ export class Mark {
        */
       if (isNested) {
         let channelObj = {}
-        for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {  
+        for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
           this.pickupReferences(children)
 
@@ -819,261 +834,188 @@ export class Mark {
     }
 
     constructQuery(nest?) {
-      let idCounter = 0
-      let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
-      let pathIDMap = new Map<FKConstraint[], number>()
+      /**
+       * Construct all foreign key paths and for each path, store a set of ColumnObjs
+       * Each foreign key path and its set of columnObjs will be used to create a subquery
+       * Each subquery must select the _rav_id column of this.src
+       * Join all subqueries together on the _rav_id column
+       */
+      let foreignkeyPaths = new Map<FKConstraint[], Set<ColumnObj>>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
 
-      /**
-      * An array of possible aliases for this.src
-      * Usually contains a single alias
-      * Can contain more aliases if multiple marks have this.src as their source table
-      * and some mark has a foreign key reference to another mark,
-      * In this case, we need to rename this.src in the query 
-      */
-      let possibleSrcTableAliases = []
-
-
-      /**
-       * If some table != this.src and it appears in different foreign key references, then we need to rename it
-       * 
-       * An example from the airport nodelink diagram:
-       * SELECT "am1"."x" as "x1", "am1"."y" as "y1", "am2"."x" as "x2", "am2"."y" as "y2"
-       * FROM "airport_marktable0" as "am1", "airport_marktable0" as "am2", "airport" as "a1", "airport" as "a2", routes
-       * WHERE "a1"."airport" = "routes"."ORIGIN"
-       *       AND "a1"."_rav_id" = "am1"."_rav_id" 
-       *       AND "a2"."airport" = "routes"."DEST"
-       *       AND "a2"."_rav_id" = "am2"."_rav_id"
-       * 
-       * Note how every table along the foreign key path also has to be renamed
-       */
-
-      /**
-       * 1. Iterate over all query items and group their dattrs by path or source in a Map mp.
-       *    dattrs that are derived from a table that is not this.src will have a path as the key
-       *    dattrs that are derived from this.src have this.src as the key
-       * 
-       * 2. Iterate over key,value pairs of mp. 
-       *    All tables in the FKPath besides this.src will need to be renamed. 
-       *    Each dattr in the value is added to the select part of query
-       * 
-       * 3. Handle nesting if needed
-       * 
-       */
-
+      //Loop to create foreign key paths
       for (let i = 0; i < queryItems.length; i++) {
         let {source, columns, constraint, isConstant} = queryItems[i]
 
-        /**
-        * Check if column is a numeric value. the user could have entered x: 5 
-        * and we wouldnt want to query for column 5
-        */
-        if (!columns.some(column => source.schema.attrs.includes(column.dataAttr)))
-          continue
-        if (isConstant)
-          continue
-        /**
-         * This is a foreign key reference
-         */
+        // Only query items with a constraint are foreign attributes
         if (constraint) {
           let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
-            let pathInMap = null
 
-            if (!possibleNewPath)
-              throw new Error("No possible path")
+          if (!possibleNewPath)
+            throw new Error("No possible path")
 
-            for (let path of pathQueryItemMap.keys()) {
-              if (eqPath(possibleNewPath, path)) {
-                pathInMap = path
-                break
-              }
+          let path = null
+
+          //Check if possibleNewPath is already in foreignkeyPaths
+          for (let p of foreignkeyPaths.keys()) {
+            if (eqPath(possibleNewPath, p)) {
+              path = p
+              break
             }
+          }
 
-            if (!pathInMap) {
-              queryItems[i].columns.push({dataAttr: IDNAME, renameAs: `idcounter_${idCounter}`})
-              pathIDMap.set(possibleNewPath, idCounter)
-              this.idVisualAttrMap.set(idCounter, new Set(queryItems[i].columns.map(columnObj => columnObj.renameAs)))
-              idCounter++
-
-              pathQueryItemMap.set(possibleNewPath, new Set([queryItems[i]]))
-
-              /**
-               * Create a path for each constraint and check if this new path is already present
-               */
-              if ((constraint.t1 == constraint.t2) && (constraint.t1 == this.src)) {
-                let currlen = possibleSrcTableAliases.length
-                possibleSrcTableAliases.push(`${this.src.internalname}_${currlen}`)
-              }
-
-            } else {
-              let queryItemSet = pathQueryItemMap.get(pathInMap)
-              let id = pathIDMap.get(pathInMap)
-              queryItems[i].columns.forEach(columnObj => this.idVisualAttrMap.get(id).add(columnObj.renameAs))
-  
-              queryItemSet.add(queryItems[i])
-
-            }
+          //Store columns in foreign key paths
+          if (!path) {
+            path = possibleNewPath
+            foreignkeyPaths.set(path, new Set(columns))
+          }
+          columns.forEach((column) => foreignkeyPaths.get(path).add(column))
+          
         }
       }
 
-      /**
-       * This handles nesting
-       * Create a new path
-       * Append a FKConstraint for the outermark
-       *  For example if outermark VRECT is a bunch of 3 rectangles with ids 0, 1, 2
-       *  We would need a FKConstraint where VRECT.id = 0 (could be any of the 3 ids above)
-       *  See how nesting works in doMarkNest for complete picture
-       * 
-       * Check if that new path is already present
-       * If present, remove the path that is currently present in the map and replace it with new path
-       * If not, we can just add new path to the map
-       * 
-       * Note: We do not support re-referencing this.src in nesting ie. the following is not possible
-       * let va = c.rect("A", ...)
-       * let vb = c.dot("A", ...)
-       * 
-       * nest(va, vb, <some_key>)
-       */
+
       if (nest) {
-        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.src, nest.fk)
-        let pathInMap = null
+        let possibleNewPath = this.c.db.getFKPath(this.src, nest.outerMark.marktable, nest.fk)
 
         if (!possibleNewPath)
           throw new Error("No possible path")
 
-        for (let path of pathQueryItemMap.keys()) {
-          if (eqPath(possibleNewPath, path)) {
-            pathInMap = path
+        let path = null
+
+        for (let p of foreignkeyPaths.keys()) {
+          if (eqPath(possibleNewPath, p)) {
+            path = p
             break
           }
         }
 
-        //possibleNewPath.push(new FKConstraint({t1: nest.outerMark.marktable, X: [IDNAME], t2: nest.outerMark.marktable, Y: [crow[IDNAME]]}))
-        let nestQueryItem: QueryItem = {srcmark: nest.outerMark, source: nest.outerMark.src, columns: [{dataAttr: IDNAME, renameAs: `${IDNAME}_parent`}], constraint: nest.fk, isConstant: false}
-
-        if (!pathInMap) {
-          pathQueryItemMap.set(possibleNewPath, new Set([nestQueryItem])) /* empty set because this is a nest, no attributes are being selected */
-        } else {
-          let queryItemSet = pathQueryItemMap.get(pathInMap)
-          queryItemSet.add(nestQueryItem)
+        if (!path) {
+          path = possibleNewPath
+          foreignkeyPaths.set(path, new Set())
         }
+        //For the nesting path, we select only the id of this.src, and id of outermark
+        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: IDNAME, tablename: this.src.internalname})
+        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: `${IDNAME}_parent`, tablename: nest.outerMark.marktable.internalname})
       }
 
       /**
-       * Actual construction of query
+       * Actually construct the query here
+       * For each foreign key path, create a new subquery and select the relevant columns
+       * Create an additional base subquery that selects all columns in this.src
        */
 
-      let query = new Query()
+      let resultQuery = new Query()
+      let pathCounter = 0 //to differentiate WITH subqueries 
 
-      query = query.distinct()
+      foreignkeyPaths.forEach((columns, path) => {
+        let subquery = new Query()
+        subquery = subquery.distinct()
+        this.pathAttrMap.set(pathCounter, [])
+        let addedTables = new Set()
+        
+        for (let p of path) {
+          let {t1, t2, X, Y} = p
+          //check if t1 and t2 have been added to the subquery
+          if (!addedTables.has(t1.internalname)) {
+            subquery = subquery.from(t1.internalname)
+            addedTables.add(t1.internalname)
+          }
+          if (!addedTables.has(t2.internalname)) {
+            subquery = subquery.from(t2.internalname)
+            addedTables.add(t2.internalname)
+          }
 
-      /**
-       * Select all columns from this.src by default
-       */
-      this.src.schema.attrs.forEach(attr => {
-        query = query.select({[attr]: column(this.src.internalname, attr)})
+          //This creates the where clauses to join on
+          for (let i = 0; i < X.length; i++) {
+            subquery = subquery.where(eq(column(t1.internalname, X[i]), column(t2.internalname, Y[i])))
+          }
+        }
+
+        let selectedCols = new Set<string>()
+        columns.forEach(c => {
+          subquery = subquery.select({[c.renameAs]: column(c.tablename, c.dataAttr)})
+          selectedCols.add(c.dataAttr)
+          this.pathAttrMap.get(pathCounter).push(c.renameAs)
+        })
+        
+        //Check if id col of this.src and id col of last table have been selected
+        let srcIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: IDNAME, tablename: this.src.internalname}
+        let lastTableName = path[path.length - 1].t1.internalname
+        let lastIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: `path${pathCounter}_id`, tablename: lastTableName}
+        let foundSrcID = false
+        let foundLastID = false
+
+        for (const item of selectedCols) {
+          if (JSON.stringify(item) === JSON.stringify(srcIDColumnObj)) {
+            foundSrcID = true
+          }
+          if (JSON.stringify(item) === JSON.stringify(lastIDColumnObj)) {
+            foundLastID = true
+          }
+        }
+        
+        //We need to select the the id for this.src in each subquery so that we can join all of them together later
+        if (!foundSrcID){
+          subquery = subquery.select({[srcIDColumnObj.renameAs]: column(srcIDColumnObj.tablename, srcIDColumnObj.dataAttr)})
+        }
+
+        if (!foundLastID){
+          subquery = subquery.select({[lastIDColumnObj.renameAs]: column(lastIDColumnObj.tablename, lastIDColumnObj.dataAttr)})
+          this.pathAttrMap.get(pathCounter).push(lastIDColumnObj.renameAs)
+        }
+
+        resultQuery.with({[`path${pathCounter}`]: subquery})
+        pathCounter += 1
       })
+
+      //Now create the additional base query. It's basically a dummy WITH statement to join other WITH subqueries
+      let baseQuery = new Query()
+      baseQuery = baseQuery.distinct()
+      //Selecting columns from this.src in base...
+      this.src.schema.attrs.forEach(attr => {
+        baseQuery = baseQuery.select(column(this.src.internalname, attr))
+      })
+      baseQuery = baseQuery.from(this.src.internalname)
+      this.filters.forEach((filter) => {
+        baseQuery = baseQuery.where(filter)
+      })
+
+
+      resultQuery = resultQuery.with({base: baseQuery})
+      this.src.schema.attrs.forEach(attr => {
+        resultQuery = resultQuery.select({[attr]: column("base", attr)})
+      })
+      resultQuery = resultQuery.from("base")
+
+      //Now pull everything together
+      //Select the columns in each path
+      for (let [pathID, columns] of this.pathAttrMap.entries()) {
+        columns.forEach(c => {
+          resultQuery = resultQuery.select({[c]: column(`path${pathID}`, c)})
+        })
+        resultQuery = resultQuery.from(`path${pathID}`)
+      }
+      
+
+      for (let i = 0; i < pathCounter; i++) {
+        resultQuery = resultQuery.where(eq(column(`path${i}`, IDNAME), column("base", IDNAME)))
+      }
+
 
       if (this.ordering.length > 0)
-        query = query.orderby(this.ordering)
-
-      query = query.from(this.src.internalname)
-
-      let pathCounter = 1
-      let srcTableAliasIndex = 0
-
-      for (let [path, queryItemSet] of pathQueryItemMap.entries()){
-        /**
-         * tableRenameMap is a mapping from internal table names to in-query aliases
-         */
-        let tableRenameMap = new Map<string, string>()
-        let srcTableAlias = null
-        let startPathIterIndex = 0
-
-        if ((path[0].t1 == path[0].t2) && (path[0].t1 == this.src)) {
-          let {X, Y} = path[0]
-
-          srcTableAlias = possibleSrcTableAliases[srcTableAliasIndex]
-          srcTableAliasIndex++
-          startPathIterIndex = 1
-          query = query.from({[srcTableAlias]: this.src.internalname})
-
-          for (let i = 0; i < X.length; i++)
-            query = query.where(eq(column(this.src.internalname, X[i]), column(srcTableAlias, Y[i])))
-        }
-
-        for (let i = startPathIterIndex; i < path.length; i++) {
-          let constraint = path[i]
-          let {t1, t2, X, Y} = constraint
-          let renameT1 = null
-          let renameT2 = null
-
-          if (t1.internalname != this.src.internalname) {
-            if (!tableRenameMap.has(t1.internalname)) {
-              renameT1 = `${t1.internalname}_${pathCounter}`
-              query = query.from({[renameT1]: t1.internalname})
-              tableRenameMap.set(t1.internalname, renameT1)
-            } else {
-              renameT1 = tableRenameMap.get(t1.internalname)
-            }
-          } else if (srcTableAlias)
-            renameT1 = srcTableAlias
-          else {
-            renameT1 = this.src.internalname
-          }
-
-          if (t2.internalname != this.src.internalname) {
-            if (!tableRenameMap.has(t2.internalname)) {
-              renameT2 = `${t2.internalname}_${pathCounter}`
-              query = query.from({[renameT2]: t2.internalname})
-              tableRenameMap.set(t2.internalname, renameT2)
-            } else {
-              renameT2 = tableRenameMap.get(t2.internalname)
-            }
-          } else if (srcTableAlias) {
-            renameT2 = srcTableAlias
-          }
-          else {
-            renameT2 = this.src.internalname
-          }
-          for (let i = 0; i < X.length; i++)
-            query = query.where(eq(column(renameT1, X[i]), column(renameT2, Y[i])))
-        }
-
-        for (let queryItem of queryItemSet) {
-          let {source, columns} = queryItem
-
-          for (let columnObj of columns) {
-            let {dataAttr, renameAs} = columnObj
-            let tableName = tableRenameMap.get(source.internalname)
-            query = query.select({[renameAs]: column(tableName, dataAttr)})
-
-            /**
-             * Experimental feature
-             */
-            query = query.select({[`${renameAs}_ref`]: column(tableName, IDNAME)})
-          }
-        }
-        pathCounter++
-      }
-
-    /**
-     * this.filters populated in filter function
-     */
-      this.filters.forEach((filter) => {
-        query = query.where(filter)
-      })
+        resultQuery = resultQuery.orderby(this.ordering)
 
       /**
        * This part feels extremely hacky and unsafe
        * But I am pretty sure we can gurantee that order by is the last thing in the sql query 
        */
-      query = query.toString()
+      resultQuery = resultQuery.toString()
 
       if (this.orderByDesc) {
-        query += " DESC"
+        resultQuery += " DESC"
       }
-      return query
+      return resultQuery
     }
  
     /**
@@ -1127,58 +1069,58 @@ export class Mark {
           /**
            * BUGGY
            */
-          if (mark.level != this.level){
-            if (visualAttr == "x1" 
-              || visualAttr == "x2" 
-              || visualAttr == "x"
-              || visualAttr == "y1"
-              || visualAttr == "y2"
-              || visualAttr == "y") {
-                let idcounter = null
+          // if (mark.level != this.level){
+          //   if (visualAttr == "x1" 
+          //     || visualAttr == "x2" 
+          //     || visualAttr == "x"
+          //     || visualAttr == "y1"
+          //     || visualAttr == "y2"
+          //     || visualAttr == "y") {
+          //       let idcounter = null
 
-                for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
-                  visualAttrSet.forEach((attr) => {
-                    if (attr == queryItem.columns[0].renameAs) {
-                      idcounter = id
-                    }
-                  })
-                  if (idcounter != null) {
-                    break
-                  }
-                }
+          //       for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
+          //         visualAttrSet.forEach((attr) => {
+          //           if (attr == queryItem.columns[0].renameAs) {
+          //             idcounter = id
+          //           }
+          //         })
+          //         if (idcounter != null) {
+          //           break
+          //         }
+          //       }
 
-                if (idcounter == null) {
-                  throw new Error("Cannot find visualAttr in applychannels")
-                }
+          //       if (idcounter == null) {
+          //         throw new Error("Cannot find visualAttr in applychannels")
+          //       }
 
-                let idcounterArr = data[`idcounter_${idcounter}`]
+          //       let idcounterArr = data[`idcounter_${idcounter}`]
 
-                for (let j = 0; j < idcounterArr.length; j++) {
-                  let currOtherId = idcounterArr[j]
-                  let othermark = mark
-                  let othermarkInfoCache = mark.markInfoCache
-                  let otherlevel = mark.level
+          //       for (let j = 0; j < idcounterArr.length; j++) {
+          //         let currOtherId = idcounterArr[j]
+          //         let othermark = mark
+          //         let othermarkInfoCache = mark.markInfoCache
+          //         let otherlevel = mark.level
 
-                  while (othermark && (otherlevel > this.level)) {
-                    let obj = othermarkInfoCache.get(currOtherId)
+          //         while (othermark && (otherlevel > this.level)) {
+          //           let obj = othermarkInfoCache.get(currOtherId)
 
-                    if (visualAttr == "x1" 
-                      || visualAttr == "x2" 
-                      || visualAttr == "x") {
-                        arr = arr.map(elem => elem + obj.data_xoffset)
-                      }
-                    else if (visualAttr == "y1" 
-                      || visualAttr == "y2" 
-                      || visualAttr == "y") {
-                        arr = arr.map(elem => elem + obj.data_yoffset)
-                      }
-                      othermark = othermark.outermark
-                      othermarkInfoCache = othermark.markInfoCache
-                    otherlevel--
-                  }
-                }
-            }
-          }
+          //           if (visualAttr == "x1" 
+          //             || visualAttr == "x2" 
+          //             || visualAttr == "x") {
+          //               arr = arr.map(elem => elem + obj.data_xoffset)
+          //             }
+          //           else if (visualAttr == "y1" 
+          //             || visualAttr == "y2" 
+          //             || visualAttr == "y") {
+          //               arr = arr.map(elem => elem + obj.data_yoffset)
+          //             }
+          //             othermark = othermark.outermark
+          //             othermarkInfoCache = othermark.markInfoCache
+          //           otherlevel--
+          //         }
+          //       }
+          //   }
+          // }
 
           channels[visualAttr] = arr
         }
@@ -2155,24 +2097,20 @@ export class Mark {
     }
 
     pickupReferences(rows) {
-      for (let i = 0; i < this.channels.length; i++) {
-        let {mark, visualAttr, isGet} = this.channels[i]
-        let queryItem = toQueryItem(this.channels[i])
+      //Now populate referencedMarks. 
+      // key is row id of this.src
+      // value is an object with key: <visual_attr>_ref, value: pathID
+      for (let [pathID, attrs] of this.pathAttrMap.entries()) {
+        rows.forEach(row => {
+          let rowID = row[IDNAME]
 
-        if (isGet) {
-          let ref = `${queryItem.columns[0].renameAs}_ref`
-          /**
-           * Currently operate under assumption that x1,y1,x2,y2 always involve a call to get
-           */
-          for (let i = 0; i < rows.length; i++) {
-            if (this.referencedMarks.has(rows[i][IDNAME])) {
-              let obj = this.referencedMarks.get(rows[i][IDNAME])
-              obj[`${visualAttr}_ref`] = rows[i][ref]
-            } else {
-              this.referencedMarks.set(rows[i][IDNAME], {[`${visualAttr}_ref`]: rows[i][ref]})
-            }
-          }
-        }
+          if (!this.referencedMarks.has(rowID))
+            this.referencedMarks.set(rowID, {})
+
+          attrs.forEach(attr => {
+            this.referencedMarks.get(rowID)[`${attr}_ref`] = row[`path${pathID}_id`]
+          })
+        })
       }
     }
 
