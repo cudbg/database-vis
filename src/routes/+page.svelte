@@ -200,7 +200,7 @@
             window.db = db;
 
             await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: {cols: "cp", func: d => d.cp + 1}}, {x: {range: [10, 990]}})
+            let dots = c.dot("heart_reduced", {x: "age", y: "thalach", symbol: "sex", fill: "target", r: ({cp}) => cp + 1}, {x: {range: [10, 990]}})
         }
 
         /* TIMECARD / PUNCHCARD DESIGN FIG 5B PART 1 */
@@ -362,7 +362,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-        if (1) {
+        if (0) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -475,8 +475,8 @@
             let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
             let vattributes= c2.text("columns", {
                                             y: 'ord_pos',
-                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
                                             x: 0
                             })
 
@@ -773,7 +773,7 @@
         }
 
         /* HEATMAP */
-        if (0) {
+        if (1) {
             /**
              * Data transformation process
              * 
@@ -811,7 +811,7 @@
 
             let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
             let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
-            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}, fill: {cols: "corrvalue", func: (d) => Math.abs(d.corrvalue)}})
+            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: ({corrvalue}) => Math.abs(corrvalue), fill: ({corrvalue}) => Math.abs(corrvalue)})
             let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
         }
 

@@ -99,21 +99,10 @@ function toQueryItem(item: RawChannelItem): QueryItem {
     source = item.mark.src
   }
 
-  //setting columns to select from source
-  if (item.refLayout) { //If it is a reflayout, select all columns as they are
-    for (let i = 0; i < item.dataAttr.length; i++) {
-      columns.push({dataAttr: item.dataAttr[i], renameAs: item.dataAttr[i]})
-    }
-  }
-  else if (item.isGet) {
+  if (item.isGet) {
     item.dataAttr.forEach((attr) => {
       columns.push({dataAttr: attr, renameAs: `${source.internalname}_${item.visualAttr}_${attr}`})
     })
-  } else {
-     //dataAttr is an array that contains one element and because this is not a get, we do not rename it to the visualAttr
-     item.dataAttr.forEach(dattr => {
-      columns.push({dataAttr: dattr, renameAs: dattr})
-     })
   }
   return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint, isConstant: item.isConstant}
 
@@ -333,17 +322,8 @@ export class Mark {
 
               if (dattr.scale.callback)
                 rawChannelItem.callback = dattr.scale.callback
-          } else if (dattr instanceof Object && "cols" in dattr) {
-            if (!("func" in dattr))
-              throw new Error("Error in initialization: Give me a callback function!")
-
-            if (!(dattr.func instanceof Function))
-              throw new Error("Error initialization: This has to be a callback function!")
-
-            let {cols, func} = dattr
-
-            rawChannelItem.dataAttr = cols instanceof Array ? cols : [cols]
-            rawChannelItem.callback = func
+          } else if (typeof dattr === "function") {
+            rawChannelItem.callback = dattr
           } else if (dattr instanceof Object && "constant" in dattr) {
             rawChannelItem.dataAttr = [dattr.constant]
             rawChannelItem.isConstant = true
@@ -842,9 +822,7 @@ export class Mark {
       let idCounter = 0
       let pathQueryItemMap = new Map<FKConstraint[] ,Set<QueryItem>>()
       let pathIDMap = new Map<FKConstraint[], number>()
-      let noConstraintColumnObjSet = new Set<ColumnObj>() /* this is for dattrs from this.src */
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
-
 
       /**
       * An array of possible aliases for this.src
@@ -935,17 +913,6 @@ export class Mark {
               queryItemSet.add(queryItems[i])
 
             }
-        } else {
-          for (let i = 0; i < columns.length; i++) {
-            let foundColumn = false
-
-            for (const columnObj of noConstraintColumnObjSet) {
-              if (eqColumnObjs(columnObj, columns[i]))
-                foundColumn = true
-            }
-            if (!foundColumn)
-              noConstraintColumnObjSet.add(columns[i])
-          }
         }
       }
 
@@ -1000,13 +967,12 @@ export class Mark {
 
       query = query.distinct()
 
-      for (let columnObj of noConstraintColumnObjSet.values()) {
-        let {dataAttr, renameAs} = columnObj
-
-        query = query.select({[renameAs]: column(this.src.internalname, dataAttr)})
-      }
-
-      query = query.select(column(this.src.internalname, IDNAME))
+      /**
+       * Select all columns from this.src by default
+       */
+      this.src.schema.attrs.forEach(attr => {
+        query = query.select({[attr]: column(this.src.internalname, attr)})
+      })
 
       if (this.ordering.length > 0)
         query = query.orderby(this.ordering)
@@ -1225,25 +1191,15 @@ export class Mark {
           }
           channels[visualAttr] = Array(data[IDNAME].length).fill(0); // dummy value
         } else {
-          /**
-           * If we fall to this else block, this is a normal mapping.
-           * As such, dataAttr is an array of length 1 and we just get element at index 0
-           * We check to see if the element in dataAttr is present in the data that was returned from the query
-           * This is necessary because of numeric mappings like x: 0. Numeric mappings will not be included in the data
-           * If the first element in dataAttr is present in the data, then we just assign it directly
-           */
-          if (Object.keys(data).includes(dataAttr[0])) {
-            if (callback)
-              channels[visualAttr] = this.handleCallback(currItem,queryItem, data)
-            else
-              channels[visualAttr] = data[dataAttr[0]]
-          } else {
-            /**
-             * This runs in cases like x: 0, width: "5em"
-             * As such we fill up channels[visualAttr] with that fixed value
-             */
-            channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
+          if (callback) {
+
+            channels[visualAttr] = this.handleCallback(currItem, queryItem, data)
           }
+          else if (Object.keys(data).includes(dataAttr[0]))
+            channels[visualAttr] = data[dataAttr[0]]
+          else
+            channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
+          
         }
       }
 
@@ -1270,11 +1226,10 @@ export class Mark {
      */
     handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, data) {
       let resArr = []
-      let {mark, callback, dataAttr} = channelItem
-      let {columns} = queryItem
+      let {mark, callback} = channelItem
       let src = mark == this ? this.src : mark.marktable
-      let datalen = data[columns[0].renameAs].length
-
+      let firstKey = Object.keys(data)[0]
+      let datalen = data[firstKey].length
       /**
        * For the number of datapoints available
        *    pick the relevant data points from each inner array in args. 
@@ -1285,20 +1240,24 @@ export class Mark {
        */
       for (let i = 0; i < datalen; i++) {
         let obj = {}
-        columns.forEach((column) => {
-          let attrIndex = src.schema.attrs.indexOf(column.dataAttr)
+        if (channelItem.isGet) {
+          queryItem.columns.forEach((column) => {
+            if (parseFloat(data[column.renameAs][i])) {
+              obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
+            } else {
+              obj[column.dataAttr] = data[column.renameAs][i]
+            }
 
-          if (attrIndex == -1)
-            throw new Error(`Error in handleCallback: Could not find attribute ${column.dataAttr} in ${src.internalname}`)
-  
-          let attrType = src.schema.types[attrIndex]
-  
-          if (attrType == "num") {
-            obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
-          } else {
-            obj[column.dataAttr] = data[column.renameAs][i]
-          }
-        })
+          })
+        } else {
+          Object.keys(data).forEach(attr => {
+            if (Number(data[attr][i]) || data[attr][i] == 0n) {
+              obj[attr] = parseFloat(data[attr][i])
+            } else {
+              obj[attr] =  data[attr][i]
+            }
+          })
+        }
         resArr.push(callback(obj))
       }
       return resArr
