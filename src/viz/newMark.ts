@@ -913,28 +913,65 @@ export class Mark {
         subquery = subquery.distinct()
         this.pathAttrMap.set(pathCounter, [])
         let addedTables = new Set()
+        let srcTableAlias = null
         
         for (let p of path) {
           let {t1, t2, X, Y} = p
-          //check if t1 and t2 have been added to the subquery
-          if (!addedTables.has(t1.internalname)) {
+          //Need to handle multiple copies of this.src in the query
+          //For now assume, that there is at most 2 copies in a single subquery
+          //Also assume that the constraint with multiple copies is the very first constraint along the path
+          if (t1.internalname == t2.internalname) {
             subquery = subquery.from(t1.internalname)
+            subquery = subquery.from({[`${t1.internalname}_1`]: t1.internalname})
             addedTables.add(t1.internalname)
-          }
-          if (!addedTables.has(t2.internalname)) {
-            subquery = subquery.from(t2.internalname)
-            addedTables.add(t2.internalname)
-          }
+            addedTables.add(`${t1.internalname}_1`)
+            srcTableAlias = `${t1.internalname}_1`
 
-          //This creates the where clauses to join on
-          for (let i = 0; i < X.length; i++) {
-            subquery = subquery.where(eq(column(t1.internalname, X[i]), column(t2.internalname, Y[i])))
+            //This creates the where clauses to join on
+            for (let i = 0; i < X.length; i++) {
+              subquery = subquery.where(eq(column(t1.internalname, X[i]), column(srcTableAlias, Y[i])))
+            }
+
+          } else if (srcTableAlias && (t1.internalname == this.src.internalname || t2.internalname == this.src.internalname)) {
+            //check if t1 and t2 have been added to the subquery
+            //This is guranteed to be the second edge, where the copy of this.src could be used
+            let leftName = t1.internalname == this.src.internalname ? srcTableAlias : t1.internalname
+            let  rightName = t2.internalname == this.src.internalname ? srcTableAlias : t2.internalname
+
+            if (!addedTables.has(leftName)) {
+              subquery = subquery.from(leftName)
+              addedTables.add(leftName)
+            }
+            if (!addedTables.has(rightName)) {
+              subquery = subquery.from(rightName)
+              addedTables.add(rightName)
+            }
+
+            for (let i = 0; i < X.length; i++) {
+              subquery = subquery.where(eq(column(leftName, X[i]), column(rightName, Y[i])))
+            }
+
+          } else {
+            if (!addedTables.has(t1.internalname)) {
+              subquery = subquery.from(t1.internalname)
+              addedTables.add(t1.internalname)
+            }
+            if (!addedTables.has(t2.internalname)) {
+              subquery = subquery.from(t2.internalname)
+              addedTables.add(t2.internalname)
+            }
+
+            for (let i = 0; i < X.length; i++) {
+              subquery = subquery.where(eq(column(t1.internalname, X[i]), column(t2.internalname, Y[i])))
+            }
           }
         }
-
+        
         let selectedCols = new Set<string>()
         columns.forEach(c => {
-          subquery = subquery.select({[c.renameAs]: column(c.tablename, c.dataAttr)})
+          //Need to double check if we are selecting from the copy of this.src
+          let tname = c.tablename == this.src.internalname && srcTableAlias ? srcTableAlias : c.tablename
+          subquery = subquery.select({[c.renameAs]: column(tname, c.dataAttr)})
           selectedCols.add(c.dataAttr)
           this.pathAttrMap.get(pathCounter).push(c.renameAs)
         })
@@ -942,6 +979,8 @@ export class Mark {
         //Check if id col of this.src and id col of last table have been selected
         let srcIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: IDNAME, tablename: this.src.internalname}
         let lastTableName = path[path.length - 1].t1.internalname
+        //Last table might be the copy of this.src
+        lastTableName = lastTableName == this.src.internalname ? srcTableAlias : lastTableName
         let lastIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: `path${pathCounter}_id`, tablename: lastTableName}
         let foundSrcID = false
         let foundLastID = false

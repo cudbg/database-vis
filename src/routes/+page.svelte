@@ -773,7 +773,7 @@
         }
 
         /* HEATMAP */
-        if (1) {
+        if (0) {
             /**
              * Data transformation process
              * 
@@ -1984,7 +1984,7 @@
             c.nest(rect2, rect1)
         }
 
-        if (0) { /* airport nodelink */
+        if (1) { /* airport nodelink */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})
