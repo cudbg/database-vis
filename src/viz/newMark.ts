@@ -10,7 +10,7 @@ import { Cardinality, FKConstraint } from "./constraint";
 import type {  Canvas } from "./canvas";
 import type {Schema} from "./schema";
 import { MarkNest, RootNest, type Nest } from "./nest";
-import { markof, RefColumn, RefLayout, RefMark } from "./ref";
+import { markof, RefColumn, RefLayout, RefMark, RLFD } from "./ref";
 import { inferScale, Linear, Ordinal, Sqrt } from "./scale"
 import { oplotUtils } from "./plotUtils/oplotUtils";
 import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection } from "./markUtils"
@@ -47,7 +47,7 @@ interface RawChannelItem {
   mark: Mark
   src: Table
   visualAttr: string
-  constraint: FKConstraint /* will be null if there are no clauses ie. normal mapping like x: "a" */
+  constraint: FKConstraint | FKConstraint[] /* will be null if there are no clauses ie. normal mapping like x: "a" */
   /**
    * Underlying data attribute for visualAttribute
    * The type is an array because the user could do x: va.get(null, ["x", "width"], someCallback)
@@ -77,7 +77,7 @@ interface QueryItem {
    */
   columns: ColumnObj[]
 
-  constraint: FKConstraint
+  constraint: FKConstraint | FKConstraint[]
   isConstant: boolean
 }
 
@@ -297,10 +297,75 @@ export class Mark {
           let rawChannelItem: RawChannelItem = {mark, src, visualAttr, constraint, dataAttr, isGet, refLayout, callback, isVisualChannel, isConstant}
 
           if (dattr instanceof RefLayout) {
-              dattr.add(va);
-              this.addLayout(dattr);
-              rawChannelItem.dataAttr = dattr.dattrs
-              rawChannelItem.refLayout = dattr
+              //Need to handle special case of RLFD where we need to get a foreign key path
+              if (dattr instanceof RLFD) {
+                let filter = dattr.dattrs
+                let edgetable = dattr.edgetable
+                
+                for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
+                  if (!(constraint instanceof FKConstraint))
+                    continue
+                  let validFkConstraint = this.checkValidFkConstraint(constraint, filter)
+
+                  if (validFkConstraint) {
+                    let paths = this.c.db.getTwoPaths(this.src, edgetable, constraint)
+
+                    if (!paths)
+                      throw new Error("Can't find two paths!")
+                    
+                    //Set both leftPath and rightPath when we hit leftAttr because its simpler that way
+                    if (dattr.leftPath.length == 0 && dattr.rightPath.length == 0) {
+                      dattr.leftPath = paths[0]
+                      dattr.rightPath = paths[1]
+
+                      //Update metadata for ER diagram
+                      paths.forEach((path) => {
+                        path.forEach(edge => {
+                          this.c.tablesUsed.add(edge.t1.internalname)
+                          this.c.tablesUsed.add(edge.t2.internalname)
+                        })
+                      })
+                    }
+
+
+                    if (va == "left") {
+                      let lastEdge = paths[0][paths[0].length - 1]
+                      let {t1, X, Y} = lastEdge
+                      rawChannelItem.constraint = paths[0] //If this is rlfd, we pass the entire path to rawChannelItem
+  
+                      //For now, assume that we do not use self-referencing constraints
+                      //We store the foreign key columns as the attrs to get
+                      //Tbh, they are kind of place holders because what we really want are the ids of the edges
+                      if (t1 == edgetable) {
+                        rawChannelItem.dataAttr = X
+                      } else {
+                        rawChannelItem.dataAttr = Y
+                      }
+                    } else if (va == "right") {
+                      let lastEdge = paths[1][paths[1].length - 1]
+                      let {t1, X, Y} = lastEdge
+                      rawChannelItem.constraint = paths[1]
+  
+                      if (t1 == edgetable) {
+                        rawChannelItem.dataAttr = X
+                      } else {
+                        rawChannelItem.dataAttr = Y
+                      }
+                    }
+                    //Found path, break out of for loop
+                    break
+                  }
+                }
+                rawChannelItem.isGet = true
+                rawChannelItem.src = edgetable
+
+              } else {
+                dattr.add(va);
+                this.addLayout(dattr);
+  
+                rawChannelItem.dataAttr = dattr.dattrs
+                rawChannelItem.refLayout = dattr
+              }
           }
           else if (dattr instanceof Object && (('othermark' in dattr) || ('othertable' in dattr))) { //there's a call to get
             let {othermark, othertable, constraint, otherattr, callback, isVisualChannel} = this.processGet(dattr)
@@ -485,7 +550,6 @@ export class Mark {
         return false
 
       if (c.t1 == this.src) {
-      
         return !currSearchkey || R.intersection(c.X, currSearchkey).length == currSearchkey.length
       } else if (c.t2 == this.src) {
         return !currSearchkey || R.intersection(c.Y, currSearchkey).length == currSearchkey.length
@@ -849,36 +913,41 @@ export class Mark {
        */
       let foreignkeyPaths = new Map<FKConstraint[], Set<ColumnObj>>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
-
       //Loop to create foreign key paths
       for (let i = 0; i < queryItems.length; i++) {
         let {source, columns, constraint, isConstant} = queryItems[i]
 
+        //We are not concerned with query items that are not foreign attributes
+        if (!constraint)
+          continue
+
+        let possibleNewPath = null
         // Only query items with a constraint are foreign attributes
-        if (constraint) {
-          let possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
+        if (!Array.isArray(constraint))
+          possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
+        else
+          possibleNewPath = constraint
 
-          if (!possibleNewPath)
-            throw new Error("No possible path")
+        if (!possibleNewPath)
+          throw new Error("No possible path")
 
-          let path = null
+        let path = null
 
-          //Check if possibleNewPath is already in foreignkeyPaths
-          for (let p of foreignkeyPaths.keys()) {
-            if (eqPath(possibleNewPath, p)) {
-              path = p
-              break
-            }
+        //Check if possibleNewPath is already in foreignkeyPaths
+        for (let p of foreignkeyPaths.keys()) {
+          if (eqPath(possibleNewPath, p)) {
+            path = p
+            break
           }
-
-          //Store columns in foreign key paths
-          if (!path) {
-            path = possibleNewPath
-            foreignkeyPaths.set(path, new Set(columns))
-          }
-          columns.forEach((column) => foreignkeyPaths.get(path).add(column))
-          
         }
+
+        //Store columns in foreign key paths
+        if (!path) {
+          path = possibleNewPath
+          foreignkeyPaths.set(path, new Set(columns))
+        }
+        columns.forEach((column) => foreignkeyPaths.get(path).add(column))
+          
       }
 
 

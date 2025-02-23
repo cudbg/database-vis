@@ -6,6 +6,7 @@ import { Table, IDNAME } from "./table";
 import { Constraint, FKConstraint } from "./constraint";
 import {Mark} from "./newMark"
 
+
 export function markof(source, attr?) {
   if (typeof source == "string") {}  // tablename
   else if (source instanceof Table) {
@@ -16,11 +17,19 @@ export function markof(source, attr?) {
   return new RefMark(source, attr);
 }
 
-function makelayoutspecs(klass, dattrs?) {
+function makelayoutspecs(klass, dattrs?, edgetable?, options?) {
   return (...vas) => {
     vas = vas.flat()
     vas = (vas.length==0)? klass.fills : vas;
-    const rl = new klass(dattrs)
+
+    if (klass == RLFD) {
+      //hardcode key for RLFD as left, right. These will correspond to ids of nodes that have an edge between them
+      vas = ["left", "right"]
+      const rl = new klass(dattrs, edgetable, options)
+      return Object.fromEntries(vas.map((va) => [va, rl]))
+    }
+
+    const rl = new klass(dattrs, options)
     return Object.fromEntries(vas.map((va)=>[va, rl])) 
   }
 }
@@ -31,6 +40,7 @@ export function eqY() { return makelayoutspecs(RLY) }
 export function propY(attr) { return makelayoutspecs(RLY, attr) }
 export function sq(attr) { return makelayoutspecs(RLSQ, attr) }
 export function grid(attr, numCols) { return makelayoutspecs(RLGRID, [attr,numCols]) }
+export function fdlayout(filter, edgetable, options?) { return makelayoutspecs(RLFD, filter, edgetable, options) }
 
 class RefBase {
   t: Table;
@@ -156,8 +166,7 @@ export class RLY extends RL1D {
       console.warn("Data contains empty arrays. Returning empty result.");
       return { [IDNAME]: [], y: [], y1: [], y2: [], height: [] }; // Return empty structure
   }
-    console.log("data", data)
-    console.log("options", options)
+
     options.height ??= 100;
     const treemap = d3.treemap()
     treemap.tile(d3.treemapSlice);
@@ -237,9 +246,6 @@ export class RLGRID extends RLSpaceFilling {
   }
 
   layout(data, {width, height, minx=0, miny=0}) {
-    console.log("layout data", data)
-    console.log("width", width)
-    console.log("height", height)
     /**
      * Need null guard
      */
@@ -257,6 +263,28 @@ export class RLGRID extends RLSpaceFilling {
   }
 }
 
+export class RLFD extends RLSpaceFilling {
+  strength //repulsion force between nodes
+  steps //number of steps to simulate
+  foreignKeyColumns
+  edgetable: Table
+  leftPath: FKConstraint[]
+  rightPath: FKConstraint[]
+  constructor(dattrs=[], edgetable: Table, options?) {
+    super(dattrs);
+    this.foreignKeyColumns = dattrs
+    this.required = ["left", "right"]
+    this.edgetable = edgetable
+    this.strength = (options && options?.strength && (typeof(options.strength) == "number")) ? options.strength : -750
+    this.steps = (options && options?.steps && (typeof(options.steps) == "number")) ? options.steps : 300
+    this.leftPath = []
+    this.rightPath = []
+  }
+
+  layout(data, { width, height }) {
+    console.log("data", data)
+  }
+}
 
 class RLPhysics extends RefLayout {
   constructor(dattrs, vattrs) {

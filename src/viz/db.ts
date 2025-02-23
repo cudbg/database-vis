@@ -532,6 +532,34 @@ export class Database {
 
   }
 
+  getTwoPaths(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    let edges = this.getFkDependencyGraph()
+    let paths: FKConstraint[][] = []
+    let visited = new Set<string>()
+    visited.add(source.internalname)
+    let start = source.internalname == searchConstraint.t1.internalname ? searchConstraint.t2.internalname : searchConstraint.t1.internalname
+    visited.add(start)
+
+      function dfs(node: string, visited: Set<string>, path: FKConstraint[]) {
+        if (paths.length >= 2) return; // Stop if we found two paths
+        if (node === destination.internalname) {
+            paths.push(path)
+            return
+        }
+
+        visited.add(node);
+        for (const {dst: _dst, c} of edges[node] || []) {
+            if (!visited.has(_dst)) {
+                dfs(_dst, new Set(visited), [...path, c])
+            }
+        }
+    }
+
+    dfs(start, visited, [searchConstraint])
+
+    return paths.length === 2 ? paths : null
+  }
+
   constraint(name) {
     if (name instanceof Constraint) return name;
     return this.constraints[name];
