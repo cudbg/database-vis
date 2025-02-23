@@ -839,7 +839,7 @@ export class Mark {
       } else {    
         let {mark, markInfo} = this.makemark(channels, crow)
         // select(root)
-  
+
         root
           .append("g")
           .attr("transform", `translate(${crow.x}, ${crow.y})`)
@@ -1415,6 +1415,7 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
+      console.log("data makemark", data)
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),
@@ -1435,7 +1436,6 @@ export class Mark {
 
 
       this.updateScales(mark)
-
       return {mark, markInfo};
     }
 

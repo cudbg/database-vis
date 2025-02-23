@@ -1,10 +1,11 @@
 import * as R from "ramda";
 import { get, writable, derived } from "svelte/store";
-import { Query, sql, agg, and, eq, column, literal } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, column, literal, count, max, min, median, sum } from "@uwdata/mosaic-sql";
 import { idexpr } from "./id";
 import { unorderedEquals } from "./util";
 import type { Schema } from "./schema";
 import { mgg } from "./uapi/mgg";
+import { FKConstraint } from "./constraint";
 
 
 
@@ -152,13 +153,50 @@ export class Table {
     return t;
   }
 
-  async groupby(o, displayname=null) {
-    o[IDNAME] ??= idexpr;
-    let keys = R.keys(o).filter((key) => o[key].aggregate == true)
-    let q = Query.from(this.internalname).select(o)
+  async groupby(attrs: string| string[], aggregate: {[key: string]: string}, displayname=null) {
+    attrs = Array.isArray(attrs) ? attrs : [attrs]
+    displayname ??= `${this.internalname}_aggregate`
+    let q = new Query()
+    q = q.from(this.internalname)
+    attrs.forEach(attr => {
+      q = q.select(attr)
+    })
+    q = q.select({[IDNAME]: idexpr})
+    
+    let renameAs = Object.keys(aggregate)[0];
+    let aggregateFunction = aggregate[renameAs]
+    switch (aggregateFunction) {
+      case "count":
+        q = q.select({[renameAs]: count()})
+        q = q.groupby(attrs)
+        break
+      case "max":
+        q = q.select({[renameAs]: max()})
+        q = q.groupby(attrs)
+        break
+      case "min":
+        q = q.select({[renameAs]: min()})
+        q = q.groupby(attrs)
+        break
+      case "median":
+        q = q.select({[renameAs]: median()})
+        q = q.groupby(attrs)
+        break
+      case "sum":
+        q = q.select({[renameAs]: sum()})
+        q = q.groupby(attrs)
+        break
+    }
+
     let t = await Table.fromSql(this.db, q, displayname);
-    t.keys(keys)
+    t.keys(attrs)
+    t.keys([IDNAME])
     t.name(displayname)
+
+
+    let c = new FKConstraint({t1: t, X: attrs, t2: this, Y: attrs})
+    this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
     return t;
   }
 

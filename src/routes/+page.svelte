@@ -490,6 +490,110 @@
 
         }
 
+        /* REWORK OF PARALLEL COORDINATES FIG 5C PART 3 */
+        if (1) {
+            /**
+             * We managed to color the links based on frequency, but the visualization is still pretty noisy.
+             * To resolve this, we can bucket the data to produce fewer dot marks
+             * In particular, age and thalach columns can be bucketed due to the number of dot marks they produce
+             * We can also turn the dots in squares
+             * 
+             * DATA TRANSFORMATIONS:
+             * Repeat steps from previous example
+             * Create bucket tables
+             * 
+             * 
+            */
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["sex", "age", "thalach", "cp", "target"]
+            await db.normalize("heart_csv", attrs, "heart_reduced")
+            
+            await db.normalizeMany("heart_reduced", attrs.map(a => [a]),
+                {dimnames: attrs, factname: "combined"})
+            
+            let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
+            let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
+            
+            // await c.createCountTable("combined", ["age", "thalach"], "age_thalach_count")
+            // await c.createCountTable("combined", ["thalach", "cp"], "thalach_cp_count")
+            // await c.createCountTable("combined", ["cp", "target"], "cp_target_count")
+
+            let ageThalachCount = await c.db.table("combined").groupby(["age", "thalach"], {count: "count"}, "age_thalach_count")
+            let thalachCpCount = await c.db.table("combined").groupby(["thalach", "cp"], {count: "count"}, "thalach_cp_count")
+            let cpTargetCount = await c.db.table("combined").groupby(["cp", "target"], {count: "count"}, "cp_target_count")
+            let squareMarks = []
+
+            attrs.forEach((attr, i) => {
+                let table = attr
+
+                if (attr == "age") {
+                    attr = "age_bucket"
+                    table = bucketedAgeTable
+                } else if (attr == "thalach") {
+                    attr = "thalach_bucket"
+                    table = bucketedThalachTable
+                }
+                let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
+                let label = c.text(table,
+                    {
+                        x: mark.get(attr, ["x", "width"], ({x, width}) => x + width/2), 
+                        y: mark.get(attr, ["y", "height"], ({y, height}) => y + height/2),
+                        text: attr
+
+                    }, {lineAnchor: "middle"})
+                if (attr == "age_bucket") {
+                    mark.filter({operator: ">=", col: "min_age", value: 40})
+                    mark.filter({operator: "<=", col: "max_age", value: 63})
+                } else if (attr == "thalach_bucket") {
+                    mark.filter({operator: ">=", col: "min_thalach", value: 100})
+
+                    mark.filter({operator: "<=", col: "max_thalach", value: 189})
+                }
+                squareMarks.push(mark)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = squareMarks[i]
+                let rightMark = squareMarks[i + 1]
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                let table = "combined"
+
+                let mappingObj = 
+                {
+                    x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
+                    y1: leftMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                    x2: rightMark.get(null, "x"),
+                    y2: rightMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                }
+
+                //Use count table instead of combined in this case
+                if (leftAttr == "thalach") {
+                    table = thalachCpCount
+                    mappingObj["strokeWidth"] = "count"
+                    mappingObj["opacity"] = "count"
+                    mappingObj["stroke"] = "count"
+                } else if (leftAttr == "age") {
+                    table = ageThalachCount
+                    mappingObj["strokeWidth"] = "count"
+                    mappingObj["opacity"] = "count"
+                    mappingObj["stroke"] = "count"
+                } else if (leftAttr == "cp") {
+                    table = cpTargetCount
+                    mappingObj["strokeWidth"] = "count"
+                    mappingObj["opacity"] = "count"
+                    mappingObj["stroke"] = "count"
+                }
+
+                let linkMark = c.link(table, mappingObj, {curve: true})
+            }
+        }
+
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
         if (0) {
             /**
