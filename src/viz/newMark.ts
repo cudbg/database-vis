@@ -534,6 +534,10 @@ export class Mark {
         }
     }
 
+    nest(innermark: Mark, predicate?) {
+      this.c.nest(innermark, this, predicate)
+    }
+
     eqSearchKey(searchKey1: string[], searchKey2: string[]) {
       if (searchKey1.length != searchKey2.length)
         return false

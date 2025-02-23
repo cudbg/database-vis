@@ -491,7 +491,7 @@
         }
 
         /* REWORK OF PARALLEL COORDINATES FIG 5C PART 3 */
-        if (1) {
+        if (0) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -519,10 +519,8 @@
             let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
             let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
             
-            // await c.createCountTable("combined", ["age", "thalach"], "age_thalach_count")
-            // await c.createCountTable("combined", ["thalach", "cp"], "thalach_cp_count")
-            // await c.createCountTable("combined", ["cp", "target"], "cp_target_count")
 
+            //Use new group by function!!!!!!
             let ageThalachCount = await c.db.table("combined").groupby(["age", "thalach"], {count: "count"}, "age_thalach_count")
             let thalachCpCount = await c.db.table("combined").groupby(["thalach", "cp"], {count: "count"}, "thalach_cp_count")
             let cpTargetCount = await c.db.table("combined").groupby(["cp", "target"], {count: "count"}, "cp_target_count")
