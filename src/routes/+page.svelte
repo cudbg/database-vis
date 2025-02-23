@@ -362,7 +362,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-        if (0) {
+        if (1) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -817,7 +817,7 @@
             let c2 = new Canvas(db, {width: 800, height: 500})
             erDiagramCanvas = c2
 
-            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black', height: c2.db.table("columns")})
+            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black', height: c2.db.table("columns").get("id", "count", (d) => d.count * 20)})
             vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
             // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
@@ -1984,7 +1984,7 @@
             c.nest(rect2, rect1)
         }
 
-        if (1) { /* airport nodelink */
+        if (0) { /* airport nodelink */
             await db.loadFromConnection()
 
             let c = new Canvas(db, {width: 800, height: 500})

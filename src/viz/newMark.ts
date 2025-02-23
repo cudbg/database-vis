@@ -1,7 +1,7 @@
 import * as R from "ramda";
 import { creator, select } from "d3";
 import * as d3 from "d3";
-import { Query, sql, agg, and, eq, neq, lt, gt, lte, gte, column, literal } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, neq, lt, gt, lte, gte, column, literal, count, median, min, max } from "@uwdata/mosaic-sql";
 import * as OPlot from "@observablehq/plot";
 
 import { IDNAME, Table, createView } from "./table";
@@ -28,7 +28,7 @@ import { mgg } from "./uapi/mgg";
 interface ColumnObj {
   dataAttr: string
   renameAs: string
-  tablename: string
+  table: Table
 }
 
 function eqColumnObjs(columnObj1: ColumnObj, columnObj2: ColumnObj) {
@@ -94,7 +94,7 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   //setting source to select from
   if (item.isGet && item.isVisualChannel) {
       source = item.mark.marktable //If this is a get method, we select from the marktable instead of src
-  } else if (item.src != item.mark.src) {
+  } else if (item.isGet) {
     source = item.src
   } else {
     source = item.mark.src
@@ -105,16 +105,25 @@ function toQueryItem(item: RawChannelItem): QueryItem {
       item.dataAttr.forEach((attr) => {
         //renameAs is this really long string because we need to differentiate between attributes with the same name in the query
         //Example: x1: [x, width], x2: [x, height]. We need to differentiate between the x used for x1 and x used for x2
-        columns.push({dataAttr: attr, renameAs: `${attr}_${item.visualAttr}`, tablename: source.internalname})
+        columns.push({dataAttr: attr, renameAs: `${attr}_${item.visualAttr}`, table: source})
       })
     } else {
-      columns.push({dataAttr: String(item.dataAttr[0]), renameAs: `${item.visualAttr}`, tablename: source.internalname})
+      //Check if this is an aggregate column
+      if (!source.schema.attrs.includes(item.dataAttr[0])) {
+        let aggregateIndex = mgg.AggregateOperators.indexOf(item.dataAttr[0])
+        if (aggregateIndex == -1)
+          throw new Error(`${item.dataAttr} does not exist in table ${source.internalname}`)
+        columns.push({dataAttr: String(item.dataAttr[0]), renameAs: item.dataAttr[0], table: source})
+      } else if (!item.callback) {
+        columns.push({dataAttr: String(item.dataAttr[0]), renameAs: `${item.visualAttr}`, table: source})
+      } else {
+        //that string in renameAs is there because we need to differentiate between different columns. See comment above
+        columns.push({dataAttr: String(item.dataAttr[0]), renameAs: `${item.dataAttr[0]}_${item.visualAttr}`, table: source})
+      }
     }
-    item.dataAttr.forEach((attr) => {
-    })
   } else {
     source.schema.attrs.forEach((attr) => {
-      columns.push({dataAttr: attr, renameAs: attr, tablename: source.internalname})
+      columns.push({dataAttr: attr, renameAs: attr, table: source})
     })
   }
   return {srcmark: item.mark, source: source, columns: columns, constraint: item.constraint, isConstant: item.isConstant}
@@ -294,7 +303,7 @@ export class Mark {
               rawChannelItem.refLayout = dattr
           }
           else if (dattr instanceof Object && (('othermark' in dattr) || ('othertable' in dattr))) { //there's a call to get
-            let {othermark, constraint, otherattr, callback, isVisualChannel} = this.processGet(dattr)
+            let {othermark, othertable, constraint, otherattr, callback, isVisualChannel} = this.processGet(dattr)
 
             if ('othermark' in dattr) {
               this.c.registerRefMark(othermark, this)
@@ -302,10 +311,7 @@ export class Mark {
               rawChannelItem.mark = othermark
             }
             else
-              rawChannelItem.src = othermark
-
-
-            rawChannelItem.mark = othermark
+              rawChannelItem.src = othertable
 
             rawChannelItem.constraint = constraint
             rawChannelItem.dataAttr = otherattr
@@ -479,6 +485,7 @@ export class Mark {
         return false
 
       if (c.t1 == this.src) {
+      
         return !currSearchkey || R.intersection(c.X, currSearchkey).length == currSearchkey.length
       } else if (c.t2 == this.src) {
         return !currSearchkey || R.intersection(c.Y, currSearchkey).length == currSearchkey.length
@@ -491,9 +498,10 @@ export class Mark {
      * @param getObj the object that was created from a get method 
      */
 
-    processGet(getObj): {othermark, constraint, otherattr, callback, isVisualChannel}{
-      let othermark = !getObj.othermark ? getObj.othertable : getObj.othermark
-      let othersrc = !getObj.othermark ? getObj.othertable : getObj.othermark.src
+    processGet(getObj): {othermark, othertable, constraint, otherattr, callback, isVisualChannel}{
+      let othermark = getObj.othermark
+      let othertable = getObj.othertable
+      let othersrc = !othermark ? othertable : othermark.src
       let searchkeys = getObj.searchkeys
       let otherattr = getObj.otherAttr
       let callback = getObj.callback
@@ -523,7 +531,7 @@ export class Mark {
             if (!R.intersection(constraint.Y, searchkeys).length == searchkeys.length)
               continue
 
-            return {othermark, constraint, otherattr, callback, isVisualChannel}
+            return {othermark, othertable, constraint, otherattr, callback, isVisualChannel}
           }
         }
 
@@ -543,14 +551,14 @@ export class Mark {
           if (c.Y[0] != IDNAME)
             continue
 
-          return {othermark, constraint: c, otherattr, callback, isVisualChannel}
+          return {othermark, othertable, constraint: c, otherattr, callback, isVisualChannel}
         }
 
         let constraint = new FKConstraint({t1: this.src, X: searchkeys, t2: this.src, Y: searchkeys})
 
         this.c.db.addConstraint(constraint)
         
-        return {othermark, constraint, otherattr, callback, isVisualChannel}
+        return {othermark, othertable, constraint, otherattr, callback, isVisualChannel}
       }
 
       for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
@@ -563,6 +571,7 @@ export class Mark {
          */
         let validFkConstraint = this.checkValidFkConstraint(constraint, searchkeys)
 
+
         if (validFkConstraint) {
           /**
            * We only check if there is a valid path from this.src to othermark.src but we don't append the path at this point
@@ -571,9 +580,7 @@ export class Mark {
            * We theoretically could create the path right here but I feel it would become messy
            * As such, We only create the path in constructQuery
            */
-
           let path = this.c.db.getFKPath(this.src, othersrc, constraint)
-
           if (!path)
             continue
 
@@ -582,7 +589,7 @@ export class Mark {
             this.c.tablesUsed.add(edge.t2.internalname)
           })
 
-          return {othermark, constraint, otherattr, callback, isVisualChannel}
+          return {othermark, othertable, constraint, otherattr, callback, isVisualChannel}
         }
       }
 
@@ -895,8 +902,8 @@ export class Mark {
           foreignkeyPaths.set(path, new Set())
         }
         //For the nesting path, we select only the id of this.src, and id of outermark
-        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: IDNAME, tablename: this.src.internalname})
-        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: `${IDNAME}_parent`, tablename: nest.outerMark.marktable.internalname})
+        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: IDNAME, table: this.src})
+        foreignkeyPaths.get(path).add({dataAttr: IDNAME, renameAs: `${IDNAME}_parent`, table: nest.outerMark.marktable})
       }
 
       /**
@@ -914,6 +921,7 @@ export class Mark {
         this.pathAttrMap.set(pathCounter, [])
         let addedTables = new Set()
         let srcTableAlias = null
+        let isAggregate = false
         
         for (let p of path) {
           let {t1, t2, X, Y} = p
@@ -970,40 +978,83 @@ export class Mark {
         let selectedCols = new Set<string>()
         columns.forEach(c => {
           //Need to double check if we are selecting from the copy of this.src
-          let tname = c.tablename == this.src.internalname && srcTableAlias ? srcTableAlias : c.tablename
-          subquery = subquery.select({[c.renameAs]: column(tname, c.dataAttr)})
-          selectedCols.add(c.dataAttr)
-          this.pathAttrMap.get(pathCounter).push(c.renameAs)
+          let tname = c.table.internalname == this.src.internalname && srcTableAlias ? srcTableAlias : c.table.internalname
+          //Check if this data attr is an aggregate
+          if (c.table.schema.attrs.indexOf(c.dataAttr) == -1) {
+            let aggregateIndex = mgg.AggregateOperators.indexOf(c.dataAttr)
+
+            //If we can't find this column anywhere, we stop immediately
+            if (aggregateIndex == -1)
+            throw new Error(`Column ${c.dataAttr} does not exist in ${c.table.internalname}!`)
+            
+            isAggregate = true
+
+            //We should add more aggregates in the future
+            //Only count is supported for now
+            switch (c.dataAttr) {
+              case "count": subquery.select({"count": count()})
+                            selectedCols.add("count")
+                            this.pathAttrMap.get(pathCounter).push("count")
+                            break
+              case "max": subquery.select({"max": max()})
+                            selectedCols.add("max")
+                            this.pathAttrMap.get(pathCounter).push("max")
+                            break
+              case "min": subquery.select({"min": min()})
+                            selectedCols.add("min")
+                            this.pathAttrMap.get(pathCounter).push("min")
+                            break
+              case "median": subquery.select({"median": median()})
+                            selectedCols.add("median")
+                            this.pathAttrMap.get(pathCounter).push("median")
+                            break
+            }
+
+          } else {
+            subquery = subquery.select({[c.renameAs]: column(tname, c.dataAttr)})
+            selectedCols.add(c.dataAttr)
+            this.pathAttrMap.get(pathCounter).push(c.renameAs)
+          }
         })
         
-        //Check if id col of this.src and id col of last table have been selected
-        let srcIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: IDNAME, tablename: this.src.internalname}
-        let lastTableName = path[path.length - 1].t1.internalname
-        //Last table might be the copy of this.src
-        lastTableName = lastTableName == this.src.internalname ? srcTableAlias : lastTableName
-        let lastIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: `path${pathCounter}_id`, tablename: lastTableName}
-        let foundSrcID = false
-        let foundLastID = false
 
-        for (const item of selectedCols) {
-          if (JSON.stringify(item) === JSON.stringify(srcIDColumnObj)) {
-            foundSrcID = true
-          }
-          if (JSON.stringify(item) === JSON.stringify(lastIDColumnObj)) {
-            foundLastID = true
-          }
+        let lastTable = path[path.length - 1].t1
+
+        //Last table might be the copy of this.src
+        if (lastTable.internalname == this.src.internalname) {
+
+            //This is a corner case where there is only one edge in the path
+            // and the last table is the N side of the foreign key constraint
+            //We hit this corner case when we want to run aggregates over another table
+            //This must mean that the edge is 1-N and last table is the N side
+            lastTable = path[path.length - 1].t2
         }
+
+        // let lastIDColumnObj: ColumnObj = {dataAttr: IDNAME, renameAs: , table: lastTable}
+        let foundSrcID = selectedCols.has(IDNAME)
+
         
         //We need to select the the id for this.src in each subquery so that we can join all of them together later
+        //We do not add IDNAME to pathAttrMap because it doesn't come from another table (duh)
         if (!foundSrcID){
-          subquery = subquery.select({[srcIDColumnObj.renameAs]: column(srcIDColumnObj.tablename, srcIDColumnObj.dataAttr)})
+          subquery = subquery.select({[IDNAME]: column(this.src.internalname, IDNAME)})
         }
-
-        if (!foundLastID){
-          subquery = subquery.select({[lastIDColumnObj.renameAs]: column(lastIDColumnObj.tablename, lastIDColumnObj.dataAttr)})
-          this.pathAttrMap.get(pathCounter).push(lastIDColumnObj.renameAs)
+        if (!isAggregate) {
+          //We do not select pathid in case this is an aggregate subquery
+          //Skip checking here because path_id is guranteed to not be selected by user
+          subquery = subquery.select({[`path${pathCounter}_id`]: column(lastTable.internalname, IDNAME)})
+          this.pathAttrMap.get(pathCounter).push(`path${pathCounter}_id`)
         }
+        
 
+        //This is where we create the groupby clause if this is an aggregate subquery
+        if (isAggregate) {
+          let attrsExceptAggregates = this.pathAttrMap.get(pathCounter).filter(attr => !mgg.AggregateOperators.includes(attr))
+          attrsExceptAggregates = [...attrsExceptAggregates, column(this.src.internalname, IDNAME)]
+
+          subquery.groupby(attrsExceptAggregates)
+        }
+        //Thank god we made it here
         resultQuery.with({[`path${pathCounter}`]: subquery})
         pathCounter += 1
       })

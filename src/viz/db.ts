@@ -194,10 +194,6 @@ export class Database {
       return Promise.resolve()
     }
 
-    console.log("t1Name", t1Name)
-    console.log("t2Name", t2Name)
-    console.log("X", X)
-    console.log("Y", Y)
 
     let x = "(" + X.map(elem => `'${elem}'`).join(",") + ")"
     let y = "(" + Y.map(elem => `'${elem}'`).join(",") + ")"
@@ -499,26 +495,27 @@ export class Database {
   }
 
   getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    
     let edges = this.getFkDependencyGraph()
 
     let visited = new Set<string>()
     visited.add(source.internalname)
     let path = [searchConstraint]
-    let start
-
     /**
      * Start is set to the side of the FKConstraint that is not source
      */
-    if (searchConstraint.card == Cardinality.ONEMANY) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else if (searchConstraint.t1.internalname != source.internalname) {
-      start = searchConstraint.t1.internalname
-      visited.add(searchConstraint.t1.internalname)
-    } else {
-      start = searchConstraint.t2.internalname
-      visited.add(searchConstraint.t2.internalname)
-    }
+    let start = source.internalname == searchConstraint.t1.internalname ? searchConstraint.t2.internalname : searchConstraint.t1.internalname
+    visited.add(start)
+    // if (searchConstraint.card == Cardinality.ONEMANY) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else if (searchConstraint.t1.internalname != source.internalname) {
+    //   start = searchConstraint.t1.internalname
+    //   visited.add(searchConstraint.t1.internalname)
+    // } else {
+    //   start = searchConstraint.t2.internalname
+    //   visited.add(searchConstraint.t2.internalname)
+    // }
 
     if (start == destination.internalname)
       return path

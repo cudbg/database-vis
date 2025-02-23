@@ -7,7 +7,7 @@ import { IDNAME } from "../table";
 
 export class mgg {
     static canvas;
-    static id = IDNAME;
+    //static id = IDNAME;
     static plot(db, {width, height}, plotConfig?) {
         mgg.canvas = new Canvas(db, {width, height}, plotConfig)
         return mgg.canvas
@@ -32,4 +32,6 @@ export class mgg {
         LESS_EQUAL: "<=",
         GREATER_EQUAL: ">=",
     }
+
+    static AggregateOperators = ["count"]
 }

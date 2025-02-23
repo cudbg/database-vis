@@ -4,6 +4,7 @@ import { Query, sql, agg, and, eq, column, literal } from "@uwdata/mosaic-sql";
 import { idexpr } from "./id";
 import { unorderedEquals } from "./util";
 import type { Schema } from "./schema";
+import { mgg } from "./uapi/mgg";
 
 
 
@@ -217,19 +218,14 @@ export class Table {
   get(filter: string | string[] | null = null, props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback, isVisualChannel} {
     props = Array.isArray(props) ? props : [props]
 
-    if (!props.every((attr) => this.schema.attrs.includes(attr))) {
+    if (!props.every((attr) => this.schema.attrs.includes(attr)) && ! props.every(attr => mgg.AggregateOperators.includes(attr))) {
       throw new Error(`Give me valid columns to get!`)
     }
-    
 
-    if (!filter) {
-      return {othertable: this, searchkeys: null, otherAttr: props, callback: callback, isVisualChannel: false}
-    } else {
+    if (filter)
       filter = Array.isArray(filter) ? filter : [filter]
-  
-      let obj = {othertable: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
-      return obj
-    }    
+    
+      return {othertable: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
   }
 
   public name(newName) {
