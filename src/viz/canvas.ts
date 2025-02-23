@@ -183,85 +183,81 @@ export class Canvas implements IMark {
   }
 
   nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
-    if (predicate) {
+    if (predicate)
       predicate = Array.isArray(predicate) ? predicate : [predicate]
-      this.nestWithPredicate(innerMark, outerMark, predicate)
-    }
-    else
-      this.nestWithoutPredicate(innerMark, outerMark)
-    this.taskGraph.addDependency(innerMark, outerMark, true)
-  }
 
-  nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    let path = this.db.getFkPath(innerTable, outerTable)
-
-    if (!path)
-      throw new Error("No possible path!")
-
-    this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
-    innerMark.outermark = outerMark
-  }
-
-  nestWithPredicate(innerMark: Mark, outerMark: Mark, predicate: string[]) {
-    let innerTable = innerMark.src
-    let outerTable = outerMark.src
-
-    for (const [cname, constraint] of Object.entries(this.db.constraints)) {
-      if (!(constraint instanceof FKConstraint))
-        continue
-
-      if (constraint.card != Cardinality.ONEONE && constraint.card != Cardinality.ONEMANY)
-        continue
-
-      if (constraint.t1 == innerTable) {
-        if ((constraint.X.length != predicate.length))
+    /**
+     * If both marks share the same source table, then skip checking and create a new FKConstraint
+     */
+    if ((innerTable == outerTable) && !predicate) {
+      for (let c of Object.values(this.db.constraints)) {
+        if (!(c instanceof FKConstraint))
           continue
+
+        if ((c.t1 != innerTable) || (c.t2 != innerTable))
+          continue
+        
+        if ((c.X.length != 1) || (c.Y.length != 1))
+          continue
+
+        if (c.X[0] != IDNAME)
+          continue
+        if (c.Y[0] != IDNAME)
+          continue
+
   
-        if (!(constraint.X.every((value, index) => value == predicate[index])))
-          continue
-
-        let path = this.db.getFKPath(innerTable, outerTable, constraint)
-
-        if (!path)
-          continue
-
-        path.forEach(edge => {
-          this.tablesUsed.add(edge.t1.internalname)
-          this.tablesUsed.add(edge.t2.internalname)
-        })
-
-        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         innerMark.outermark = outerMark
+        this.nests.push(new MarkNest(this, c, innerMark, outerMark))
+        this.taskGraph.addDependency(innerMark, outerMark, true)
         return
       }
-
-      if (constraint.t2 == innerTable) {
-        if (constraint.Y.length != predicate.length)
-          continue
-
-        if (!(constraint.Y.every((value, index) => value == predicate[index])))
-          continue
-
-        let path = this.db.getFKPath(innerTable, outerTable, constraint)
-
-        if (!path)
-          continue
-  
-        path.forEach(edge => {
-          this.tablesUsed.add(edge.t1.internalname)
-          this.tablesUsed.add(edge.t2.internalname)
-        })
-
-        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
-        innerMark.outermark = outerMark
-        return
-      }
+      
+      let constraint = new FKConstraint({t1: innerTable, X: [IDNAME], t2: outerTable, Y: [IDNAME]})
+      this.db.addConstraint(constraint)
+      innerMark.outermark = outerMark
+      this.nests.push(new MarkNest(this, constraint,innerMark, outerMark))
+      this.taskGraph.addDependency(innerMark, outerMark, true)
+      return
     }
 
-    throw new Error("Cannot find foreign key reference to nest using predicate!")  
+    for (let c of Object.values(this.db.constraints)) {
+      if (!(c instanceof FKConstraint))
+        continue
+
+      if (c.card != Cardinality.ONEONE && c.card != Cardinality.ONEMANY)
+        continue
+
+      if (c.t1 != innerTable && c.t2 != innerTable)
+        continue
+
+      if (predicate) {
+        if (c.t1 == innerTable && R.intersection(c.X, predicate) != predicate.length)
+          continue
+        if (c.t2 == innerTable && R.intersection(c.Y, predicate) != predicate.length)
+          continue
+      }
+
+      let start = c.t1 == innerTable ? c.t1 : c.t2  
+      let path = this.db.getFKPath(start, outerTable, c)
+
+      if (!path)
+        continue
+
+      path.forEach(edge => {
+        this.tablesUsed.add(edge.t1.internalname)
+        this.tablesUsed.add(edge.t2.internalname)
+      })
+
+      innerMark.outermark = outerMark
+      this.nests.push(new MarkNest(this, c, innerMark, outerMark))
+      this.taskGraph.addDependency(innerMark, outerMark, true)
+      return
+    }
+    //If we reach here, we couldn't find a foreign key path, with or without predicate
+    throw new Error("Could not find a path to nest!")
   }
 
   /*
@@ -398,7 +394,7 @@ export class Canvas implements IMark {
         let innerMarkID = innerMark.id
 
         graph.get(outerMarkID).push(innerMarkID)
-        referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
+        referenceCounts.set(outerMarkID, referenceCounts.get(outerMarkID) + 1)
       }
     }
 
@@ -519,7 +515,6 @@ export class Canvas implements IMark {
       g = this.node.append("svg:g")
         .classed("canvas", true);
     } else {
-      console.log("third")
       g = this.node = select(
         creator("svg:g").call(document.documentElement))
         .classed("canvas", true);
@@ -530,7 +525,7 @@ export class Canvas implements IMark {
 
     for (const m of this.sortedmarks()){
       let node = await m.render(context);
-     (g.node() as HTMLElement).appendChild(node);
+      (g.node() as HTMLElement).appendChild(node)
     }
     
     await this.taskGraph.execute()
@@ -1015,70 +1010,6 @@ export class Canvas implements IMark {
     await fkeysMark.createMarkTable(newFkeysMark.markInfo)
 
     return Promise.resolve()
-  }
-
-  async bucket({table, col, bucketSize}: {table: string, col: string, bucketSize: number}) {
-    let t = this.db.table(table)
-
-    if (!t)
-      throw new Error(`No such table ${table}`)
-
-    let newTableName = `bucketed_${table}`
-
-    let query = new Query()
-
-    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
-         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
-
-    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
-    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
-
-    query = query.select({
-      // count: count(),
-      [IDNAME]: idexpr,
-      [`${col}_bucket`]: sql`${bucketLabelExpr}`,
-      [`min_${col}`]: sql`${minBucketExpr}`,
-      [`max_${col}`]: sql`${maxBucketExpr}`,
-    })
-    
-    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
-    query = query.from(table)
-
-    let newTable = await this.db.fromSql(query, newTableName)
-
-    newTable.name(newTableName)
-    newTable.keys(IDNAME)
-    newTable.keys(`${col}_bucket`)
-
-    await this.db.conn.exec(`ALTER TABLE ${table} ADD COLUMN ${col}_bucket_id INTEGER;`)
-    await this.db.conn.exec(`UPDATE ${table}
-                            SET ${col}_bucket_id = ${newTableName}.${IDNAME}
-                            FROM ${newTableName}
-                            WHERE
-                            ${table}.${col} >= ${newTableName}.min_${col} AND
-                            ${table}.${col} <= ${newTableName}.max_${col};`)
-    
-    await this.db.conn.exec(
-      `INSERT INTO columns (tid, colname, is_key, type, ord_pos, _rav_id)
-      VALUES (
-      (SELECT id FROM tables WHERE table_name = '${table}'),      
-      '${col}_bucket_id',
-      FALSE,                                                 
-      'INTEGER',
-      (SELECT COALESCE(MAX(ord_pos), 0) + 1
-      FROM columns 
-      WHERE tid = (SELECT id FROM tables WHERE table_name = '${table}')),
-
-      (SELECT COALESCE(MAX(_rav_id), 0) + 1 
-      FROM columns )
-      );`)
-
-    let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
-    this.db.addConstraint(c)
-    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
-
-    return newTableName
-
   }
 
   getTablesUsed(): string {

@@ -679,14 +679,16 @@ export class Database {
       }
     }
 
+    return [newDim, newFact]
   }
 
 
-  async normalizeMany(tablename, list_of_attrs:string[][], { dimnames, factname}={}) {
+  async normalizeMany(table: string | Table, list_of_attrs:string[][], { dimnames, factname}={}) {
+    let t = typeof(table) == "string" ? this.table(table) : table
+    let tablename = t.internalname
     dimnames ??= list_of_attrs.map((a) => `${tablename}_${a}`)
     factname ??= `${tablename}_fact`
 
-    let t = this.table(tablename)
     let rest = t.schema.except([...list_of_attrs.flat(), IDNAME]).attrs
     let q = Query
       .from({l: t.internalname})

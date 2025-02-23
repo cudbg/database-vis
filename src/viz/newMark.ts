@@ -481,25 +481,20 @@ export class Mark {
 
       props = Array.isArray(props) ? props : [props]
   
-      let valid = true
-      for (let attr of props) {
-        if (!R.includes(attr, Object.keys(this.mappings))) { //othervattr must be present in this.mappings
-          valid = false
-        }
-      }
 
-      if (valid) {
-        let obj = {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: true}
-        return obj
-      }
+      if (props.every(attr => Object.keys(this.mappings).includes(attr)))
+        return {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: true}
+      
 
+      if (props.every((attr) => this.src.schema.attrs.includes(attr)))
+        return {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: true}
 
-      if (!props.every((attr) => this.src.schema.attrs.includes(attr))) {
-        throw new Error(`Give me valid columns to get!`)
-      }
+      if (props.every(attr => this.mark.domprops.includes(attr)))
+        return {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: true}
 
-      let obj = {othermark: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
-      return obj
+      //props is not mapped, not a column in this.src, and not a domprop, throw an Error
+      throw new Error(`Give me valid columns to get!`)
+
     }
 
     get(filter: string | string[] | null, sugar: Record<string, string>): {[key: string]: {othermark, searchkeys, otherAttr, callback, isVisualChannel}};
@@ -835,6 +830,20 @@ export class Mark {
             .attr("transform", `translate(${xoffset}, ${yoffset})`)
             .node().appendChild(mark);
 
+          if (this.mark.aria == "text") {
+            //Only after appending the text element can we get the BBox
+            maybeselection(mark)
+            .selectAll(`g[aria-label='${this.mark.aria}']`)
+            .selectAll("*")
+            .each(function (d, i) {
+              let el = d3.select(this);
+              let bbox = el.node().getBBox()
+              let id = el.attr(`data_${IDNAME}`)
+              markInfo[id]["width"] = bbox.width
+              markInfo[id]["height"] = bbox.height
+            })
+          }
+
           markInfoArr.push(...markInfo)
           
         }
@@ -848,6 +857,20 @@ export class Mark {
           .append("g")
           .attr("transform", `translate(${crow.x}, ${crow.y})`)
           .node().appendChild(mark);
+
+          if (this.mark.aria == "text") {
+            //Only after appending the text element can we get the BBox
+            maybeselection(mark)
+            .selectAll(`g[aria-label='${this.mark.aria}']`)
+            .selectAll("*")
+            .each(function (d, i) {
+              let el = d3.select(this);
+              let bbox = el.node().getBBox()
+              let id = el.attr(`data_${IDNAME}`)
+              markInfo[id]["width"] = bbox.width
+              markInfo[id]["height"] = bbox.height
+            })
+          }
 
         return markInfo
       }        
@@ -1300,8 +1323,9 @@ export class Mark {
 
             channels[visualAttr] = this.handleCallback(currItem, queryItem, data)
           }
-          else if (Object.keys(data).includes(dataAttr[0]))
+          else if (Object.keys(data).includes(dataAttr[0])) {
             channels[visualAttr] = data[dataAttr[0]]
+          }
           else
             channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
           
@@ -1473,6 +1497,11 @@ export class Mark {
         if ('textDecoration' in this.mappings) {
           this.setTextDecoration(mark, data)
         }
+
+        if (!("strokeWidth" in this.mappings)) {
+          maybeselection(mark).selectAll(`g[aria-label='${this.mark.aria}']`).attr("stroke-width", null)
+        }
+
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
@@ -1884,9 +1913,7 @@ export class Mark {
               let attrName = elAttrs[j].name;
               let attrValue = elAttrs[j].value;
 
-              if (attrName == "y") {
-                markAttributes["width"] = attrValue
-              } else if (attrName == "transform") {
+              if (attrName == "transform") {
                 let {x,y} = thisref.getTransformInfo(el)
                 markAttributes["x"] = x
                 markAttributes["y"] = y
@@ -1901,6 +1928,7 @@ export class Mark {
           }
           markInfo.push(markAttributes)
       })
+
       return markInfo
     }
 

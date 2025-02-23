@@ -89,6 +89,7 @@ export class Table {
       return this._keys;
     }
     key = [key].flat();
+    console.log("key after creation", key)
     this._keys.push(R.uniq(key));
     return this._keys;
   }
@@ -155,7 +156,8 @@ export class Table {
 
   async groupby(attrs: string| string[], aggregate: {[key: string]: string}, displayname=null) {
     attrs = Array.isArray(attrs) ? attrs : [attrs]
-    displayname ??= `${this.internalname}_aggregate`
+    displayname ??= `${this.internalname}_aggregate_${attrs.join("_")}`
+
     let q = new Query()
     q = q.from(this.internalname)
     attrs.forEach(attr => {
@@ -198,6 +200,67 @@ export class Table {
     this.db.addConstraint(c)
     await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
     return t;
+  }
+
+  async normalize(attrs:string|string[], dimname=null, factname=null) {
+    return await this.db.normalize(this.internalname, attrs, dimname, factname)
+  }
+
+  async select({attrs, sel, displayname}:  { attrs: string[] | string, sel: string, displayname? }) {
+    let q = new Query()
+    if (attrs == "*") {
+      attrs = this.schema.attrs
+    }
+
+    attrs = Array.isArray(attrs) ? attrs : [attrs]
+    if (!attrs.includes(IDNAME))
+      attrs.push(IDNAME)
+    
+    attrs.forEach(attr => q.select(attr))
+    q = q.select({"sel": sql`CASE WHEN ${sel} THEN TRUE ELSE FALSE END`})
+    q = q.from(this.internalname)
+    // q = q.where(sel)
+    displayname ??= `${this.internalname}_sel`
+    let t = await Table.fromSql(this.db, q, displayname)
+    t.keys([IDNAME])
+    t.name(displayname)
+
+    let c = new FKConstraint({t1: t, X: [IDNAME], t2: this, Y: [IDNAME]})
+    this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+    return t;
+  }
+
+  async bucket(col: string, bucketSize: number, displayname=null) {
+    displayname ??= `${this.internalname}_bucketed_${col}`
+
+    let query = new Query()
+
+    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
+         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
+
+    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
+    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
+
+    query = query.select({
+      [IDNAME]: idexpr,
+      [`${col}`]: sql`${bucketLabelExpr}`,
+      [`min_${col}`]: sql`${minBucketExpr}`,
+      [`max_${col}`]: sql`${maxBucketExpr}`,
+    })
+
+    let remainingAttributes = this.schema.attrs.filter(attr => attr != col && attr != IDNAME)
+    query = query.select(remainingAttributes)
+    
+    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
+    query = query.groupby(remainingAttributes)
+    query = query.from(this.internalname)
+
+    let newTable = await this.db.fromSql(query, displayname)
+    newTable.name(displayname)
+    newTable.keys([IDNAME])
+
+    return newTable
   }
 
   async distinctproject(o, displayname=null) {

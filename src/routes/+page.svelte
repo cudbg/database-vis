@@ -376,52 +376,31 @@
              * 
             */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 500}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
             let attrs = ["sex", "age", "thalach", "cp", "target"]
-            await db.normalize("heart_csv", attrs, "heart_reduced")
+            await db.normalize("heart_csv", attrs, "heart_data")
+            let edgetable = await c.db.table("heart_data").bucket("age", 8)
+            edgetable = await edgetable.bucket("thalach", 10)
             
-            await db.normalizeMany("heart_reduced", attrs.map(a => [a]),
+            await db.normalizeMany(edgetable.internalname, attrs.map(a => [a]),
                 {dimnames: attrs, factname: "combined"})
             
-            let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
-            let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
-            
-            await c.createCountTable("combined", ["age", "thalach"], "age_thalach_count")
-            await c.createCountTable("combined", ["thalach", "cp"], "thalach_cp_count")
-            await c.createCountTable("combined", ["cp", "target"], "cp_target_count")
-
             let squareMarks = []
 
             attrs.forEach((attr, i) => {
-                let table = attr
 
-                if (attr == "age") {
-                    attr = "age_bucket"
-                    table = bucketedAgeTable
-                } else if (attr == "thalach") {
-                    attr = "thalach_bucket"
-                    table = bucketedThalachTable
-                }
-                let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
-                let label = c.text(table,
+                let mark = c.square(attr, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
+                let label = c.text(attr,
                     {
                         x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
                         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
                         text: attr
 
                     }, {lineAnchor: "middle"})
-                if (attr == "age_bucket") {
-                    mark.filter({operator: ">=", col: "min_age", value: 40})
-                    mark.filter({operator: "<=", col: "max_age", value: 63})
-                } else if (attr == "thalach_bucket") {
-                    mark.filter({operator: ">=", col: "min_thalach", value: 100})
-
-                    mark.filter({operator: "<=", col: "max_thalach", value: 189})
-                }
                 squareMarks.push(mark)
             })
 
@@ -430,7 +409,8 @@
                 let rightMark = squareMarks[i + 1]
                 let leftAttr = attrs[i]
                 let rightAttr = attrs[i + 1]
-                let table = "combined"
+
+                let table = await edgetable.groupby([leftAttr, rightAttr], {c: "count"})
 
                 let mappingObj = 
                 {
@@ -438,31 +418,19 @@
                     y1: leftMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
                     x2: rightMark.get(null, "x"),
                     y2: rightMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
-                }
-
-                //Use count table instead of combined in this case
-                if (leftAttr == "thalach") {
-                    table = "thalach_cp_count"
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
-                } else if (leftAttr == "age") {
-                    table = "age_thalach_count"
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
-                } else if (leftAttr == "cp") {
-                    table = "cp_target_count"
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
+                    opacity: "c",
+                    stroke: "c",
+                    strokeWidth: "c"
                 }
 
                 let linkMark = c.link(table, mappingObj, {curve: true})
 
-                if (leftAttr == "thalach" || leftAttr == "age") {
-                    linkMark.filter({operator: ">=", col: "count", value: 2})
-                } 
+                if (leftAttr == "sex")
+                    linkMark.filter({operator: ">=", col: "c", value: 3})
+                else if (leftAttr == "age")
+                    linkMark.filter({operator: ">=", col: "c", value: 2})
+                else if (leftAttr == "thalach")
+                    linkMark.filter({operator: ">=", col: "c", value: 2})
             }
 
             // let c2 = new Canvas(db, {width: 1500, height: 1500})
@@ -488,108 +456,6 @@
             //                     })
             // await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -200, steps: 350})
 
-        }
-
-        /* REWORK OF PARALLEL COORDINATES FIG 5C PART 3 */
-        if (0) {
-            /**
-             * We managed to color the links based on frequency, but the visualization is still pretty noisy.
-             * To resolve this, we can bucket the data to produce fewer dot marks
-             * In particular, age and thalach columns can be bucketed due to the number of dot marks they produce
-             * We can also turn the dots in squares
-             * 
-             * DATA TRANSFORMATIONS:
-             * Repeat steps from previous example
-             * Create bucket tables
-             * 
-             * 
-            */
-            await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 500}) //setting up canvas
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            let attrs = ["sex", "age", "thalach", "cp", "target"]
-            await db.normalize("heart_csv", attrs, "heart_reduced")
-            
-            await db.normalizeMany("heart_reduced", attrs.map(a => [a]),
-                {dimnames: attrs, factname: "combined"})
-            
-            let bucketedAgeTable = await c.bucket({table: "age", col: "age", bucketSize: 8})
-            let bucketedThalachTable = await c.bucket({table: "thalach", col: "thalach", bucketSize: 10})
-            
-
-            //Use new group by function!!!!!!
-            let ageThalachCount = await c.db.table("combined").groupby(["age", "thalach"], {count: "count"}, "age_thalach_count")
-            let thalachCpCount = await c.db.table("combined").groupby(["thalach", "cp"], {count: "count"}, "thalach_cp_count")
-            let cpTargetCount = await c.db.table("combined").groupby(["cp", "target"], {count: "count"}, "cp_target_count")
-            let squareMarks = []
-
-            attrs.forEach((attr, i) => {
-                let table = attr
-
-                if (attr == "age") {
-                    attr = "age_bucket"
-                    table = bucketedAgeTable
-                } else if (attr == "thalach") {
-                    attr = "thalach_bucket"
-                    table = bucketedThalachTable
-                }
-                let mark = c.square(table, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
-                let label = c.text(table,
-                    {
-                        x: mark.get(attr, ["x", "width"], ({x, width}) => x + width/2), 
-                        y: mark.get(attr, ["y", "height"], ({y, height}) => y + height/2),
-                        text: attr
-
-                    }, {lineAnchor: "middle"})
-                if (attr == "age_bucket") {
-                    mark.filter({operator: ">=", col: "min_age", value: 40})
-                    mark.filter({operator: "<=", col: "max_age", value: 63})
-                } else if (attr == "thalach_bucket") {
-                    mark.filter({operator: ">=", col: "min_thalach", value: 100})
-
-                    mark.filter({operator: "<=", col: "max_thalach", value: 189})
-                }
-                squareMarks.push(mark)
-            })
-
-            for (let i = 0; i < attrs.length - 1; i++) {
-                let leftMark = squareMarks[i]
-                let rightMark = squareMarks[i + 1]
-                let leftAttr = attrs[i]
-                let rightAttr = attrs[i + 1]
-                let table = "combined"
-
-                let mappingObj = 
-                {
-                    x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
-                    y1: leftMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
-                    x2: rightMark.get(null, "x"),
-                    y2: rightMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
-                }
-
-                //Use count table instead of combined in this case
-                if (leftAttr == "thalach") {
-                    table = thalachCpCount
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
-                } else if (leftAttr == "age") {
-                    table = ageThalachCount
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
-                } else if (leftAttr == "cp") {
-                    table = cpTargetCount
-                    mappingObj["strokeWidth"] = "count"
-                    mappingObj["opacity"] = "count"
-                    mappingObj["stroke"] = "count"
-                }
-
-                let linkMark = c.link(table, mappingObj, {curve: true})
-            }
         }
 
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
@@ -1040,6 +906,97 @@
             await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
         }
 
+        //CASE STUDY: SECTION 7 OF PAPER
+        //7.1 NESTED SCATTER PLOTS
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 800, height: 650}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            //finish data preparation
+            //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
+            let t = c.db.table("heart_data")
+
+            //This to demonstrate filtering
+            let t3 = await t.select({attrs: "*", sel: "chol > 230"})
+
+            //Switch between t and t3 to see the difference before and after projection
+            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
+
+            let t2 = await t.groupby(["cp", "slope"], {n: "count"}, "cp_slope_combinations")
+
+            //I skip normalizing cp and slope here
+            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", stroke: "black", width: 175})
+
+            let vtext = c.text(t2, {x: vsquare.get(null, "x"), y: vsquare.get(null, "y", ({y}) => y - 10), text: ({cp, slope}) => `cp: ${cp} slope: ${slope}`})
+
+            vsquare.nest(vdot)
+        }
+
+        //7.2 PARALLEL COORDINATES V2
+        if (1) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            let edgetable = await c.db.table("heart_data").bucket("age", 8)
+            edgetable = await edgetable.bucket("thalach", 10)
+            edgetable = await edgetable.bucket("chol", 20)
+
+
+            await db.normalizeMany(edgetable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
+
+
+            //finish data preparation
+            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
+
+            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
+            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
+            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
+
+            let domObj = {x: {domain: [0, 1200]}}
+            let views = []
+            
+            attrs.forEach((attr, i) => {
+                let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr}, domObj)
+                views.push(mark)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = views[i]
+                let rightMark = views[i + 1]
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], {c: "count"})
+
+                let vlink = c.link(grouped,
+                    {
+                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
+                        y1: leftMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                        x2: rightMark.get(null, "x"),
+                        y2: rightMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                        strokeWidth: "c",
+                        opacity: "c",
+                        fill: "c"
+                    }, {curve: true})
+            }
+        }
+
+        
+
+
+
+
+
 
         if (0) {
             await db.loadFromConnection()
@@ -1192,6 +1149,7 @@
 
         }
 
+        //BUGGY DO NOT RENDER. THIS IS BECAUSE THE BUCKET FUNCTION HAS BEEN MOVED
         if (0) { //parallel coordinates with the new heart dataset
 
                 
@@ -1410,7 +1368,7 @@
             c.nest(cp, sex)
         }
         
-
+        //BUGGY DO NOT RENDER. THIS IS BECAUSE THE BUCKET FUNCTION HAS BEEN MOVED
         if (0) { //parallel coordinates with the new heart dataset (old one with two points)
             await db.loadFromConnection()
 
