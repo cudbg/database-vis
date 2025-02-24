@@ -297,7 +297,6 @@ export class RLFD extends RefLayout {
   }
 
   layout(data, { width, height }) {
-    console.log("layout data", data)
     //We will populate store with information about nodes and links
     //Node data can found in data
     //Link data can be found in this.links
@@ -323,10 +322,6 @@ export class RLFD extends RefLayout {
     this.links.forEach(link => {
       links.push({source: link[0], target: link[1]})
     })
-
-
-    console.log("nodes", nodes)
-    console.log("links", links)
 
     //link force and charge force are always present in the force layout algorithm
     //link force specifies a minimum distance for links
@@ -377,9 +372,6 @@ export class RLFD extends RefLayout {
     .stop()
     .tick(this.steps)
 
-    console.log("AFTER")
-    console.log("nodes", nodes)
-    console.log("links", links)
 
     if (this.nodetype == "rect") {
       const x1 = nodes.map(node => node.x);

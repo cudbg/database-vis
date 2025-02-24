@@ -1384,8 +1384,6 @@ export class Mark {
         channels["strokeWidth"] = result
       }
 
-      console.log("channels after", channels)
-
       return channels;
     }
 
@@ -1427,7 +1425,7 @@ export class Mark {
           })
         } else {
           Object.keys(data).forEach(attr => {
-            if (Number(data[attr][i]) || data[attr][i] == 0n) {
+            if ((Number(data[attr][i]) || data[attr][i] == 0n) && typeof(data[attr][i]) != "boolean") {
               obj[attr] = parseFloat(data[attr][i])
             } else {
               obj[attr] =  data[attr][i]
@@ -1436,6 +1434,7 @@ export class Mark {
         }
         resArr.push(callback(obj))
       }
+     
       return resArr
     }
 
@@ -1485,7 +1484,6 @@ export class Mark {
       for (const rl of rls) {
         const layout = rl.layout(markrows, crow)
         for (const va of rl.vattrs)  {
-          console.log("va", va)
           channels[va] = layout[va]
           //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
@@ -1716,10 +1714,6 @@ export class Mark {
      */
     setTextDecoration(mark, data) {
       let channelItem: RawChannelItem = this.channels.find((item) => item.visualAttr == 'textDecoration')
-      let queryItem: QueryItem = toQueryItem(channelItem)
-      let dataAttr = channelItem.dataAttr
-      let callback = channelItem.callback
-      let thisref = this
 
       maybeselection(mark)
       .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -1727,7 +1721,7 @@ export class Mark {
       .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
       .each(function (d, i) {
         let el = d3.select(this)
-        let id = parseInt(el.attr("data__rav_id"))
+        let id = parseInt(el.attr(`data_${IDNAME}`))
         let idIdx = data[IDNAME].indexOf(id)
 
         el.attr("text-decoration", data["textDecoration"][idIdx])

@@ -956,9 +956,36 @@
             let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "12px"}, {lineAnchor: "middle"})
 
             vsquare.nest(vtext)
+
+            let c2 = new Canvas(db, {width: 800, height: 700})
+            erDiagramCanvas = c2
+
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
+
+            vtables.nest(vattributes)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
         }
         //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -973,11 +1000,11 @@
             let t = c.db.table("heart_data")
 
             //This to demonstrate filtering
-            //let t3 = await t.select({attrs: "*", sel: "chol > 230"})
+            let t3 = await t.select({attrs: "*", sel: "chol > 230"})
 
             //Switch between t and t3 to see the difference before and after projection
-            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
-            //let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
+            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
@@ -994,7 +1021,7 @@
 
             vsquare.nest(vdot)
 
-            let c2 = new Canvas(db, {width: 1500, height: 1500})
+            let c2 = new Canvas(db, {width: 800, height: 700})
             erDiagramCanvas = c2
 
             let vtables = c2.rect("tables",
@@ -1023,7 +1050,7 @@
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
@@ -1072,6 +1099,33 @@
                         fill: "c"
                     }, {curve: true})
             }
+
+            let c2 = new Canvas(db, {width: 2000, height: 1500})
+            erDiagramCanvas = c2
+
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 30),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
+
+            vtables.nest(vattributes)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
         }
 
         

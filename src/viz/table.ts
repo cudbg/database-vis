@@ -44,6 +44,7 @@ export async function createView(db, viewname, q:Query|String) {
 // all operations create new tables
 export class Table {
   static id = 0;
+  id;
   db;
   displayname: string;
   internalname: string;  // name of table in duckdb
@@ -60,6 +61,8 @@ export class Table {
     this.displayname = displayname ?? internalname;
     this.schema = schema;
     this._keys = keys
+    this.id = Table.id
+    Table.id += 1
   }
 
   static newname(prefix="table") {
@@ -218,8 +221,9 @@ export class Table {
     attrs.forEach(attr => q.select(attr))
     q = q.select({"sel": sql`CASE WHEN ${sel} THEN TRUE ELSE FALSE END`})
     q = q.from(this.internalname)
-    // q = q.where(sel)
-    displayname ??= `${this.internalname}_sel`
+
+    displayname ??= `${this.internalname}_${this.id + 1}`
+
     let t = await Table.fromSql(this.db, q, displayname)
     t.keys([IDNAME])
     t.name(displayname)

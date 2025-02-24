@@ -157,29 +157,34 @@ export class Database {
       `INSERT INTO tables (id, table_name, _rav_id)
       SELECT COALESCE(MAX(id), 0) + 1, '${tablename}', COALESCE(MAX(id), 0) + 1, FROM tables;`)
 
-    await this.conn.exec(
-      `WITH new_table_id AS (
-    SELECT id FROM tables WHERE table_name = '${tablename}'
-    ),
-    table_columns AS (
-        SELECT column_name, ordinal_position, data_type
-        FROM information_schema.columns
-        WHERE table_name = '${tablename}'
-    )
-    INSERT INTO columns (id, tid, colname, is_key, type, ord_pos, _rav_id)
-    SELECT row_number() OVER () + COALESCE((SELECT MAX(id) FROM columns), 0),
-          (SELECT id FROM new_table_id),
-          column_name,
-          column_name IN (
-              SELECT column_name
-              FROM information_schema.key_column_usage
-              WHERE table_name = '${tablename}'
-          ),
-          data_type,
-          ordinal_position,
-          row_number() OVER () + COALESCE((SELECT MAX(_rav_id) FROM columns), 0) as _rav_id
-    FROM table_columns;
-    `)
+      await this.conn.exec(
+        `WITH new_table_id AS (
+            SELECT id FROM tables WHERE table_name = '${tablename}'
+        ),
+        table_columns AS (
+            SELECT column_name, ordinal_position, data_type
+            FROM information_schema.columns
+            WHERE table_name = '${tablename}'
+        )
+        INSERT INTO columns (id, tid, colname, is_key, type, ord_pos, _rav_id)
+        SELECT row_number() OVER () + COALESCE((SELECT MAX(id) FROM columns), 0),
+               (SELECT id FROM new_table_id),
+               column_name,
+               CASE 
+                   WHEN column_name = '_rav_id' THEN TRUE
+                   WHEN column_name IN (
+                       SELECT column_name
+                       FROM information_schema.key_column_usage
+                       WHERE table_name = '${tablename}'
+                   ) THEN TRUE
+                   ELSE FALSE
+               END AS is_key,
+               data_type,
+               ordinal_position,
+               row_number() OVER () + COALESCE((SELECT MAX(_rav_id) FROM columns), 0) as _rav_id
+        FROM table_columns;
+        `);
+    
   }
 
   async updateFkeysMetadata(t1Name: string, t2Name: string, X: string[], Y: string[]) {
@@ -194,25 +199,25 @@ export class Database {
       return Promise.resolve()
     }
 
+    for (let i = 0; i < X.length; i++) {
+      let x = X[i]
+      let y = Y[i]
 
-    let x = "(" + X.map(elem => `'${elem}'`).join(",") + ")"
-    let y = "(" + Y.map(elem => `'${elem}'`).join(",") + ")"
-
-    await this.conn.exec(
-      `INSERT INTO fkeys (id, tid1, col1, tid2, col2, _rav_id)
-      SELECT
-      row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as id,
-      c1.tid as tid1,
-      c1.colname as col1,
-      c2.tid as tid2,
-      c2.colname as col2,
-      row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as _rav_id
-      FROM columns c1, tables t1, columns c2, tables t2
-      WHERE c1.tid = t1.id AND t1.table_name = '${t1Name}'
-      AND c2.tid = t2.id AND t2.table_name= '${t2Name}'
-      AND c1.colname in ${x} AND c2.colname in ${y}`
-    )
-
+      await this.conn.exec(
+        `INSERT INTO fkeys (id, tid1, col1, tid2, col2, _rav_id)
+        SELECT
+        row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as id,
+        c1.tid as tid1,
+        c1.colname as col1,
+        c2.tid as tid2,
+        c2.colname as col2,
+        row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as _rav_id
+        FROM columns c1, tables t1, columns c2, tables t2
+        WHERE c1.tid = t1.id AND t1.table_name = '${t1Name}'
+        AND c2.tid = t2.id AND t2.table_name= '${t2Name}'
+        AND c1.colname = '${x}' AND c2.colname = '${y}'`
+      )
+    }
   }
 
   async data(tablename, format="rows") {
