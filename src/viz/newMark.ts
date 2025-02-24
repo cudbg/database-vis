@@ -1273,7 +1273,6 @@ export class Mark {
      *          Has format {x: [...], y: [...], ...}
      */
     applychannels(data) {
-      console.log("data applychannels", data)
       if (Object.keys(data).length == 0) {
         return []
       }
@@ -1293,7 +1292,11 @@ export class Mark {
           if (currItem.refLayout != null) {
             continue
           }
+
+
           let arr = data[queryItem.columns[0].renameAs]
+
+
           /**
            * If callback exists, then we run the callback function and assign the resulting array
            * from handlecallback to channels[visualAttr]
@@ -1301,61 +1304,54 @@ export class Mark {
           if (callback)
             arr = this.handleCallback(currItem, queryItem, data)
 
+          //Store result in channels
+          //If visualAttr is not related to coordinates, we end here
+          channels[visualAttr] = arr
+
+
+          if (visualAttr != "x1" 
+            && visualAttr != "x2" 
+            && visualAttr != "x"
+            && visualAttr != "y1"
+            && visualAttr != "y2"
+            && visualAttr != "y") {
+              continue
+            }
+
           /**
            * BUGGY
            */
-          // if (mark.level != this.level){
-          //   if (visualAttr == "x1" 
-          //     || visualAttr == "x2" 
-          //     || visualAttr == "x"
-          //     || visualAttr == "y1"
-          //     || visualAttr == "y2"
-          //     || visualAttr == "y") {
-          //       let idcounter = null
+          if (mark.level != this.level){
+            for (let [id, foreignIDs] of this.referencedMarks.entries()) {
+              //key of foreignIDs is id of this mark
+              //value is an object that looks like: {<some visual attr>_ref: <some row id of another mark>}
+              let foreignID = foreignIDs[`${visualAttr}_ref`]
+              let othermark = mark
+              let othermarkInfoCache = mark.markInfoCache
+              let otherlevel = mark.level
 
-          //       for (let [id, visualAttrSet] of this.idVisualAttrMap.entries()) {
-          //         visualAttrSet.forEach((attr) => {
-          //           if (attr == queryItem.columns[0].renameAs) {
-          //             idcounter = id
-          //           }
-          //         })
-          //         if (idcounter != null) {
-          //           break
-          //         }
-          //       }
+              //index into the arr where _rav_id = id
+              let idx = data[IDNAME].indexOf(id)
 
-          //       if (idcounter == null) {
-          //         throw new Error("Cannot find visualAttr in applychannels")
-          //       }
 
-          //       let idcounterArr = data[`idcounter_${idcounter}`]
+              //Keep walking upwards until you find an outermark that is on the same level as this mark
+              //At this point you have the correct x and y coordinates
+              while (othermark && (otherlevel > this.level)) {
+                let othermarkRow = othermarkInfoCache.get(foreignID)
 
-          //       for (let j = 0; j < idcounterArr.length; j++) {
-          //         let currOtherId = idcounterArr[j]
-          //         let othermark = mark
-          //         let othermarkInfoCache = mark.markInfoCache
-          //         let otherlevel = mark.level
+                if (visualAttr == "x1"  || visualAttr == "x2"  || visualAttr == "x")
+                    arr[idx] += othermarkRow.data_xoffset
+                else if (visualAttr == "y1" || visualAttr == "y2" || visualAttr == "y") {
+                    arr[idx] += othermarkRow.data_yoffset
+                }
 
-          //         while (othermark && (otherlevel > this.level)) {
-          //           let obj = othermarkInfoCache.get(currOtherId)
-
-          //           if (visualAttr == "x1" 
-          //             || visualAttr == "x2" 
-          //             || visualAttr == "x") {
-          //               arr = arr.map(elem => elem + obj.data_xoffset)
-          //             }
-          //           else if (visualAttr == "y1" 
-          //             || visualAttr == "y2" 
-          //             || visualAttr == "y") {
-          //               arr = arr.map(elem => elem + obj.data_yoffset)
-          //             }
-          //             othermark = othermark.outermark
-          //             othermarkInfoCache = othermark.markInfoCache
-          //           otherlevel--
-          //         }
-          //       }
-          //   }
-          // }
+                othermark = othermark.outermark
+                othermarkInfoCache = othermark.markInfoCache
+                otherlevel--
+              }
+            }
+            
+          }
 
           channels[visualAttr] = arr
         }
@@ -1388,7 +1384,8 @@ export class Mark {
         channels["strokeWidth"] = result
       }
 
-      console.log("channels post apply", channels)
+      console.log("channels after", channels)
+
       return channels;
     }
 
@@ -1487,14 +1484,12 @@ export class Mark {
       }
       for (const rl of rls) {
         const layout = rl.layout(markrows, crow)
-        console.log("layout", layout)
         for (const va of rl.vattrs)  {
           console.log("va", va)
           channels[va] = layout[va]
           //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
-      console.log("channels post layout", channels)
       return channels
     }
 
@@ -2419,7 +2414,6 @@ export class Mark {
     rowsToCols(data) {
       if (data.length == 0) { //check if no data has been returned and set up an empty res object to return. This is for applychannels to work properly
         let res = {}
-        console.log("data.length", data.length)
         for (let i = 0; i < data.columns.length; i++) {
           res[data.columns[i]] = []
         }

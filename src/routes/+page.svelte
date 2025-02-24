@@ -433,29 +433,32 @@
                     linkMark.filter({operator: ">=", col: "c", value: 2})
             }
 
-            // let c2 = new Canvas(db, {width: 1500, height: 1500})
-            // erDiagramCanvas = c2
+            let c2 = new Canvas(db, {width: 1500, height: 1500})
+            erDiagramCanvas = c2
 
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
-            // let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            // vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
 
-            // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            // let vattributes= c2.text("columns", {
-            //                                 y: 'ord_pos',
-            //                                 text: ({colname, type}) => `${colname} ${type}`,
-            //                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-            //                                 x: 0
-            //                 })
+            vtables.nest(vattributes)
 
-            // c2.nest(vattributes, vtables)
-
-            // let vfkeys = c2.link("fkeys", {
-            //                         ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-            //                         ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-            //                     })
-            // await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -200, steps: 350})
-
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
         }
 
         /* WIP NESTED PARALLEL COORDINATES FIG 5C PART 4 */
@@ -741,7 +744,7 @@
         }
 
         /* HEATMAP */
-        if (1) {
+        if (0) {
             /**
              * Data transformation process
              * 
@@ -802,7 +805,7 @@
                                             x: 20
                             })
 
-            c2.nest(vattributes, vtables)
+            vtables.nest(vattributes)
 
             let vfkeys = c2.link("fkeys", {
                                     ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
@@ -886,24 +889,30 @@
             let c2 = new Canvas(db, {width: 800, height: 500})
             erDiagramCanvas = c2
 
-            let vtables = c2.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
+
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -1000, steps: 40})()
+            })
             vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
             let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
             let vattributes= c2.text("columns", {
-                                            y: 'ordinal_position',
-                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
-                                            x: 0
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
                             })
 
-            c2.nest(vattributes, vtables)
+            vtables.nest(vattributes)
 
             let vfkeys = c2.link("fkeys", {
                                     ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
                                     ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
                                 })
-            await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
         }
 
         //CASE STUDY: SECTION 7 OF PAPER
@@ -949,7 +958,7 @@
             vsquare.nest(vtext)
         }
         //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -964,11 +973,11 @@
             let t = c.db.table("heart_data")
 
             //This to demonstrate filtering
-            let t3 = await t.select({attrs: "*", sel: "chol > 230"})
+            //let t3 = await t.select({attrs: "*", sel: "chol > 230"})
 
             //Switch between t and t3 to see the difference before and after projection
-            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
-            let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
+            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            //let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
@@ -984,6 +993,33 @@
                 })
 
             vsquare.nest(vdot)
+
+            let c2 = new Canvas(db, {width: 1500, height: 1500})
+            erDiagramCanvas = c2
+
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
+
+            vtables.nest(vattributes)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
         }
 
         //7.2 PARALLEL COORDINATES V2
@@ -1304,31 +1340,34 @@
        if (0) {
             await db.loadFromConnection()
 
-            let c = new Canvas(db, {width: 3000, height: 3000})
+            let c = new Canvas(db, {width: 800, height: 800})
             canvas = c
             window.c = c;
             window.db = db;
 
-            await c.createTablesMetadata()
-            await c.createColumnsMetadata()
-            await c.createForeignKeysMetadata()
+            let vtables = c.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c.db.table("columns").get("id", "count", (d) => d.count * 40),
+                width: 200,
+                ...fdlayout(c.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 40})()
+            })
 
-            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
             let vlabels = c.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
             let vattributes= c.text("columns", {
-                                            y: 'ordinal_position',
-                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
-                                            x: 0
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
                             })
 
-            c.nest(vattributes, vtables)
+            vtables.nest(vattributes)
 
             let vfkeys = c.link("fkeys", {
                                     ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
                                     ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
                                 })
-            await c.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
+
        }
 
         if (0) { //Multiple Table Habits Nested in Alcohol 1-1-N
@@ -2137,77 +2176,6 @@
             c.nest(vdots, vinner, ["aid", "bid"])
 
 
-        }
-
-        if (0) {
-            await db.conn.exec(`CREATE TABLE tables (tid int primary key, table_name string)`)
-            await db.conn.exec(`INSERT INTO tables VALUES (0, 'Customers'), (1, 'Orders'), (2, 'Products'), (3, 'Payments'), (4, 'CanPlace'), (5, 'Contains'), (6, 'LinkedTo')`)
-
-            await db.conn.exec(`CREATE TABLE columns (tid int, colname string, is_key int, type string, ordinal_position int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables (tid))`)
-            await db.conn.exec(`INSERT INTO columns VALUES
-                    (0, 'customerID', 1, 'int', 0),
-                    (0, 'name', 0, 'string', 1),
-                    (0, 'email', 0, 'string', 2),
-                    (0, 'country', 0, 'string', 3),
-
-                    (1, 'orderID', 1, 'int', 0), 
-                    (1, 'orderDate', 0, 'date', 1),
-                    (1, 'amount', 0, 'int', 2),
-
-                    (2, 'productID', 1, 'int', 0), 
-                    (2, 'name', 0, 'string', 1),
-                    (2, 'price', 0, 'string', 2),
-                    (2, 'category', 0, 'int', 3),
-
-                    (3, 'paymentID', 1, 'int', 0), 
-                    (3, 'paymentDate', 0, 'date', 1),
-                    (3, 'paymentMethod', 0, 'string', 2),
-
-                    (4, 'customerID', 1, 'int', 0), 
-                    (4, 'orderID', 1, 'int', 1),
-
-                    (5, 'orderID', 1, 'int', 0), 
-                    (5, 'productID', 1, 'int', 1),
-
-                    (6, 'orderID', 1, 'int', 0), 
-                    (6, 'paymentID', 1, 'int', 1),
-                    
-            `)
-            await db.conn.exec(`CREATE TABLE fkeys (tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))`)
-            await db.conn.exec(`INSERT INTO fkeys VALUES
-                    (4, 'customerID', 0, 'customerID'),
-                    (4, 'orderID', 1, 'orderID'),
-                    (5, 'orderID', 1, 'orderID'),
-                    (5, 'productID', 2, 'productID'),
-                    (6, 'orderID', 1, 'orderID'),
-                    (6, 'paymentID', 3, 'paymentID'),
-                    `
-                )
-
-            await db.loadFromConnection()
-
-            let c = new Canvas(db, {width: 800, height: 800})
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            let vtables = c.rect("tables", { x: 'tid', y: 0, fill:'white', stroke:'black'})
-            let vlabels = c.text("tables", {x: vtables.get(["tid"], "x"), y: vtables.get(["tid"], "y"), text: "table_name"})
-            let vattributes= c.text("columns", {
-                                            y: 'ordinal_position',
-                                            text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-                                            'text-decoration': {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
-                                            x: 0
-                            })
-
-            c.nest(vattributes, vtables, "tid")
-
-            let vfkeys = c.link("fkeys", {
-                                    x1: vattributes.get(["tid1", "col1"], ['x']), 
-                                    y1: vattributes.get(["tid1", "col1"], ['y']), 
-                                    x2: vattributes.get(["tid2", "col2"], ['x']), 
-                                    y2: vattributes.get(["tid2", "col2"], ['y'])})
-            await c.erDiagram(vtables, vlabels, vattributes, vfkeys)
         }
 
         if (0) {

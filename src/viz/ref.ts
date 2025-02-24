@@ -297,6 +297,7 @@ export class RLFD extends RefLayout {
   }
 
   layout(data, { width, height }) {
+    console.log("layout data", data)
     //We will populate store with information about nodes and links
     //Node data can found in data
     //Link data can be found in this.links
