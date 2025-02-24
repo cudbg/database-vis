@@ -17,15 +17,18 @@ export function markof(source, attr?) {
   return new RefMark(source, attr);
 }
 
-function makelayoutspecs(klass, dattrs?, edgetable?, options?) {
+function makelayoutspecs(klass, dattrs?, options?) {
   return (...vas) => {
     vas = vas.flat()
     vas = (vas.length==0)? klass.fills : vas;
 
     if (klass == RLFD) {
+      let getResult = dattrs
       //hardcode key for RLFD as left, right. These will correspond to ids of nodes that have an edge between them
+      //Also guaranteed that left and right are not used by observable
+      //so if we see left or right, we know there is a call to fdlayout
       vas = ["left", "right"]
-      const rl = new klass(dattrs, edgetable, options)
+      const rl = new klass(dattrs, getResult, options)
       return Object.fromEntries(vas.map((va) => [va, rl]))
     }
 
@@ -40,7 +43,7 @@ export function eqY() { return makelayoutspecs(RLY) }
 export function propY(attr) { return makelayoutspecs(RLY, attr) }
 export function sq(attr) { return makelayoutspecs(RLSQ, attr) }
 export function grid(attr, numCols) { return makelayoutspecs(RLGRID, [attr,numCols]) }
-export function fdlayout(filter, edgetable, options?) { return makelayoutspecs(RLFD, filter, edgetable, options) }
+export function fdlayout(getResult, options?) { return makelayoutspecs(RLFD, getResult, options) }
 
 class RefBase {
   t: Table;
@@ -63,13 +66,14 @@ export class RefLayout {
   dattrs: string[];
   vattrs: string[];
   containerTable: string;
+  genericBag: {} //Need this specifically for RLFD
 
   fills: string[];
   required: string[];
 
   _computed;
 
-  constructor(dattrs=[], vattrs=[]) {
+  constructor(dattrs=[], vattrs=[], genericBag={}) {
     dattrs = Array.isArray(dattrs) ? dattrs : [dattrs];
     vattrs = Array.isArray(vattrs) ? vattrs : [vattrs];
     this.id = `reflayout-${RefLayout.id++}`;
@@ -77,6 +81,7 @@ export class RefLayout {
     this.vattrs = vattrs;
     this.fills = this.constructor.fills; //[locname, sizename, `${locname}1`, `${locname}2`];
     this._computed = null;
+    this.genericBag = genericBag
   }
 
   container(name) {
@@ -242,7 +247,7 @@ export class RLGRID extends RLSpaceFilling {
     }
     super(dattrs[0], vattrs);
     this.numCols = dattrs[1]
-    this.required = dattrs;
+    this.required = [dattrs[0]] //dattrs has 2 elements. the first is a data column and the second specifies number of columns
   }
 
   layout(data, {width, height, minx=0, miny=0}) {
@@ -263,26 +268,130 @@ export class RLGRID extends RLSpaceFilling {
   }
 }
 
-export class RLFD extends RLSpaceFilling {
+export class RLFD extends RefLayout {
   strength //repulsion force between nodes
   steps //number of steps to simulate
-  foreignKeyColumns
-  edgetable: Table
-  leftPath: FKConstraint[]
-  rightPath: FKConstraint[]
-  constructor(dattrs=[], edgetable: Table, options?) {
-    super(dattrs);
-    this.foreignKeyColumns = dattrs
-    this.required = ["left", "right"]
-    this.edgetable = edgetable
+  foreignKeyColumns: string[]
+  getResult: {othertable: string, searchkeys: string[], otherAttr: string[], callback: Function | null, isVisualChannel: boolean}
+  links: number[][]
+  nodetype: string
+
+  constructor(getResult: {othertable: string, searchkeys: string[], otherAttr: string[], callback: Function | null, isVisualChannel: boolean}, options?) {
+    super(null, ["x", "y"], getResult);
+    if (getResult.otherAttr.length != 2)
+      throw new Error("Pass only 2 foreign attributes into fdlayout!")
+    this.required = ["x", "y"]
+    this.getResult = getResult
+    this.links = []
+    this.foreignKeyColumns = [getResult.otherAttr[0], getResult.otherAttr[1]]
     this.strength = (options && options?.strength && (typeof(options.strength) == "number")) ? options.strength : -750
     this.steps = (options && options?.steps && (typeof(options.steps) == "number")) ? options.steps : 300
-    this.leftPath = []
-    this.rightPath = []
+  }
+
+  setNodeType(nodetype: string) {
+    this.nodetype = nodetype
+
+    if (this.nodetype == "rect") {
+      this.vattrs = ["x1", "x2", "y1", "y2"]
+    }
   }
 
   layout(data, { width, height }) {
-    console.log("data", data)
+    //We will populate store with information about nodes and links
+    //Node data can found in data
+    //Link data can be found in this.links
+
+    let nodes = []
+    let links = []
+
+    /**
+     * Create nodes first
+     */
+    let datalen = data[IDNAME].length
+    for (let i = 0; i < datalen; i++) {
+      let nodeObj = {id: data[IDNAME][i]}
+      //TODO: use an algorithm to estimate good width and height for rectangles that do not have user specified height
+      //The algorithm should not be a space filling algorithm!
+      if ("width" in data) {
+        nodeObj["width"] = data["width"][i]
+        nodeObj["height"] = data["height"][i]
+      }
+      nodes.push(nodeObj)
+    }
+
+    this.links.forEach(link => {
+      links.push({source: link[0], target: link[1]})
+    })
+
+
+    console.log("nodes", nodes)
+    console.log("links", links)
+
+    //link force and charge force are always present in the force layout algorithm
+    //link force specifies a minimum distance for links
+    //charge force specifies the amount of repulsion bewteen nodes
+
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+      .force("charge", d3.forceManyBody().strength(this.strength))
+
+    if (nodes[0].width != null) {
+      simulation.force("collide", d3.forceCollide().radius(d => Math.sqrt(d.width * d.width + d.height * d.height) / 2 + 50))
+    } else {
+      simulation.force("collide", d3.forceCollide())
+    }
+
+    //this force makes sure all marks remain within the canvas
+    simulation.force("boundingBox", function() {
+      nodes.forEach(function(node) {
+        //for differentiating between rectangles/squares and dots
+        let leftBound = 0
+        let rightBound = width
+        let topBound = 0
+        let bottomBound = height
+
+        if (node.width != null) {
+          leftBound = node.width/2
+          rightBound = width - node.width/2
+          topBound = node.height/2
+          bottomBound = height - node.height/2
+
+        }
+
+        if (node.x < leftBound) {
+          node.vx = Math.abs(node.vx);  // Push right if out of bounds on the left
+        }
+        if (node.x > rightBound) {
+          node.vx = -Math.abs(node.vx);  // Push left if out of bounds on the right
+        }
+        // Constrain y position
+        if (node.y < topBound) {
+          node.vy = Math.abs(node.vy);  // Push down if out of bounds on the top
+        }
+        if (node.y > bottomBound) {
+          node.vy = -Math.abs(node.vy);  // Push up if out of bounds on the bottom
+        }
+      })
+    })
+    .stop()
+    .tick(this.steps)
+
+    console.log("AFTER")
+    console.log("nodes", nodes)
+    console.log("links", links)
+
+    let result = {}
+    for (let i = 0; i < datalen; i++) {
+      let nodeKeys = Object.keys(nodes)
+      nodeKeys.forEach((currkey) => {
+        if (!result[currkey])
+          result[currkey] = []
+        result[currkey].push(nodes[i][currkey])
+      })
+    }
+
+    
+    return result
   }
 }
 

@@ -166,6 +166,8 @@ export class Canvas implements IMark {
         mapping.height = mapping.width
       } else if (!("width" in mapping ) && ("height" in mapping)) {
         mapping.width = mapping.height
+      } else if (mapping.width != mapping.height) {
+        mapping.width = mapping.height
       }
     }
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)

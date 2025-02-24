@@ -789,7 +789,8 @@
             { 
                 x: 'id', y: 0, fill:'white', stroke:'black', 
                 height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
-                ...fdlayout("id", c2.db.table("fkeys"))()
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]))()
             })
             vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 

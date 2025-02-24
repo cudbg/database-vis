@@ -416,7 +416,7 @@ export class Database {
 
 
   // @returns { }
-  getFkDependencyGraph() {
+  getFkDependencyGraph(allow1ToN: boolean | null) {
     let edges = {};
     for (const [cname, c] of Object.entries(this.constraints)) {
       if (!(c instanceof FKConstraint)) continue
@@ -433,7 +433,9 @@ export class Database {
          * honestly unsure about whether to include this line
          * Ideally we always want to go from N to 1, but this line goes from 1 to N, which can lead to row explosion
          */
-        //edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        if (allow1ToN) {
+          edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        }
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
@@ -494,9 +496,9 @@ export class Database {
     return null
   }
 
-  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
+  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint, allow1ToN=false) {
     
-    let edges = this.getFkDependencyGraph()
+    let edges = this.getFkDependencyGraph(allow1ToN)
 
     let visited = new Set<string>()
     visited.add(source.internalname)
@@ -533,7 +535,7 @@ export class Database {
   }
 
   getTwoPaths(source:Table, destination:Table, searchConstraint: FKConstraint) {
-    let edges = this.getFkDependencyGraph()
+    let edges = this.getFkDependencyGraph(true)
     let paths: FKConstraint[][] = []
     let visited = new Set<string>()
     visited.add(source.internalname)

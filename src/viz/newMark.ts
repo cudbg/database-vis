@@ -99,8 +99,11 @@ function toQueryItem(item: RawChannelItem): QueryItem {
   } else {
     source = item.mark.src
   }
-
-  if (item.isGet) {
+  if (item.isGet && item.refLayout) {
+    item.dataAttr.forEach((attr) => {
+      columns.push({dataAttr: attr, renameAs: `${attr}`, table: source})
+    })
+  } else if (item.isGet) {
     if (item.dataAttr.length > 1) {
       item.dataAttr.forEach((attr) => {
         //renameAs is this really long string because we need to differentiate between attributes with the same name in the query
@@ -298,10 +301,15 @@ export class Mark {
 
           if (dattr instanceof RefLayout) {
               //Need to handle special case of RLFD where we need to get a foreign key path
+              //For RLFD, dattr is the output of a get function called on another table
               if (dattr instanceof RLFD) {
-                let filter = dattr.dattrs
-                let edgetable = dattr.edgetable
-                
+                //Cast it to the type of object returned by get()
+                let getResult = dattr.genericBag as {othertable: Table, searchkeys: string[], otherAttr: string[], callback: Function | null, isVisualChannel: boolean}
+                let edgetable = getResult.othertable
+                let filter = getResult.searchkeys
+                dattr.setNodeType(this.mark.aria)
+
+                //Find 2 paths
                 for (const [constraintName, constraint] of Object.entries(this.c.db.constraints)) {
                   if (!(constraint instanceof FKConstraint))
                     continue
@@ -312,52 +320,25 @@ export class Mark {
 
                     if (!paths)
                       throw new Error("Can't find two paths!")
-                    
-                    //Set both leftPath and rightPath when we hit leftAttr because its simpler that way
-                    if (dattr.leftPath.length == 0 && dattr.rightPath.length == 0) {
-                      dattr.leftPath = paths[0]
-                      dattr.rightPath = paths[1]
-
-                      //Update metadata for ER diagram
-                      paths.forEach((path) => {
-                        path.forEach(edge => {
-                          this.c.tablesUsed.add(edge.t1.internalname)
-                          this.c.tablesUsed.add(edge.t2.internalname)
-                        })
-                      })
-                    }
-
 
                     if (va == "left") {
-                      let lastEdge = paths[0][paths[0].length - 1]
-                      let {t1, X, Y} = lastEdge
-                      rawChannelItem.constraint = paths[0] //If this is rlfd, we pass the entire path to rawChannelItem
-  
-                      //For now, assume that we do not use self-referencing constraints
-                      //We store the foreign key columns as the attrs to get
-                      //Tbh, they are kind of place holders because what we really want are the ids of the edges
-                      if (t1 == edgetable) {
-                        rawChannelItem.dataAttr = X
-                      } else {
-                        rawChannelItem.dataAttr = Y
-                      }
-                    } else if (va == "right") {
-                      let lastEdge = paths[1][paths[1].length - 1]
-                      let {t1, X, Y} = lastEdge
+                      rawChannelItem.dataAttr = getResult.otherAttr
+                      rawChannelItem.constraint = paths[0]
+                    } else {
+                      rawChannelItem.dataAttr = getResult.otherAttr
                       rawChannelItem.constraint = paths[1]
-  
-                      if (t1 == edgetable) {
-                        rawChannelItem.dataAttr = X
-                      } else {
-                        rawChannelItem.dataAttr = Y
-                      }
                     }
+                    //Need to update data in rawChannelItem
+                    rawChannelItem.isGet == true
+                    rawChannelItem.refLayout = dattr
+                    rawChannelItem.src = edgetable
                     //Found path, break out of for loop
                     break
                   }
                 }
                 rawChannelItem.isGet = true
                 rawChannelItem.src = edgetable
+                this.addLayout(dattr)
 
               } else {
                 dattr.add(va);
@@ -410,8 +391,10 @@ export class Mark {
                 rawChannelItem.callback = dattr.scale.callback
           } else if (typeof dattr === "function") {
             rawChannelItem.callback = dattr
-          } else if (dattr instanceof Object && "constant" in dattr) {
-            rawChannelItem.dataAttr = [dattr.constant]
+          } else {
+            if (dattr instanceof Object && "constant" in dattr) {
+              rawChannelItem.dataAttr = [dattr.constant]
+            }
             rawChannelItem.isConstant = true
           }
           this.channels.push(rawChannelItem)
@@ -784,6 +767,8 @@ export class Mark {
       } else {
         this.pickupReferences(rows)
 
+        //Need to extract link information in case of fdlayout call
+        rows = this.handleFdLayoutData(rows)
         let cols = this.rowsToCols(rows)
         let channels = this.applychannels(cols)
   
@@ -942,20 +927,25 @@ export class Mark {
        */
       let foreignkeyPaths = new Map<FKConstraint[], Set<ColumnObj>>()
       let queryItems = this.channels.map((rawChannelItem) => toQueryItem(rawChannelItem))
+      let fdlayoutPaths: FKConstraint[][] = []
+
       //Loop to create foreign key paths
       for (let i = 0; i < queryItems.length; i++) {
         let {source, columns, constraint, isConstant} = queryItems[i]
 
-        //We are not concerned with query items that are not foreign attributes
+        // We are not concerned with query items that are not foreign attributes
+        // Only query items with a constraint are foreign attributes
         if (!constraint)
           continue
 
         let possibleNewPath = null
-        // Only query items with a constraint are foreign attributes
+
         if (!Array.isArray(constraint))
-          possibleNewPath = this.c.db.getFKPath(this.src, source, constraint)
-        else
+          possibleNewPath = this.c.db.getFKPath(this.src, source, constraint, true)
+        else {
           possibleNewPath = constraint
+          fdlayoutPaths.push(constraint)
+        }
 
         if (!possibleNewPath)
           throw new Error("No possible path")
@@ -975,8 +965,7 @@ export class Mark {
           path = possibleNewPath
           foreignkeyPaths.set(path, new Set(columns))
         }
-        columns.forEach((column) => foreignkeyPaths.get(path).add(column))
-          
+        columns.forEach((column) => foreignkeyPaths.get(path).add(column))          
       }
 
 
@@ -1013,7 +1002,10 @@ export class Mark {
       let resultQuery = new Query()
       let pathCounter = 0 //to differentiate WITH subqueries 
 
-      foreignkeyPaths.forEach((columns, path) => {
+      for (let [path, columns] of foreignkeyPaths.entries()) {
+        if (fdlayoutPaths.includes(path))
+          continue
+
         let subquery = new Query()
         subquery = subquery.distinct()
         this.pathAttrMap.set(pathCounter, [])
@@ -1088,7 +1080,7 @@ export class Mark {
             isAggregate = true
 
             //We should add more aggregates in the future
-            //Only count is supported for now
+            //Only count has been tested
             switch (c.dataAttr) {
               case "count": subquery.select({"count": count()})
                             selectedCols.add("count")
@@ -1137,12 +1129,13 @@ export class Mark {
         if (!foundSrcID){
           subquery = subquery.select({[IDNAME]: column(this.src.internalname, IDNAME)})
         }
+
+        //If this is an aggregate, we do not select pathCounter_id because these are unique values that can affect aggregation
         if (!isAggregate) {
-          //We do not select pathid in case this is an aggregate subquery
-          //Skip checking here because path_id is guranteed to not be selected by user
           subquery = subquery.select({[`path${pathCounter}_id`]: column(lastTable.internalname, IDNAME)})
           this.pathAttrMap.get(pathCounter).push(`path${pathCounter}_id`)
         }
+
         
 
         //This is where we create the groupby clause if this is an aggregate subquery
@@ -1155,7 +1148,58 @@ export class Mark {
         //Thank god we made it here
         resultQuery.with({[`path${pathCounter}`]: subquery})
         pathCounter += 1
+      }
+
+
+      //Handle fdlayout union query
+      let leftFdquery = null
+      let rightFdquery = null
+      fdlayoutPaths.forEach((path, idx) => {
+        let columns = foreignkeyPaths.get(path)
+        let subquery = new Query()
+        subquery = subquery.distinct()
+        this.pathAttrMap.set(pathCounter, [])
+        let addedTables = new Set()
+        
+        for (let p of path) {
+          let {t1, t2, X, Y} = p
+          if (!addedTables.has(t1.internalname)) {
+            subquery = subquery.from(t1.internalname)
+            addedTables.add(t1.internalname)
+          }
+          if (!addedTables.has(t2.internalname)) {
+            subquery = subquery.from(t2.internalname)
+            addedTables.add(t2.internalname)
+          }
+
+          for (let i = 0; i < X.length; i++) {
+            subquery = subquery.where(eq(column(t1.internalname, X[i]), column(t2.internalname, Y[i])))
+          }
+        }
+
+        columns.forEach(c => {
+          subquery = subquery.select({[c.renameAs]: column(c.table.internalname, c.dataAttr)})
+          if (!this.pathAttrMap.get(pathCounter).includes(c.renameAs))
+            this.pathAttrMap.get(pathCounter).push(c.renameAs)
+        })
+
+        subquery = subquery.select({[IDNAME]: column(this.src.internalname, IDNAME)})
+        subquery = subquery.select({[`path${pathCounter}_id`]: literal(pathCounter)})
+
+        //Now we need to set the left or right query accordingly
+        if (idx == 0)
+          leftFdquery = subquery
+        else
+          rightFdquery = subquery
       })
+
+      let fdUnionQuery = null
+      if (leftFdquery && rightFdquery) {
+        fdUnionQuery = Query.union([leftFdquery, rightFdquery])
+        resultQuery = resultQuery.with({[`path${pathCounter}`]: fdUnionQuery})
+        this.pathAttrMap.get(pathCounter).push(`path${pathCounter}_id`)
+      }
+
 
       //Now create the additional base query. It's basically a dummy WITH statement to join other WITH subqueries
       let baseQuery = new Query()
@@ -1178,18 +1222,15 @@ export class Mark {
 
       //Now pull everything together
       //Select the columns in each path
+      let counter = 0
       for (let [pathID, columns] of this.pathAttrMap.entries()) {
         columns.forEach(c => {
           resultQuery = resultQuery.select({[c]: column(`path${pathID}`, c)})
         })
         resultQuery = resultQuery.from(`path${pathID}`)
+        resultQuery = resultQuery.where(eq(column(`path${counter}`, IDNAME), column("base", IDNAME)))
+        counter += 1
       }
-      
-
-      for (let i = 0; i < pathCounter; i++) {
-        resultQuery = resultQuery.where(eq(column(`path${i}`, IDNAME), column("base", IDNAME)))
-      }
-
 
       if (this.ordering.length > 0)
         resultQuery = resultQuery.orderby(this.ordering)
@@ -1231,6 +1272,7 @@ export class Mark {
      *          Has format {x: [...], y: [...], ...}
      */
     applychannels(data) {
+      console.log("data applychannels", data)
       if (Object.keys(data).length == 0) {
         return []
       }
@@ -1246,6 +1288,10 @@ export class Mark {
 
 
         if (currItem.isGet) {
+          //If isGet and reflayout skip this because this is fdlayout
+          if (currItem.refLayout != null) {
+            continue
+          }
           let arr = data[queryItem.columns[0].renameAs]
           /**
            * If callback exists, then we run the callback function and assign the resulting array
@@ -1322,7 +1368,6 @@ export class Mark {
           channels[visualAttr] = Array(data[IDNAME].length).fill(0); // dummy value
         } else {
           if (callback) {
-
             channels[visualAttr] = this.handleCallback(currItem, queryItem, data)
           }
           else if (Object.keys(data).includes(dataAttr[0])) {
@@ -1341,6 +1386,8 @@ export class Mark {
 
         channels["strokeWidth"] = result
       }
+
+      console.log("channels post apply", channels)
       return channels;
     }
 
@@ -1421,17 +1468,32 @@ export class Mark {
       // run layouts
       let markrows = markdata(required, tmpMark, this.mark, channels);
       console.log("markrows", markrows)
+      //if this is a rect, we need both width and height
+      //if the user specified a width or height, we need to use those values
+      if (rls[0] instanceof RLFD && this.mark.aria == "rect") {
+        let heightChannel = this.channels.find(channel => channel.visualAttr == "height" && (channel.isConstant || channel.isGet))
+        let widthChannel = this.channels.find(channel => channel.visualAttr == "width" && (channel.isConstant || channel.isGet))
+
+        if (heightChannel)
+          markrows["height"] = channels["height"]
+
+        if (widthChannel)
+          markrows["width"] = channels["width"]
+      }
 
       if (!R.all((a) => a in markrows, required)) {
         console.log("Missing required attr in markrows", required, R.keys(markrows))
       }
       for (const rl of rls) {
         const layout = rl.layout(markrows, crow)
+        console.log("layout", layout)
         for (const va of rl.vattrs)  {
-          channels[va] = { value: layout[va] }
+          console.log("va", va)
+          channels[va] = layout[va]
           //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
+      console.log("channels post layout", channels)
       return channels
     }
 
@@ -2282,6 +2344,7 @@ export class Mark {
       return values
     }
 
+    //This function gets the ids of foreign rows that are referenced for each row
     pickupReferences(rows) {
       //Now populate referencedMarks. 
       // key is row id of this.src
@@ -2299,6 +2362,54 @@ export class Mark {
         })
       }
     }
+
+    //This function retrieves all the link information for fdlayout
+    //Marks that do not use fdlayout will return immediately
+    handleFdLayoutData(rows) {
+      if (!this.channels.some(channel => channel.refLayout && channel.refLayout instanceof RLFD))
+        return rows
+
+      //Get the channel with RLFD so that we have access to the layout object
+      let rlfdChannel = this.channels.find(channel => channel.refLayout && channel.refLayout instanceof RLFD)
+      let rlfdObj = rlfdChannel.refLayout as RLFD
+
+      //These are the columns we need to remove from rows
+      let linkColumns = rlfdObj.foreignKeyColumns
+
+      //Store rows after removing linkColumns from each row.
+      //Should only insert unique rows
+      let filteredRows = []
+
+      //We might pick up on links that do not connect between nodes we want to run fdlayout on
+      //We need to filter those out
+      let desiredIDs = new Set<number>()
+      rows.forEach(row => { desiredIDs.add(row[IDNAME]) })
+
+      //Keep track of which rows have been added by stringifying rows
+      let visitedRows = new Set<string>()
+      for (let i = 0; i < rows.length; i++) {
+        let row = rows[i]
+        let left = row[linkColumns[0]]
+        let right = row[linkColumns[1]]
+
+        if (!desiredIDs.has(left) || !desiredIDs.has(right))
+          continue
+
+        rlfdObj.links.push([left, right])
+
+        //yep modify in place
+        delete row[linkColumns[0]]
+        delete row[linkColumns[1]]
+        let rowString = JSON.stringify(row)
+        if (!visitedRows.has(rowString)) {
+          visitedRows.add(rowString)
+          filteredRows.push(row)
+        }
+      }
+      return filteredRows
+    }
+
+
 
 
     /**
