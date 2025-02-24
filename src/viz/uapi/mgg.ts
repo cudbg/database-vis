@@ -33,5 +33,5 @@ export class mgg {
         GREATER_EQUAL: ">=",
     }
 
-    static AggregateOperators = ["count"]
+    static AggregateOperators = ["count", "max", "min", "median"]
 }

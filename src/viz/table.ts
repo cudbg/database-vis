@@ -89,7 +89,6 @@ export class Table {
       return this._keys;
     }
     key = [key].flat();
-    console.log("key after creation", key)
     this._keys.push(R.uniq(key));
     return this._keys;
   }

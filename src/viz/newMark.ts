@@ -800,7 +800,6 @@ export class Mark {
       */
       if (isNested) {
         let markInfoArr = []
-
         for (let [outermarkID, currChannels] of Object.entries(channels)) {
           let outerMarkRow = this.outermark.markInfoCache.get(parseInt(outermarkID))
           // render final marks
@@ -830,6 +829,7 @@ export class Mark {
             .attr("transform", `translate(${xoffset}, ${yoffset})`)
             .node().appendChild(mark);
 
+          
           if (this.mark.aria == "text") {
             //Only after appending the text element can we get the BBox
             maybeselection(mark)
@@ -839,8 +839,10 @@ export class Mark {
               let el = d3.select(this);
               let bbox = el.node().getBBox()
               let id = el.attr(`data_${IDNAME}`)
-              markInfo[id]["width"] = bbox.width
-              markInfo[id]["height"] = bbox.height
+              
+              let row = markInfo.find(info => info[IDNAME] == id)
+              row["width"] = bbox.width
+              row["height"] = bbox.height
             })
           }
 
@@ -1443,7 +1445,6 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
-      console.log("data makemark", data)
       let mark = OPlot.plot( {
         ...R.pick(['width', 'height'], crow),
         ...(this.options),
@@ -1547,6 +1548,7 @@ export class Mark {
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
+        .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
         .each(function (d, i) {
           let el = d3.select(this);
           let elAttrs = el.node().attributes;
@@ -1575,7 +1577,6 @@ export class Mark {
 
     setXTranslate(mark, data) {
       let thisref = this
-
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
@@ -1584,17 +1585,11 @@ export class Mark {
           let el = d3.select(this);
           let elAttrs = el.node().attributes;
 
+
           /**
            * Get value of data__rav_id
            */
-          let data_id;
-          for (let j = 0; j < elAttrs.length; j++) {
-            let attrName = elAttrs[j].name
-            if (attrName == `data_${IDNAME}`) {
-              data_id = parseInt(elAttrs[j].value)
-              break
-            }
-          }
+          let data_id = parseInt(el.attr(`data_${IDNAME}`))
 
           /**
            * Get the corresponding xcoord for that data__rav_id

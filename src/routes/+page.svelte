@@ -907,10 +907,51 @@
         }
 
         //CASE STUDY: SECTION 7 OF PAPER
-        //7.1 NESTED SCATTER PLOTS
+        //7.1 A SCATTER PLOTS
         if (0) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 800, height: 650}) //setting up canvas
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            //finish data preparation
+            //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
+            let t = c.db.table("heart_data")
+
+            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+        }
+        //7.1 B HEATMAP
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            //finish data preparation
+            //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
+            let t = c.db.table("heart_data")
+
+            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
+
+            //I skip normalizing cp and slope here
+            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
+
+            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "12px"}, {lineAnchor: "middle"})
+
+            vsquare.nest(vtext)
+        }
+        //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -929,18 +970,24 @@
             //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
             let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
-            let t2 = await t.groupby(["cp", "slope"], {n: "count"}, "cp_slope_combinations")
+            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", stroke: "black", width: 175})
+            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
 
-            let vtext = c.text(t2, {x: vsquare.get(null, "x"), y: vsquare.get(null, "y", ({y}) => y - 10), text: ({cp, slope}) => `cp: ${cp} slope: ${slope}`})
+            let vtext = c.text(t2, 
+                {
+                    x: vsquare.get(null, "x"),
+                    y: vsquare.get(null, "y", ({y}) => y - 10),
+                    fontSize: "15px",
+                    text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`
+                })
 
             vsquare.nest(vdot)
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (1) {
+        if (1a) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
