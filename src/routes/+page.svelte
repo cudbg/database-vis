@@ -741,7 +741,7 @@
         }
 
         /* HEATMAP */
-        if (0) {
+        if (1) {
             /**
              * Data transformation process
              * 
@@ -987,7 +987,7 @@
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (1a) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
