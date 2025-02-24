@@ -794,21 +794,20 @@
             })
             vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
-            // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            // let vattributes= c2.text("columns", {
-            //                                 y: 'ordinal_position',
-            //                                 text: {cols: ["colname", "type"], func: (d) => `${d.colname} ${d.type}`},
-            //                                 textDecoration: {cols: ["is_key"], func: (d) => d.is_key ? 'underline': 'none'},
-            //                                 x: 0
-            //                 })
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
 
-            // c2.nest(vattributes, vtables)
+            c2.nest(vattributes, vtables)
 
-            // let vfkeys = c2.link("fkeys", {
-            //                         ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-            //                         ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-            //                     })
-            // await c2.erDiagram(vtables, vattributes, vfkeys, {strength: -1000, steps: 40})
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
         }
 
         /* TABLE */

@@ -380,18 +380,20 @@ export class RLFD extends RefLayout {
     console.log("nodes", nodes)
     console.log("links", links)
 
-    let result = {}
-    for (let i = 0; i < datalen; i++) {
-      let nodeKeys = Object.keys(nodes)
-      nodeKeys.forEach((currkey) => {
-        if (!result[currkey])
-          result[currkey] = []
-        result[currkey].push(nodes[i][currkey])
-      })
-    }
+    if (this.nodetype == "rect") {
+      const x1 = nodes.map(node => node.x);
+      const x2 = nodes.map(node => node.x + node.width);
+      const y1 = nodes.map(node => node.y);
+      const y2 = nodes.map(node => node.y + node.height);
+      const width = nodes.map(node => node.width);
+      const height = nodes.map(node => node.height);
 
-    
-    return result
+      return {x1, y1, x2, y2}
+    }
+    const x = nodes.map(node => node.x);
+    const y = nodes.map(node => node.y);
+   
+    return {x, y}
   }
 }
 

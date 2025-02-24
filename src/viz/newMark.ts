@@ -854,8 +854,9 @@ export class Mark {
               let el = d3.select(this);
               let bbox = el.node().getBBox()
               let id = el.attr(`data_${IDNAME}`)
-              markInfo[id]["width"] = bbox.width
-              markInfo[id]["height"] = bbox.height
+              let row = markInfo.find(info => info[IDNAME] == id)
+              row["width"] = bbox.width
+              row["height"] = bbox.height
             })
           }
 
@@ -2110,15 +2111,15 @@ export class Mark {
      * @param childX starting x coord for child node
      * @param childY starting y coord for child node
      */
-    setTransform(child, parentX, parentY, parentWidth, parentHeight, childX, childY) {
+    setTransform(child, crow, childX, childY) {
       if (this.options.textAnchor == "left") {
-        child.attr("transform", `translate(${parentX + 15}, ${childY})`)
+        child.attr("transform", `translate(20, ${childY})`)
       } else if (this.options.textAnchor == "right") {
-        child.attr("transform", `translate(${parentX + parentWidth - 15}, ${childY})`) //should be parentX + width
+        child.attr("transform", `translate(${crow.width - 20}, ${childY})`) //should be parentX + width
       } else if (this.options.textAnchor == "bottom") {
-        child.attr("transform", `translate(${childX}, ${parentY + parentHeight - 10})`)
+        child.attr("transform", `translate(${childX}, ${crow.height - 20})`)
       } else if (this.options.textAnchor == "top") {
-        child.attr("transform", `translate(${childX}, ${parentY + 10})`)
+        child.attr("transform", `translate(${childX}, 20)`)
       }
     }
 
@@ -2133,10 +2134,7 @@ export class Mark {
      */
     handleTextAnchor(mark, crow) {
       let thisref = this
-      let parentX = crow.x;
-      let parentY = crow.y; //keep in mind that (0,0) is top left!
-      let parentWidth = crow.width;
-      let parentHeight = crow.height;
+
 
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -2159,7 +2157,7 @@ export class Mark {
           let childInfo = thisref.getTransformInfo(el)
           let childX = childInfo.x
           let childY = childInfo.y
-          thisref.setTransform(el, parentX, parentY, parentWidth, parentHeight, childX, childY)
+          thisref.setTransform(el, crow, childX, childY)
         })
     }
 
