@@ -170,6 +170,7 @@ export class Canvas implements IMark {
         mapping.width = mapping.height
       }
     }
+
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
     return mark;

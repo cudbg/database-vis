@@ -766,7 +766,6 @@ export class Mark {
 
       } else {
         this.pickupReferences(rows)
-
         //Need to extract link information in case of fdlayout call
         rows = this.handleFdLayoutData(rows)
         let cols = this.rowsToCols(rows)
@@ -1372,7 +1371,6 @@ export class Mark {
           }
           else
             channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
-          
         }
       }
 
@@ -1382,6 +1380,14 @@ export class Mark {
         let result = strokeWidths.map((width) => (width/minimumWidth) * 10)
 
         channels["strokeWidth"] = result
+      }
+
+      //Here we need to convert all BigInts to number
+      for (let i = 0; i < Object.keys(channels).length; i++) {
+        let currVisualAttr = Object.keys(channels)[i]
+        if (typeof channels[currVisualAttr][0] === "bigint") {
+          channels[currVisualAttr] = channels[currVisualAttr].map(item => parseFloat(item))
+        }
       }
 
       return channels;
@@ -1501,14 +1507,41 @@ export class Mark {
      * 
      */
     makemark(data, crow, scales?) {
-      let mark = OPlot.plot( {
-        ...R.pick(['width', 'height'], crow),
-        ...(this.options),
-        marks: [ 
-          this.mark.klass(data[IDNAME], data)
-        ],
-        ...(this._scales)})
+      let mark = null
+      
+      if (this.marktype == "axisX" || this.marktype == "axisY") {
+        let minTick = Math.min(...data["ticks"])
+        let maxTick = Math.max(...data["ticks"])
+        let tickInterval = "tickInterval" in this.options ? this.options["tickInterval"] : 5
+        
+        let tickNum = (maxTick - minTick) / tickInterval
 
+        let ticks = d3.ticks(minTick, maxTick, tickNum)
+
+        if (this.marktype == "axisX")
+          this.options.x = {type: "linear"}
+        else if (this.marktype == "axisY")
+          this.options.y = {type: "linear"}
+
+        mark = OPlot.plot( {
+          ...R.pick(['width', 'height'], crow),
+          ...this.options,
+          marks: [ 
+            this.mark.klass(ticks)
+          ],
+          ...(this._scales)})
+      } else {
+        mark = OPlot.plot( {
+          ...R.pick(['width', 'height'], crow),
+          ...(this.options),
+          marks: [ 
+            this.mark.klass(data[IDNAME], data)
+          ],
+          ...(this._scales)})
+      }
+
+      
+      
       this.overrideObservable(mark, data, crow)
         
       let markInfo = this.getMarkInfo(mark, data, crow)
@@ -1517,7 +1550,8 @@ export class Mark {
         * we hide axes because each mark gets its own axis. 
         * we don't want overlapping axes because that makes it hard to read
         */
-      this.hideAxes(mark)
+      if (this.marktype != "axisX" && this.marktype != "axisY")
+        this.hideAxes(mark)
 
 
       this.updateScales(mark)
@@ -1927,8 +1961,12 @@ export class Mark {
      * @returns an array of objects. each object has information about a single datapoint
      */
     getMarkInfo(mark, data, crow) {
-      if (this.mark.marktype == "text") {
+      if (this.marktype == "text") {
         return this.getMarkInfoFromText(mark, data, crow)
+      } else if (this.marktype == "axisX") {
+        return this.getMarkInfoFromAxis(mark, data, crow, true)
+      } else if (this.marktype == "axisY") {
+        return this.getMarkInfoFromAxis(mark, data, crow, false)
       } else {
         return this.getMarkInfoNormal(mark, data, crow)
       }      
@@ -1976,6 +2014,29 @@ export class Mark {
           markInfo.push(markAttributes)
       })
 
+      return markInfo
+    }
+
+    getMarkInfoFromAxis(mark, data, crow, isAxisX: boolean) {
+      let markInfo = []
+      let thisref = this
+      let axisType = isAxisX ? "x-axis" : "y-axis"
+
+      maybeselection(mark)
+        .selectAll(`g[aria-label='${axisType} tick label']`)
+        .selectAll("*")
+        .attr(`data_${IDNAME}`, (d,i) => data[IDNAME][i] )
+        .each(function (d, i) {
+          let el = d3.select(this)
+          let markAttributes = {};
+          let value = el.text()
+          markAttributes["text"] = value
+          markAttributes[IDNAME] = parseInt(el.attr(`data_${IDNAME}`))
+          let {x,y} = thisref.getTransformInfo(el)
+          markAttributes["x"] = x
+          markAttributes["y"] = y
+          markInfo.push(markAttributes)
+        })
       return markInfo
     }
 
@@ -2355,6 +2416,7 @@ export class Mark {
     handleFdLayoutData(rows) {
       if (!this.channels.some(channel => channel.refLayout && channel.refLayout instanceof RLFD))
         return rows
+      
 
       //Get the channel with RLFD so that we have access to the layout object
       let rlfdChannel = this.channels.find(channel => channel.refLayout && channel.refLayout instanceof RLFD)

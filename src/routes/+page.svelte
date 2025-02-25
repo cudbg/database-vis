@@ -931,10 +931,20 @@
             //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
             let t = c.db.table("heart_data")
 
-            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "diverging", scheme: "turbo"}})
+
+            //plot has default margins for axis. see here https://observablehq.com/plot/marks/axis
+
+            let xaxis = c.axisX(t, {ticks: "age"}, 
+                {label: "Age", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInverval: 5})
+
+            let yaxis = c.axisY(t, {ticks: "thalach"}, 
+                {label: "Thalach", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInterval: 5})
+
+
         }
         //7.1 B HEATMAP
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -953,36 +963,9 @@
             //I skip normalizing cp and slope here
             let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
 
-            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "12px"}, {lineAnchor: "middle"})
+            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "20px", lineWidth: 10}, {lineAnchor: "middle"})
 
             vsquare.nest(vtext)
-
-            let c2 = new Canvas(db, {width: 800, height: 700})
-            erDiagramCanvas = c2
-
-            let vtables = c2.rect("tables",
-            { 
-                x: 'id', y: 0, fill:'white', stroke:'black', 
-                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
-                width: 200,
-                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
-            })
-            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
-
-            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c2.text("columns", {
-                                            y: 'ord_pos',
-                                            text: ({colname, type}) => `${colname} ${type}`,
-                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                            x: 20
-                            })
-
-            vtables.nest(vattributes)
-
-            let vfkeys = c2.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
         }
         //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
         if (0) {
@@ -1050,7 +1033,7 @@
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
