@@ -17,6 +17,7 @@ import { rowof, markdata, applycolfilter, markels, filtercoldata, maybeselection
 import { Scale, ScaleObject } from "./newScale";
 import { HOOK_PLACE } from "./task_graph/task_graph";
 import { mgg } from "./uapi/mgg";
+import {basicCurve, findContainingRectangles, findPath, generateCurve } from "./curve";
 
 
 /**
@@ -239,6 +240,7 @@ export class Mark {
     _markelsidx;  // IDNAME -> HTML mark element
     node;  // filled in render()
     markdata;
+
 
     constructor(canvas, marktype, source:Table, mappings, options, plotConfig) {
         this.id = Mark.id++;
@@ -512,9 +514,20 @@ export class Mark {
         }
     }
 
-    nest(innermark: Mark, predicate?) {
+    nestMulti(innermarks: Mark[], func: Function) {
+    }
+    nestSingle(innermark: Mark, predicate?) {
       this.c.nest(innermark, this, predicate)
     }
+    nest(innermarks: Mark | Mark[], func: Function | string | null) {
+      if (!Array.isArray(innermarks) && !(func instanceof Function)) {
+        this.nestSingle(innermarks, func)
+      } else {
+        this.nestMulti(innermarks as Mark[], func as Function) //forcefully cast
+      }
+    }
+
+
 
     eqSearchKey(searchKey1: string[], searchKey2: string[]) {
       if (searchKey1.length != searchKey2.length)
@@ -1324,7 +1337,20 @@ export class Mark {
             for (let [id, foreignIDs] of this.referencedMarks.entries()) {
               //key of foreignIDs is id of this mark
               //value is an object that looks like: {<some visual attr>_ref: <some row id of another mark>}
-              let foreignID = foreignIDs[`${visualAttr}_ref`]
+              let foundPathID = -1
+
+              //first find the path that was used to create this visual attribute
+              this.pathAttrMap.forEach((aliases, pathID) => {
+                if (queryItem.columns.some(column => aliases.includes(column.renameAs)))
+                  foundPathID = pathID 
+              })
+
+              if (foundPathID == -1) {
+                throw new Error("Un oh, couldn't find some id of the foreign mark")
+              }
+
+              //once we have found the pathID, we can the find the id of the row in the other table was referenced
+              let otherID = foreignIDs[`path${foundPathID}_id_ref`]
               let othermark = mark
               let othermarkInfoCache = mark.markInfoCache
               let otherlevel = mark.level
@@ -1336,14 +1362,13 @@ export class Mark {
               //Keep walking upwards until you find an outermark that is on the same level as this mark
               //At this point you have the correct x and y coordinates
               while (othermark && (otherlevel > this.level)) {
-                let othermarkRow = othermarkInfoCache.get(foreignID)
-
+                let othermarkRow = othermarkInfoCache.get(otherID)
                 if (visualAttr == "x1"  || visualAttr == "x2"  || visualAttr == "x")
                     arr[idx] += othermarkRow.data_xoffset
-                else if (visualAttr == "y1" || visualAttr == "y2" || visualAttr == "y") {
+                else if (visualAttr == "y1" || visualAttr == "y2" || visualAttr == "y")
                     arr[idx] += othermarkRow.data_yoffset
-                }
 
+                otherID = othermark.innerToOuter.get(otherID)
                 othermark = othermark.outermark
                 othermarkInfoCache = othermark.markInfoCache
                 otherlevel--
@@ -1387,6 +1412,44 @@ export class Mark {
         let currVisualAttr = Object.keys(channels)[i]
         if (typeof channels[currVisualAttr][0] === "bigint") {
           channels[currVisualAttr] = channels[currVisualAttr].map(item => parseFloat(item))
+        }
+      }
+
+      //This is a hack specifically for ER diagram
+      if (this.marktype != "link")
+        return channels
+
+      let isERDiagram = false
+      this.c.marks.forEach(m => {
+        let mark = m as Mark
+        if (mark.channels.some(channel => channel.refLayout && channel.refLayout instanceof RLFD)) {
+          isERDiagram = true
+        }
+      })
+
+      if (!isERDiagram)
+        return channels
+
+      //now that we have confirmed this is ER diagram, adjust x1,x2,y1,y2
+      let datalen = channels[IDNAME].length
+      let x1Mark = this.channels.find(channel => channel.visualAttr == "x1").mark
+      let x2Mark = this.channels.find(channel => channel.visualAttr == "x2").mark
+
+      for (let i = 0; i < datalen; i++) {
+        let id = channels[IDNAME][i]
+        let x1 = channels["x1"][i]
+        let x2 = channels["x2"][i]
+
+        let foreignIDs = this.referencedMarks.get(id)
+        let x1ID = foreignIDs["x1_ref"]
+        let x2ID = foreignIDs["x2_ref"]
+        let x1Row = x1Mark.markInfoCache.get(x1ID)
+        let x2Row = x2Mark.markInfoCache.get(x2ID)
+
+        if (x1 + x1Row["width"] < x2) {
+          channels["x1"][i] += x1Row["width"]
+        } else if (x2 + x2Row["width"] < x1) {
+          channels["x2"][i] += x2Row["width"]
         }
       }
 
@@ -1764,6 +1827,9 @@ export class Mark {
     }
 
     setCurve(mark) {
+      //Get all the marks present
+      let obstacles = this.getObstacles()
+
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
@@ -1784,15 +1850,25 @@ export class Mark {
                   let y1 = parseFloat(match[2])
                   let x2 = parseFloat(match[3])
                   let y2 = parseFloat(match[4])
+                  let curve
 
-                  //let {p1x, p1y} = calculateQuadraticBezierControlPoint(x1, y1, x2, y2)
-                  //let {p1x, p1y, p2x, p2y} = calculateCubicBezierControlPoints(x1, y1, x2, y2)
-                  let {p1x, p1y, p2x, p2y} = curveFunction(x1, y1, x2, y2)
+                  if (obstacles.length == 0) {
+                    let {p1x, p1y, p2x, p2y} = basicCurve(x1, y1, x2, y2)
+   
+                    curve = `M${x1},${y1} C ${p1x},${p1y}, ${p2x},${p2y}, ${x2},${y2}`
 
+                  } else {
+                    // Step 1: Find rectangles containing the start and end points
+                    const containingRects = findContainingRectangles({x: x1, y: y1}, {x: x2, y: y2}, obstacles);
 
-                  let curvedPath = `M${x1},${y1} C ${p1x},${p1y}, ${p2x},${p2y}, ${x2},${y2}`
+                    // Step 2: Pathfinding (simplified; using adjacency-based search)
+                    const path = findPath(containingRects[0], containingRects[containingRects.length - 1], obstacles);
 
-                  el.attr("d", `${curvedPath}`)
+                    // Step 3: Generate the curve between start and end points
+                    curve = generateCurve({x: x1, y: y1}, {x: x2, y: y2});
+                  }
+
+                  el.attr("d", curve)
                 } else {
                   /**
                    * Should never end up here
@@ -1802,6 +1878,60 @@ export class Mark {
               }
           }
       })
+    }
+
+    getObstacles() {
+      //Pick up all the marks on the browser
+      let obstacles = []
+      // let canvas = this.c.node.select(".canvas")
+      // console.log("canvas", canvas)
+      // let children = canvas.selectChildren("g")
+      // console.log("children", children)
+      // let grandChildren = children.selectChildren()
+      // console.log("grandChilden", grandChildren)
+      // let greatGrandChildren = grandChildren.selectChildren()
+      // console.log("greatGrandChildren", greatGrandChildren)
+      // let markSvgs = greatGrandChildren.selectAll("g:last-child")
+      // console.log("objective", markSvgs)
+      let marks = this.c.marks as Mark[]
+      for (let i = 0; i < marks.length; i++) {
+        let mark = marks[i]
+
+        for (let [id, r] of mark.markInfoCache.entries()) {
+          let row = {}
+          row["x1"] = r["x"] + r["data_xoffset"]
+          row["y1"] = r["y"] + r["data_yoffset"]
+
+          if ("width" in r) {
+            row["x2"] = row["x1"] + r["width"]
+            row["y2"] = row["y1"] + r["height"]
+          }
+
+          let outermark = mark.outermark
+
+          if (!outermark)
+            continue
+
+          let outermarkID = mark.innerToOuter.get(id)
+
+          while (outermark) {
+            let outerrow = outermark.markInfoCache.get(outermarkID)
+            row["x1"] += outerrow["data_xoffset"]
+            row["x2"] += outerrow["data_xoffset"]
+            row["y1"] += outerrow["data_yoffset"]
+            row["y2"] += outerrow["data_yoffset"]
+
+            if (!outermark.outermark)
+              break
+
+            outermarkID = outermark.innerToOuter.get(outermarkID)
+            outermark = outermark.outermark
+          }
+          obstacles.push(row)
+        }
+      }
+      console.log("obstacles", obstacles)
+      return obstacles
     }
 
     /**
@@ -2073,30 +2203,40 @@ export class Mark {
               else if (attrName == `data_${IDNAME}`)
                 markAttributes[IDNAME] = parseInt(attrValue);
               else if (attrName == "d" && marktype == "link") {
-                let regex
+
                 if ("curve" in thisref.options) {
-                  regex = /M([-\d.]+),([-\d.]+)\s+C\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+)/
+                  //regex = /M([-\d.]+),([-\d.]+)\s+C\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+),\s+([-\d.]+),([-\d.]+)/
                   //regex = /M([-\d.]+),([-\d.]+)\s+Q([-\d.]+),([-\d.]+)\s+([-\d.]+),([-\d.]+)/
-                } else {
-                  regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
-                }
-                const match = attrValue.match(regex)
-
-                if (match) {
-                  let x1 = parseFloat(match[1])
-                  let y1 = parseFloat(match[2])
-                  let x2 = parseFloat(match[3])
-                  let y2 = parseFloat(match[4])
-
+                  let parts = attrValue.split(" ")
+                  let startpoint = parts[1].split(",")
+                  let x1 = parseFloat(startpoint[0])
+                  let y1 = parseFloat(startpoint[1])
+                  let endpoint = parts[parts.length - 1].split(",")
+                  let x2 = parseFloat(endpoint[0])
+                  let y2 = parseFloat(endpoint[0])
                   markAttributes["x1"] = x1
                   markAttributes["x2"] = x2
                   markAttributes["y1"] = y1
                   markAttributes["y2"] = y2
                 } else {
-                  /**
-                   * Should never end up here
-                   */
-                  throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                  let regex = /M([\d.]+),([\d.]+)L([\d.]+),([\d.]+)/
+                  const match = attrValue.match(regex)
+                  if (match) {
+                    let x1 = parseFloat(match[1])
+                    let y1 = parseFloat(match[2])
+                    let x2 = parseFloat(match[3])
+                    let y2 = parseFloat(match[4])
+  
+                    markAttributes["x1"] = x1
+                    markAttributes["x2"] = x2
+                    markAttributes["y1"] = y1
+                    markAttributes["y2"] = y2
+                  } else {
+                    /**
+                     * Should never end up here
+                     */
+                    throw new Error("Couldn't parse x1, y1, x2, y2 from a link?")
+                  }
                 }
               } else if (attrName) {
                 attrName = attrName.replace(/-/g, "_")
@@ -2510,71 +2650,3 @@ export class Mark {
     }
 }
 
-function curveFunction(
-  x1: number, y1: number, 
-  x2: number, y2: number, 
-) {
-  let p1x = x1+(x2-x1)/2
-  let p2x = p1x
-  let p1y = y1
-  let p2y = y2
-
-  return {p1x, p1y, p2x, p2y}
-}
-
-function calculateCubicBezierControlPoints(
-  x1: number, y1: number, 
-  x2: number, y2: number, 
-  offsetFactor: number = 1
-): { p1x: number, p1y: number, p2x: number, p2y: number } {
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-
-  const perpendicularDx = -dy;
-  const perpendicularDy = dx;
-
-  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
-  const normalizedPerpendicularDx = perpendicularDx / length;
-  const normalizedPerpendicularDy = perpendicularDy / length;
-
-  const p1x = midX + offsetFactor * 2 * normalizedPerpendicularDx;
-  const p1y = midY + offsetFactor * 2 * normalizedPerpendicularDy;
-
-
-  const p2x = midX + offsetFactor * 2 * -normalizedPerpendicularDx;
-  const p2y = midY + offsetFactor * 2 * -normalizedPerpendicularDy;
-
-  return { p1x, p1y, p2x, p2y };
-}
-
-function calculateQuadraticBezierControlPoint(
-  x1: number, y1: number, 
-  x2: number, y2: number, 
-  offsetFactor: number = 0.7
-): { p1x: number, p1y: number } {
-  // Calculate the midpoint between x1, y1 and x2, y2
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-
-  // Calculate a perpendicular direction (rotate by 90 degrees)
-  const perpendicularDx = -dy;
-  const perpendicularDy = dx;
-
-  // Normalize this perpendicular vector
-  const length = Math.sqrt(perpendicularDx * perpendicularDx + perpendicularDy * perpendicularDy);
-  const normPerpendicularDx = perpendicularDx / length;
-  const normPerpendicularDy = perpendicularDy / length;
-
-  // Place the control point off-center by offsetFactor
-  const midpointX = (x1 + x2) / 2;
-  const midpointY = (y1 + y2) / 2;
-
-  // Apply the perpendicular offset
-  const p1x = midpointX + offsetFactor * normPerpendicularDx;
-  const p1y = midpointY + offsetFactor * normPerpendicularDy;
-
-  return { p1x, p1y };
-}

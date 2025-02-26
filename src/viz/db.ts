@@ -1,6 +1,6 @@
 import * as R from "ramda";
 import { get, writable, derived } from "svelte/store";
-import { Query, literal, sql, agg, and, eq, column } from "@uwdata/mosaic-sql";
+import { Query, literal, sql, agg, and, eq, column , loadObjects} from "@uwdata/mosaic-sql";
 import { Table, IDNAME, TName, maybetname } from "./table";
 import { Schema } from "./schema";
 import { constraintFromText, Constraint, Cardinality, FKConstraint } from "./constraint";
@@ -307,6 +307,29 @@ export class Database {
 
     await this.updateMetadata(internalname)
     return t;
+  }
+
+  async loadData(cols: string[], data: any[][], internalname?) {
+    internalname ??= cols.join("_") + "_table"
+
+    let rows = []
+    for (let i = 0; i < data.length; i++) {
+      let row = {}
+      for (let j = 0; j < data[i].length; j++) {
+        row[cols[j]] = data[i][j]
+        rows.push(row)
+      }
+    }
+    console.log("rows", rows)
+    let query = loadObjects(internalname, rows)
+    await this.conn.exec(query)
+    const t = await this.tableFromConnection(internalname)
+    t.keys([IDNAME])
+    t.name(internalname)
+    this.setTable(t)
+    await this.updateMetadata(internalname)
+
+    return t
   }
 
   async createView(viewname, q:Query|String) {
@@ -728,6 +751,7 @@ export class Database {
 
     this.addConstraint(new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]}))
     await this.updateFkeysMetadata(t.internalname, newFact.internalname, [IDNAME], [IDNAME])
+    return newFact
   }
 
     /**

@@ -376,15 +376,15 @@
              * 
             */
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 1400, height: 1200}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
 
             let attrs = ["sex", "age", "thalach", "cp", "target"]
             await db.normalize("heart_csv", attrs, "heart_data")
-            let edgetable = await c.db.table("heart_data").bucket("age", 8)
-            edgetable = await edgetable.bucket("thalach", 10)
+            let edgetable = await c.db.table("heart_data").bucket("age",8)
+            edgetable = await edgetable.bucket("thalach", 20)
             
             await db.normalizeMany(edgetable.internalname, attrs.map(a => [a]),
                 {dimnames: attrs, factname: "combined"})
@@ -393,12 +393,13 @@
 
             attrs.forEach((attr, i) => {
 
-                let mark = c.square(attr, {x: i * 200, y: attr, width: 50, fill: "none", stroke: "black"})
+                let mark = c.square(attr, {x: i * 300 + 50, y: attr, width: 110, fill: "none", stroke: "black"})
                 let label = c.text(attr,
                     {
                         x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
                         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
-                        text: attr
+                        text: attr,
+                        fontSize: "20px"
 
                     }, {lineAnchor: "middle"})
                 squareMarks.push(mark)
@@ -944,7 +945,7 @@
 
         }
         //7.1 B HEATMAP
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
             canvas = c
@@ -1029,11 +1030,11 @@
             let vfkeys = c2.link("fkeys", {
                                     ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
                                     ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
+                                }, {curve: true})
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
@@ -1043,9 +1044,9 @@
             let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
             await db.normalize("heart_csv", attrs, "heart_data")
 
-            let edgetable = await c.db.table("heart_data").bucket("age", 8)
+            let edgetable = await c.db.table("heart_data").bucket("age", 15)
             edgetable = await edgetable.bucket("thalach", 10)
-            edgetable = await edgetable.bucket("chol", 20)
+            edgetable = await edgetable.bucket("chol", 30)
 
 
             await db.normalizeMany(edgetable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
@@ -1062,7 +1063,7 @@
             let views = []
             
             attrs.forEach((attr, i) => {
-                let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr}, domObj)
+                let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr, fontSize: "20px"}, domObj)
                 views.push(mark)
             })
 
@@ -1106,9 +1107,62 @@
             vtables.nest(vattributes)
 
             let vfkeys = c2.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
+                ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                }, {curve: true})
+        }
+
+        //7.2 PARALLEL COORDINATES V3
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thal", "slope", "cp", "target"]
+
+            //create table that contains name of attributes
+            let tattrs = await c.db.loadData(["attr"], attrs.map(attr => [attr]), "attrstable")
+
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            let datatable = c.db.table("heart_data")
+
+            let edgetable = await db.normalizeMany(datatable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
+            let tables = attrs.map(attr => c.db.table(attr))
+
+            //finish data preparation
+            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
+
+            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
+            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
+            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
+            let vattrs = c.rect(tattrs, {x: "attr", y: 0, fill: "none", stroke: "black"})
+            
+            //create text marks
+            let views = []
+            tables.forEach((table, idx) => {
+                let currAttr = attrs[idx]
+                let view = c.text(table, {x: 0, y: currAttr, text: currAttr})
+                views.push(view)
+            })
+
+            let gv = (views, {attr}) => views[attrs.indexOf(attr)] 
+
+            vattrs.nest(views, gv)
+
+            function zip(arr1, arr2) {
+                let result = []
+                let length = Math.min(arr1.length, arr2.length)
+                for (let i = 0; i < length; i++) {
+                    result.push([arr1[i], arr2[i]])
+                }
+                return result
+            }
+
+            let pairs = zip(attrs.slice(0, -1), attrs.slice(1));
+            console.log("pairs", pairs)
         }
 
         
