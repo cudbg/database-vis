@@ -932,15 +932,15 @@
             //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
             let t = c.db.table("heart_data")
 
-            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "diverging", scheme: "turbo"}})
+            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "diverging", scheme: "RdPu"}})
 
             //plot has default margins for axis. see here https://observablehq.com/plot/marks/axis
 
-            let xaxis = c.axisX(t, {ticks: "age"}, 
-                {label: "Age", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInverval: 5})
+            // let xaxis = c.axisX(t, {ticks: "age"}, 
+            //     {label: "Age", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInverval: 5})
 
-            let yaxis = c.axisY(t, {ticks: "thalach"}, 
-                {label: "Thalach", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInterval: 5})
+            // let yaxis = c.axisY(t, {ticks: "thalach"}, 
+            //     {label: "Thalach", marginLeft: 30, marginBottom: 30, tickSize: 0, tickInterval: 5})
 
 
         }
@@ -962,7 +962,7 @@
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
+            let vsquare = c.square(t2, {x: "cp", y: "slope", stroke: "n", width: 200})
 
             let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "20px", lineWidth: 10}, {lineAnchor: "middle"})
 
@@ -990,10 +990,10 @@
             //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
             let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
-            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
+            let t2 = await t.groupby(["cp", "slope"], {count: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
+            let vsquare = c.square(t2, {x: "cp", y: "slope", stroke:"n", width: 200})
 
             let vtext = c.text(t2, 
                 {
@@ -1034,7 +1034,7 @@
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
@@ -1115,7 +1115,7 @@
         //7.2 PARALLEL COORDINATES V3
         if (0) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -1123,7 +1123,7 @@
             let attrs = ["thal", "slope", "cp", "target"]
 
             //create table that contains name of attributes
-            let tattrs = await c.db.loadData(["attr"], attrs.map(attr => [attr]), "attrstable")
+            //let tattrs = await c.db.loadData(["attr"], attrs.map(attr => [attr]), "attrstable")
 
             await db.normalize("heart_csv", attrs, "heart_data")
 
@@ -1138,31 +1138,134 @@
             //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
             // let tattr = await c.createDescriptionTable("heart_data", "attrs")
             // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
-            let vattrs = c.rect(tattrs, {x: "attr", y: 0, fill: "none", stroke: "black"})
+            //let vattrs = c.rect(tattrs, {x: "attr", y: 0, fill: "none", stroke: "black"})
             
             //create text marks
             let views = []
+            let domObj = {x: {domain: [0,800]}}
             tables.forEach((table, idx) => {
                 let currAttr = attrs[idx]
-                let view = c.text(table, {x: 0, y: currAttr, text: currAttr})
+                let view = c.text(table, {x: idx * 200, y: currAttr, text: currAttr}, domObj)
                 views.push(view)
             })
 
-            let gv = (views, {attr}) => views[attrs.indexOf(attr)] 
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = views[i]
+                let rightMark = views[i + 1]
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], {c: "count"})
 
-            vattrs.nest(views, gv)
-
-            function zip(arr1, arr2) {
-                let result = []
-                let length = Math.min(arr1.length, arr2.length)
-                for (let i = 0; i < length; i++) {
-                    result.push([arr1[i], arr2[i]])
-                }
-                return result
+                let vlink = c.link(grouped,
+                    {
+                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
+                        y1: leftMark.get(null, "y"),
+                        x2: rightMark.get(null, "x"),
+                        y2: rightMark.get(null, "y"),
+                        strokeWidth: "c",
+                        opacity: "c",
+                        fill: "c"
+                    }, {curve: true})
             }
+        }
 
-            let pairs = zip(attrs.slice(0, -1), attrs.slice(1));
-            console.log("pairs", pairs)
+        //fake ER diagram
+        if (1) {
+            await db.conn.exec(`CREATE TABLE faketables (
+                id INT PRIMARY KEY,
+                table_name VARCHAR(255) NOT NULL
+            );`)
+
+            await db.conn.exec(`
+            CREATE TABLE fakecolumns (
+                id INT UNIQUE,
+                tid INT NOT NULL,
+                colname VARCHAR(255) NOT NULL,
+                is_key BOOLEAN NOT NULL,
+                type VARCHAR(50) NOT NULL,
+                ord_pos INT NOT NULL,
+                FOREIGN KEY (tid) REFERENCES faketables(id),
+                PRIMARY KEY (tid, colname)
+            );`)
+
+            await db.conn.exec(`CREATE TABLE fakefkeys (
+                id INT PRIMARY KEY,
+                tid1 INT NOT NULL,
+                col1 VARCHAR(255) NOT NULL,
+                tid2 INT NOT NULL,
+                col2 VARCHAR(255) NOT NULL,
+                FOREIGN KEY (tid1, col1) REFERENCES fakecolumns(tid, colname),
+                FOREIGN KEY (tid2, col2) REFERENCES fakecolumns(tid, colname)
+            );`)
+
+            await db.conn.exec(`
+                INSERT INTO faketables (id, table_name) VALUES
+                (0, 'users'),
+                (1, 'orders'),
+                (2, 'products'),
+                (3, 'categories'),
+                (4, 'payments');
+
+
+                INSERT INTO fakecolumns (id, tid, colname, is_key, type, ord_pos) VALUES
+                (1, 0, 'user_id', true, 'INT', 1),
+                (2, 0, 'username', false, 'VARCHAR', 2),
+                (3, 0, 'email', false, 'VARCHAR', 3),
+                (4, 0, 'created_at', false, 'TIMESTAMP', 4),
+                (5, 1, 'order_id', true, 'INT', 1),
+                (6, 1, 'user_id', false, 'INT', 2),
+                (7, 1, 'product_id', false, 'INT', 3),
+                (8, 1, 'quantity', false, 'INT', 4),
+                (9, 1, 'total_price', false, 'DECIMAL', 5),
+                (10, 2, 'product_id', true, 'INT', 1),
+                (11, 2, 'name', false, 'VARCHAR', 2),
+                (12, 2, 'price', false, 'DECIMAL', 3),
+                (13, 2, 'category_id', false, 'INT', 4),
+                (14, 2, 'stock', false, 'INT', 5),
+                (15, 3, 'category_id', true, 'INT', 1),
+                (16, 3, 'name', false, 'VARCHAR', 2),
+                (17, 4, 'payment_id', true, 'INT', 1),
+                (18, 4, 'order_id', false, 'INT', 2),
+                (19, 4, 'amount', false, 'DECIMAL', 3),
+                (20, 4, 'method', false, 'VARCHAR', 4),
+                (21, 4, 'status', false, 'VARCHAR', 5);
+
+                INSERT INTO fakefkeys (id, tid1, col1, tid2, col2) VALUES
+                (1, 1, 'user_id', 0, 'user_id'),
+                (2, 1, 'product_id', 2, 'product_id'),
+                (3, 2, 'category_id', 3, 'category_id'),
+                (4, 4, 'order_id', 1, 'order_id');
+                `)
+
+                await db.loadFromConnection()
+
+                let c = new Canvas(db, {width: 800, height: 700})
+                canvas = c
+
+                let vtables = c.rect("faketables",
+                { 
+                    x: 'id', y: 0, fill:'white', stroke:'black', 
+                    height: c.db.table("fakecolumns").get("id", "count", (d) => d.count * 40),
+                    width: 200,
+                    ...fdlayout(c.db.table("fakefkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+                })
+
+                let vlabels = c.text("faketables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+                let vattributes= c.text("fakecolumns", {
+                                                y: 'ord_pos',
+                                                text: ({colname, type}) => `${colname} ${type}`,
+                                                textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                                x: 20
+                                })
+
+                vtables.nest(vattributes)
+
+                let vfkeys = c.link("fakefkeys", {
+                                        ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                        ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                    }, {curve: true})
+
+
+
+
         }
 
         

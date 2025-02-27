@@ -318,6 +318,9 @@ export class Mark {
                   let validFkConstraint = this.checkValidFkConstraint(constraint, filter)
 
                   if (validFkConstraint) {
+                    console.log("this.src", this.src)
+                    console.log("edge", edgetable)
+                    console.log("constraint", constraint)
                     let paths = this.c.db.getTwoPaths(this.src, edgetable, constraint)
 
                     if (!paths)
