@@ -754,7 +754,7 @@
                 if (avgBedrooms === undefined) return "#ccc"; // Default gray for missing values
 
                 // Normalize avgBedrooms into a scale (min 0, max 5 for example)
-                let maxBedrooms = 5; // Adjust based on your data range
+                let maxBedrooms = 8; // Adjust based on your data range
                 let intensity = Math.min(1, avgBedrooms / maxBedrooms); // Normalize between 0 and 1
 
                 // Generate a color gradient from light blue to dark blue
@@ -770,45 +770,45 @@
                 let avgBedrooms = entry ? entry.avg_bedrooms : 0;  // Default to 0 if not found
                 return getColorFromBedrooms(avgBedrooms);
             }});
-            
-            let priceLabels = c.text("type", {
-                x: 0,
-                y: 0,
-                text: d => {
-                    let entry = avgPriceByCity.find(row => row.city === d.city);
-                    let avgPrice = entry ? Math.round(entry.avg_price,0) : 0;  // Default to 0 if not found
-                    console.log("Avg Price:", avgPrice)
-                    return `£${avgPrice / 1000}k`;  // Display price value as text
-                },
-                // }`$${d.avg_price / 1000}`,  // Display price value as text
-                fontSize: 10,
-                fill : "white",
-                textAnchor: "end",
-                // alignmentBaseline: "central"
-            });
-
-            c.nest(typeRects, cityRects);
-            c.nest(priceLabels, typeRects);
-            // c.nest(bedroomLabels, typeRects);
 
             // // Labels for Hierarchy
             let cityLabel = c.text("city", {
                 x: cityRects.get("city", "x", d => d.x + 5 ),
-                y: cityRects.get("city", "y", d => d.y + 10),
+                y: cityRects.get("city", "y", d => d.y + 7),
                 text: "city",
-                fontSize: 15,
+                fontSize: 17,
             });
+
+            // c.nest(cityLabel, cityRects);
 
             let typeLabel = c.text("type", {
                 x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
-                y: typeRects.get(["city", "type"], "y", d => d.y+7),
+                y: typeRects.get(["city", "type"], "y", d => d.y+9),
                 text: "type",
-                fontSize: 10,
-                fill: "white"
+                fontSize: 20,
+                fill: "black"
             });
-
             c.nest(typeLabel, cityRects);
-            // c.nest(typeLabel, typeRects);
+            
+            let priceLabels = c.text("city", {
+                x: 0,
+                y: 0,
+                text: d => {
+                    let entry = avgPriceByCity.find(row => row.city === d.city);
+                    let avgPrice = entry ? Math.round(entry.avg_price) : 0;  // Default to 0 if not found
+                    console.log("Avg Price:", avgPrice)
+                    // avgPrice = Math.round(avgPrice)
+                    return `£${Math.round(avgPrice / 1000)}k`;  // Display price value as text
+                },
+                // }`$${d.avg_price / 1000}`,  // Display price value as text
+                fontSize: 25,
+                fill : "black",
+                textAnchor: "end",
+                // alignmentBaseline: "central"
+            });
+            
+            c.nest(priceLabels, cityRects);
+            c.nest(typeRects, cityRects);
         }
 
         /* CATEGORICAL SCATTERPLOT FIG 5E */
