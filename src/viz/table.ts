@@ -319,7 +319,12 @@ export class Table {
     return t;
   }
 
-  get(filter: string | string[] | null = null, props: string | string[], callback?): {othertable, searchkeys, otherAttr, callback, isVisualChannel} {
+  get(filter: string | string[] | null = null, 
+    props: string | string[] 
+          | {aggregateFunction: string} 
+          | {aggregateFunction: string, col: string},
+          callback?): {othertable, searchkeys, otherAttr, callback, isVisualChannel} {
+
     props = Array.isArray(props) ? props : [props]
 
     if (!props.every((attr) => this.schema.attrs.includes(attr)) && ! props.every(attr => mgg.AggregateOperators.includes(attr))) {

@@ -216,6 +216,7 @@ export class Mark {
     filters: any[]
     ordering: string[]
     orderByDesc: boolean
+    nestingCallback: Function
 
     
     /**
@@ -463,7 +464,7 @@ export class Mark {
       if (desc) this.orderByDesc = true
     }
 
-    getHelper(filter: string | string[] | null = null, props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
+    getHelper(filter: string | string[] | null = null, props: string | string[] | {aggregateFunction: string, colname?}, callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel} {
       if (filter)
         filter = Array.isArray(filter) ? filter : [filter]
 
@@ -486,7 +487,7 @@ export class Mark {
     }
 
     get(filter: string | string[] | null, sugar: Record<string, string>): {[key: string]: {othermark, searchkeys, otherAttr, callback, isVisualChannel}};
-    get(filter: string | string[] | null, props: string | string[], callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel};
+    get(filter: string | string[] | null, props: string | string[] | {aggregateFunction: string, colname?} | {aggregateFunction}, callback?): {othermark, searchkeys, otherAttr, callback, isVisualChannel};
     /**
      * For getting cols that have a valid fk path. valid fk paths are checked during render
      * @param arg1
@@ -503,7 +504,11 @@ export class Mark {
      */
     get(
       arg1: string | string[] | null = null,
-      arg2: Record<string, string> | string | string[], 
+      arg2: Record<string, string> 
+            | string 
+            | string[] 
+            | {aggregateFunction: string, colname: string}
+            | {aggregateFunction: string}, 
       arg3?: any): {othermark, searchkeys, otherAttr, callback, isVisualChannel} | {[key: string] : {othermark, searchkeys, otherAttr, callback, isVisualChannel}} {
       
         if (Array.isArray(arg2) || typeof(arg2) == "string") {
@@ -518,7 +523,12 @@ export class Mark {
     }
 
     nestMulti(innermarks: Mark[], func: Function) {
+      this.nestingCallback = func
+      //we proceed to ignore whether there is a foreign key reference
+      innermarks.forEach(innermark => this.c.nests.push(new MarkNest(this, null, innermark, this)))
+      
     }
+
     nestSingle(innermark: Mark, predicate?) {
       this.c.nest(innermark, this, predicate)
     }
@@ -1629,13 +1639,12 @@ export class Mark {
      * modifying the svg elements returned by observable
      */
     overrideObservable(mark, data, crow) {
-      if (this.marktype == "text" && ("textAnchor" in this.options)) {
-        /**
-         * check if this is a text mark and if the user specified textAnchor
-         * If neither, this if block will not run
-         */
-        this.handleTextAnchor(mark, crow);
-      } else if (this.marktype == "text") {
+      if (this.marktype == "text") {
+        if ("textAnchor" in this.options) {
+          mark.removeAttribute("text-anchor")
+          this.handleTextAnchor(mark, crow);
+        }
+
         /**
          * Check if this is a text mark and if x or y are created from get methods
          */
@@ -1647,18 +1656,20 @@ export class Mark {
             this.setYTranslate(mark, data)
           }
         }
+
         if (!("lineAnchor" in this.options)) {
           mark.removeAttribute("text-anchor")
         }
 
-        if ('textDecoration' in this.mappings) {
+        if ("textDecoration" in this.mappings) {
+          console.log("textDecoration")
           this.setTextDecoration(mark, data)
         }
 
         if (!("strokeWidth" in this.mappings)) {
           maybeselection(mark).selectAll(`g[aria-label='${this.mark.aria}']`).attr("stroke-width", null)
         }
-
+        
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
@@ -1831,7 +1842,7 @@ export class Mark {
 
     setCurve(mark) {
       //Get all the marks present
-      let obstacles = this.getObstacles()
+      let obstacles = []
 
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -2306,7 +2317,7 @@ export class Mark {
      */
     setTransform(child, crow, childX, childY) {
       if (this.options.textAnchor == "left") {
-        child.attr("transform", `translate(55, ${childY})`)
+        child.attr("transform", `translate(20, ${childY})`)
       } else if (this.options.textAnchor == "right") {
         child.attr("transform", `translate(${crow.width - 20}, ${childY})`) //should be parentX + width
       } else if (this.options.textAnchor == "bottom") {

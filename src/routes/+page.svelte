@@ -12,7 +12,7 @@
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
     import { attr } from "svelte/internal";
-    import { symbol, interpolateTurbo, scaleDiverging } from "d3";
+    import { symbol, interpolateTurbo, scaleDiverging, max } from "d3";
     import { FKConstraint } from "../viz/constraint";
 
 
@@ -924,7 +924,7 @@
         //7.1 A SCATTER PLOTS
         if (0) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -936,7 +936,7 @@
             //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
             let t = c.db.table("heart_data")
 
-            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "categorical", scheme: "RdGy"}})
+            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {domain: [0,1], range: ["red", "black"]}})
 
             //plot has default margins for axis. see here https://observablehq.com/plot/marks/axis
 
@@ -968,14 +968,14 @@
             //I skip normalizing cp and slope here
             let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
 
-            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "20px", lineWidth: 7}, {lineAnchor: "middle"})
+            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest: ${cp} Stress: ${slope}`, fontSize: "20px", lineWidth: 7}, {lineAnchor: "middle"})
 
             vsquare.nest(vtext)
         }
         //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 1350, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -992,8 +992,8 @@
 
 
             //Switch between t and t3 to see the difference before and after projection
-            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
-            //let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"}, {color: {type: "diverging", scheme: "BuRd"}})
+            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"}, {color: {domain: [true, false], range: ["red", "black"]}})
 
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
@@ -1004,8 +1004,8 @@
                 {
                     x: vsquare.get(null, "x"),
                     y: vsquare.get(null, "y", ({y}) => y - 12),
-                    text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`,
-                    fontSize: "20px"
+                    text: ({cp, slope}) => `Chest: ${cp} Stress: ${slope}`,
+                    fontSize: "30px"
                 })
 
             vsquare.nest(vdot)
@@ -1173,7 +1173,7 @@
         }
 
         //fake ER diagram
-        if (0) {
+        if (1) {
             await db.conn.exec(`CREATE TABLE faketables (
                 id INT PRIMARY KEY,
                 table_name VARCHAR(255) NOT NULL
@@ -1249,8 +1249,8 @@
                 { 
                     x: 'id', y: 0, fill:'white', stroke:'black', 
                     height: c.db.table("fakecolumns").get("id", "count", (d) => d.count * 40),
-                    width: 500,
-                    ...fdlayout(c.db.table("fakefkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+                    width: 175,
+                    ...fdlayout(c.db.table("fakefkeys").get("id", ["tid1", "tid2"]))()
                 })
 
                 let vlabels = c.text("faketables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name", fontSize: "20px"})
@@ -1260,7 +1260,7 @@
                                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
                                                 x: 0,
                                                 fontSize:"20px"
-                                })
+                                }, {textAnchor: "left"})
 
                 vtables.nest(vattributes)
 
