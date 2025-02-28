@@ -749,6 +749,8 @@
             // Define HiVE Hierarchy and Layout
             await c.hier("london_reduced", ["city", "type"]);
             // let bedroomColorScale = c.color("bedrooms", { scheme: "Blues", order: "ascending" });
+
+            let groupedCityType = await c.db.table("type").groupby(["city", "type"], {c: "count"}, "groupedcitytype")
             
             function getColorFromBedrooms(avgBedrooms) {
                 if (avgBedrooms === undefined) return "#ccc"; // Default gray for missing values
@@ -765,21 +767,28 @@
                 return `rgb(${r}, ${g}, ${b})`;
             }
             let cityRects = c.rect("city", { ...sq("city")(), stroke: "black", fill: "none" });
-            let typeRects = c.rect("type", {...sq("type","city")(), stroke: "black", strokewidth: 1, fill: d => {
+            let typeRects = c.rect("groupedcitytype", {...sq("type")(), stroke: "black", strokewidth: 1, fill: d => {
                 let entry = avgBedroomsByCityType.find(row => row.city === d.city && row.type === d.type);
                 let avgBedrooms = entry ? entry.avg_bedrooms : 0;  // Default to 0 if not found
                 return getColorFromBedrooms(avgBedrooms);
             }});
 
-            // // Labels for Hierarchy
-            let cityLabel = c.text("city", {
-                x: cityRects.get("city", "x", d => d.x + 5 ),
-                y: cityRects.get("city", "y", d => d.y + 7),
-                text: "city",
-                fontSize: 17,
+            let priceLabels = c.text("city", {
+                x: 0,
+                y: 0,
+                text: d => {
+                    let entry = avgPriceByCity.find(row => row.city === d.city);
+                    let avgPrice = entry ? Math.round(entry.avg_price) : 0;  // Default to 0 if not found
+                    console.log("Avg Price:", avgPrice)
+                    return `£${Math.round(avgPrice / 1000)}k`;  // Display price value as text
+                },
+                fontSize: 25,
+                fill : "black",
+                textAnchor: "end",
             });
 
-            // c.nest(cityLabel, cityRects);
+            c.nest(typeRects, cityRects);
+            c.nest(priceLabels, cityRects);
 
             let typeLabel = c.text("type", {
                 x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
@@ -788,27 +797,16 @@
                 fontSize: 20,
                 fill: "black"
             });
+            // c.nest(typeLabel, cityRects);
             c.nest(typeLabel, cityRects);
-            
-            let priceLabels = c.text("city", {
-                x: 0,
-                y: 0,
-                text: d => {
-                    let entry = avgPriceByCity.find(row => row.city === d.city);
-                    let avgPrice = entry ? Math.round(entry.avg_price) : 0;  // Default to 0 if not found
-                    console.log("Avg Price:", avgPrice)
-                    // avgPrice = Math.round(avgPrice)
-                    return `£${Math.round(avgPrice / 1000)}k`;  // Display price value as text
-                },
-                // }`$${d.avg_price / 1000}`,  // Display price value as text
-                fontSize: 25,
-                fill : "black",
-                textAnchor: "end",
-                // alignmentBaseline: "central"
+
+            // // Labels for Hierarchy
+            let cityLabel = c.text("city", {
+                x: cityRects.get("city", "x", d => d.x + 5 ),
+                y: cityRects.get("city", "y", d => d.y + 7),
+                text: "city",
+                fontSize: 17,
             });
-            
-            c.nest(priceLabels, cityRects);
-            c.nest(typeRects, cityRects);
         }
 
         /* CATEGORICAL SCATTERPLOT FIG 5E */
