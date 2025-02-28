@@ -2306,7 +2306,7 @@ export class Mark {
      */
     setTransform(child, crow, childX, childY) {
       if (this.options.textAnchor == "left") {
-        child.attr("transform", `translate(20, ${childY})`)
+        child.attr("transform", `translate(55, ${childY})`)
       } else if (this.options.textAnchor == "right") {
         child.attr("transform", `translate(${crow.width - 20}, ${childY})`) //should be parentX + width
       } else if (this.options.textAnchor == "bottom") {

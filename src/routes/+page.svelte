@@ -12,7 +12,7 @@
     import { mgg } from "../viz/uapi/mgg";
     import { IDNAME } from "../viz/table";
     import { attr } from "svelte/internal";
-    import { symbol } from "d3";
+    import { symbol, interpolateTurbo, scaleDiverging } from "d3";
     import { FKConstraint } from "../viz/constraint";
 
 
@@ -75,6 +75,10 @@
             {
                 name: "heart_csv",
                 url: "/heart.csv"
+            },
+            {
+                name: "london",
+                url: "/london.csv"
             }
         ]
         });
@@ -932,7 +936,7 @@
             //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
             let t = c.db.table("heart_data")
 
-            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "diverging", scheme: "RdPu"}})
+            let vdot = c.dot(t, {x: "age", y: "thalach", fill: "target"}, {color: {type: "categorical", scheme: "RdGy"}})
 
             //plot has default margins for axis. see here https://observablehq.com/plot/marks/axis
 
@@ -947,7 +951,7 @@
         //7.1 B HEATMAP
         if (0) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -962,16 +966,16 @@
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.square(t2, {x: "cp", y: "slope", stroke: "n", width: 200})
+            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
 
-            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "20px", lineWidth: 10}, {lineAnchor: "middle"})
+            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "20px", lineWidth: 7}, {lineAnchor: "middle"})
 
             vsquare.nest(vtext)
         }
         //7.1 C and D NESTED SCATTER PLOTS IN HEATMAP
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1000, height: 800}) //setting up canvas
+            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
@@ -986,51 +990,52 @@
             //This to demonstrate filtering
             let t3 = await t.select({attrs: "*", sel: "chol > 230"})
 
-            //Switch between t and t3 to see the difference before and after projection
-            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
-            let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
-            let t2 = await t.groupby(["cp", "slope"], {count: "count"})
+            //Switch between t and t3 to see the difference before and after projection
+            let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            //let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"}, {color: {type: "diverging", scheme: "BuRd"}})
+
+            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.square(t2, {x: "cp", y: "slope", stroke:"n", width: 200})
+            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
 
             let vtext = c.text(t2, 
                 {
                     x: vsquare.get(null, "x"),
-                    y: vsquare.get(null, "y", ({y}) => y - 10),
-                    fontSize: "15px",
-                    text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`
+                    y: vsquare.get(null, "y", ({y}) => y - 12),
+                    text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`,
+                    fontSize: "20px"
                 })
 
             vsquare.nest(vdot)
 
-            let c2 = new Canvas(db, {width: 800, height: 700})
-            erDiagramCanvas = c2
+            // let c2 = new Canvas(db, {width: 800, height: 700})
+            // erDiagramCanvas = c2
 
-            let vtables = c2.rect("tables",
-            { 
-                x: 'id', y: 0, fill:'white', stroke:'black', 
-                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
-                width: 200,
-                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
-            })
-            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+            // let vtables = c2.rect("tables",
+            // { 
+            //     x: 'id', y: 0, fill:'white', stroke:'black', 
+            //     height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+            //     width: 200,
+            //     ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            // })
+            // vtables.filter(`table_name IN ${c.getTablesUsed()}`)
 
-            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c2.text("columns", {
-                                            y: 'ord_pos',
-                                            text: ({colname, type}) => `${colname} ${type}`,
-                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                            x: 20
-                            })
+            // let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            // let vattributes= c2.text("columns", {
+            //                                 y: 'ord_pos',
+            //                                 text: ({colname, type}) => `${colname} ${type}`,
+            //                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+            //                                 x: 20
+            //                 })
 
-            vtables.nest(vattributes)
+            // vtables.nest(vattributes)
 
-            let vfkeys = c2.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                }, {curve: true})
+            // let vfkeys = c2.link("fkeys", {
+            //                         ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+            //                         ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+            //                     }, {curve: true})
         }
 
         //7.2 PARALLEL COORDINATES V2
@@ -1168,7 +1173,7 @@
         }
 
         //fake ER diagram
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE faketables (
                 id INT PRIMARY KEY,
                 table_name VARCHAR(255) NOT NULL
@@ -1237,23 +1242,24 @@
 
                 await db.loadFromConnection()
 
-                let c = new Canvas(db, {width: 800, height: 700})
+                let c = new Canvas(db, {width: 1400, height: 700})
                 canvas = c
 
                 let vtables = c.rect("faketables",
                 { 
                     x: 'id', y: 0, fill:'white', stroke:'black', 
                     height: c.db.table("fakecolumns").get("id", "count", (d) => d.count * 40),
-                    width: 200,
+                    width: 500,
                     ...fdlayout(c.db.table("fakefkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
                 })
 
-                let vlabels = c.text("faketables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+                let vlabels = c.text("faketables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name", fontSize: "20px"})
                 let vattributes= c.text("fakecolumns", {
                                                 y: 'ord_pos',
                                                 text: ({colname, type}) => `${colname} ${type}`,
                                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                                x: 20
+                                                x: 0,
+                                                fontSize:"20px"
                                 })
 
                 vtables.nest(vattributes)
@@ -1266,6 +1272,57 @@
 
 
 
+        }
+
+
+        /* HiVE Test */
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, { width: 3000, height: 2000 });
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            // console.log(db.conn.exec("SELECT * FROM london"))
+
+            let attrs = ["city", "type", "price", "bedrooms"]
+            await db.normalize("london", attrs, "london_reduced")
+
+
+            
+            // Define HiVE Hierarchy and Layout
+            await c.hier("london_reduced", ["city", "type"]);
+            // await c.layout("london_reduced", "SQ", "SQ");
+            // await c.size("london_reduced", "price", "bedrooms");
+            // await c.color("london_reduced", "_", "bedrooms");
+            
+            // let dots = c.dot("london_reduced", { x: "price", y: "type", symbol: "bedrooms" })
+            // Define Rectangles for Visualization
+
+            let cityRects = c.rect("city", { ...sq("city")(), stroke: "black", fill: "none" });
+            let typeRects = c.rect("type", {...sq("type")(), stroke: "black", fill: "none"});
+            // let priceDots = c.dot("bedrooms", { x: "price", y: "bedrooms", symbol: "type" });
+
+            c.nest(typeRects, cityRects);
+            // c.nest(priceDots, typeRects);
+
+            // // Labels for Hierarchy
+            let cityLabel = c.text("city", {
+                x: cityRects.get("city", "x"),
+                y: cityRects.get("city", "y", d => d.y - 10),
+                text: "city",
+                fontSize: 10,
+                rotate: -45
+            });
+
+            // let typeLabel = c.text("type", {
+            //     x: typeRects.get(["city", "type"], "x"),
+            //     y: typeRects.get(["city", "type"], "y", d => d.y - 10),
+            //     text: "type",
+            //     fontSize: 20
+            // });
+
+            // c.nest(typeLabel, cityRects);
         }
 
         
