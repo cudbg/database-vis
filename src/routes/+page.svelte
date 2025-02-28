@@ -1173,7 +1173,7 @@
         }
 
         //fake ER diagram
-        if (1) {
+        if (0) {
             await db.conn.exec(`CREATE TABLE faketables (
                 id INT PRIMARY KEY,
                 table_name VARCHAR(255) NOT NULL
@@ -1276,53 +1276,80 @@
 
 
         /* HiVE Test */
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
-            let c = new Canvas(db, { width: 3000, height: 2000 });
+            let c = new Canvas(db, { width: 1200, height: 800 });
             canvas = c
             window.c = c;
             window.db = db;
 
+            //London, Middlesex, Hertfordshire, Twickenham, Surrey, Essex, Fulham, Marylebone
+
             // console.log(db.conn.exec("SELECT * FROM london"))
 
             let attrs = ["city", "type", "price", "bedrooms"]
-            await db.normalize("london", attrs, "london_reduced")
+            await db.normalize("filtered_london", attrs, "london_reduced")
 
+            let avgPriceByCity = await db.conn.exec(`
+                SELECT city, AVG(price) AS avg_price
+                FROM london_reduced
+                GROUP BY city
+            `);
 
+            let avgBedroomsByCityType = await db.conn.exec(`
+                SELECT city, type, AVG(bedrooms) AS avg_bedrooms
+                FROM london_reduced
+                GROUP BY city, type
+            `);
+            console.log("Test!!", avgBedroomsByCityType)
+            console.log("Test!!", avgPriceByCity)
             
             // Define HiVE Hierarchy and Layout
             await c.hier("london_reduced", ["city", "type"]);
-            // await c.layout("london_reduced", "SQ", "SQ");
-            // await c.size("london_reduced", "price", "bedrooms");
-            // await c.color("london_reduced", "_", "bedrooms");
-            
-            // let dots = c.dot("london_reduced", { x: "price", y: "type", symbol: "bedrooms" })
-            // Define Rectangles for Visualization
+            // let bedroomColorScale = c.color("bedrooms", { scheme: "Blues", order: "ascending" });
+            let groupedCityType = await c.db.table("type").groupby(["city", "type"], {c: "count"}, "groupedcitytype")
 
             let cityRects = c.rect("city", { ...sq("city")(), stroke: "black", fill: "none" });
-            let typeRects = c.rect("type", {...sq("type")(), stroke: "black", fill: "none"});
-            // let priceDots = c.dot("bedrooms", { x: "price", y: "bedrooms", symbol: "type" });
+            let typeRects = c.rect(groupedCityType, {...sq("type")(), stroke: "black", strokewidth: 1, fill: "c"}, {color: {type: "sequential", scheme: "turbo"}});
+            
+            let priceLabels = c.text("type", {
+                x: 0,
+                y: 0,
+                text: d => {
+                    let entry = avgPriceByCity.find(row => row.city === d.city);
+                    let avgPrice = entry ? Math.round(entry.avg_price) : 0;  // Default to 0 if not found
+                    console.log("Avg Price:", avgPrice)
+                    return `£${avgPrice / 1000}k`;  // Display price value as text
+                },
+                // }`$${d.avg_price / 1000}`,  // Display price value as text
+                fontSize: 10,
+                fill : "white",
+                textAnchor: "end",
+                // alignmentBaseline: "central"
+            }, {lineWidth: 10});
 
             c.nest(typeRects, cityRects);
-            // c.nest(priceDots, typeRects);
+            c.nest(priceLabels, typeRects);
+            // c.nest(bedroomLabels, typeRects);
 
             // // Labels for Hierarchy
             let cityLabel = c.text("city", {
-                x: cityRects.get("city", "x"),
-                y: cityRects.get("city", "y", d => d.y - 10),
+                x: cityRects.get("city", "x", d => d.x + 5 ),
+                y: cityRects.get("city", "y", d => d.y + 10),
                 text: "city",
-                fontSize: 10,
-                rotate: -45
+                fontSize: 15,
             });
 
-            // let typeLabel = c.text("type", {
-            //     x: typeRects.get(["city", "type"], "x"),
-            //     y: typeRects.get(["city", "type"], "y", d => d.y - 10),
-            //     text: "type",
-            //     fontSize: 20
-            // });
+            let typeLabel = c.text("type", {
+                x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
+                y: typeRects.get(["city", "type"], "y", d => d.y+7),
+                text: "type",
+                fontSize: 10,
+                fill: "white"
+            });
 
-            // c.nest(typeLabel, cityRects);
+            c.nest(typeLabel, cityRects);
+            // c.nest(typeLabel, typeRects);
         }
 
         
