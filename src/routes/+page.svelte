@@ -33,6 +33,10 @@
         const duckdb = new DuckDB({
             sources: [
             {
+                name: "london",
+                url: "/london.csv"
+            },    
+            {
                 name: "penguins",
                 url: "/penguins.csv"
             },
@@ -136,12 +140,12 @@
              FROM heart_disease_csv
              WHERE Status = false;`
          )
-         await duckdb.exec( //sql query here
-             `CREATE TABLE heart as 
-             Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
-             FROM heart_csv
-             WHERE target = 0;`
-         )
+        //  await duckdb.exec( //sql query here
+        //      `CREATE TABLE heart as 
+        //      Select exang, thalach, cp, target,sex,fbs,slope,ca,thal,age,oldpeak,trestbps,chol
+        //      FROM heart_csv
+        //      WHERE target = 0;`
+        //  )
              
 
         })(duckdb);
@@ -715,6 +719,98 @@
             c.nest(cpLabel, targetRects)
         }
 
+        /* HiVE Test */
+        if (1) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, { width: 600, height: 400 });
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            // console.log(db.conn.exec("SELECT * FROM london"))
+
+            let attrs = ["city", "type", "price", "bedrooms"]
+            await db.normalize("london", attrs, "london_reduced")
+
+            let avgPriceByCity = await db.conn.exec(`
+                SELECT city, AVG(price) AS avg_price
+                FROM london_reduced
+                GROUP BY city
+            `);
+
+            let avgBedroomsByCityType = await db.conn.exec(`
+                SELECT city, type, AVG(bedrooms) AS avg_bedrooms
+                FROM london_reduced
+                GROUP BY city, type
+            `);
+            console.log("Test!!", avgBedroomsByCityType)
+            console.log("Test!!", avgPriceByCity)
+            
+            // Define HiVE Hierarchy and Layout
+            await c.hier("london_reduced", ["city", "type"]);
+            // let bedroomColorScale = c.color("bedrooms", { scheme: "Blues", order: "ascending" });
+            
+            function getColorFromBedrooms(avgBedrooms) {
+                if (avgBedrooms === undefined) return "#ccc"; // Default gray for missing values
+
+                // Normalize avgBedrooms into a scale (min 0, max 5 for example)
+                let maxBedrooms = 5; // Adjust based on your data range
+                let intensity = Math.min(1, avgBedrooms / maxBedrooms); // Normalize between 0 and 1
+
+                // Generate a color gradient from light blue to dark blue
+                let r = Math.round(255 - intensity * 200); // More bedrooms → darker
+                let g = Math.round(255 - intensity * 180);
+                let b = 255;
+
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+            let cityRects = c.rect("city", { ...sq("city")(), stroke: "black", fill: "none" });
+            let typeRects = c.rect("type", {...sq("type","city")(), stroke: "black", strokewidth: 1, fill: d => {
+                let entry = avgBedroomsByCityType.find(row => row.city === d.city && row.type === d.type);
+                let avgBedrooms = entry ? entry.avg_bedrooms : 0;  // Default to 0 if not found
+                return getColorFromBedrooms(avgBedrooms);
+            }});
+            
+            let priceLabels = c.text("type", {
+                x: 0,
+                y: 0,
+                text: d => {
+                    let entry = avgPriceByCity.find(row => row.city === d.city);
+                    let avgPrice = entry ? Math.round(entry.avg_price,0) : 0;  // Default to 0 if not found
+                    console.log("Avg Price:", avgPrice)
+                    return `£${avgPrice / 1000}k`;  // Display price value as text
+                },
+                // }`$${d.avg_price / 1000}`,  // Display price value as text
+                fontSize: 10,
+                fill : "white",
+                textAnchor: "end",
+                // alignmentBaseline: "central"
+            });
+
+            c.nest(typeRects, cityRects);
+            c.nest(priceLabels, typeRects);
+            // c.nest(bedroomLabels, typeRects);
+
+            // // Labels for Hierarchy
+            let cityLabel = c.text("city", {
+                x: cityRects.get("city", "x", d => d.x + 5 ),
+                y: cityRects.get("city", "y", d => d.y + 10),
+                text: "city",
+                fontSize: 15,
+            });
+
+            let typeLabel = c.text("type", {
+                x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
+                y: typeRects.get(["city", "type"], "y", d => d.y+7),
+                text: "type",
+                fontSize: 10,
+                fill: "white"
+            });
+
+            c.nest(typeLabel, cityRects);
+            // c.nest(typeLabel, typeRects);
+        }
+
         /* CATEGORICAL SCATTERPLOT FIG 5E */
         if (0) {
             // await db.loadFromConnection()
@@ -932,6 +1028,8 @@
             let t = c.db.table("heart_data")
 
             let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            let agelabel = c.text(t, {x: 500, y: 0, text: "Age", fontSize: 20}, {textAnchor: "bottom"})
+            let ylabel = c.text(t, {x:0, y:400, text: "Thalach", fontSize: 20, rotate: 270}, {textAnchor: "left"})
         }
         //7.1 B HEATMAP
         if (0) {
@@ -953,7 +1051,7 @@
             //I skip normalizing cp and slope here
             let vsquare = c.square(t2, {x: "cp", y: "slope", fill: "n", opacity: "n", width: 200})
 
-            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest pain: ${cp} Exercise stress: ${slope}`, fontSize: "12px"}, {lineAnchor: "middle"})
+            let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest Pain: ${cp} \n Exercise Stress: ${slope}`, fontSize: "15px"}, {lineAnchor: "middle"})
 
             vsquare.nest(vtext)
 
@@ -1003,7 +1101,7 @@
             let t3 = await t.select({attrs: "*", sel: "chol > 230"})
 
             //Switch between t and t3 to see the difference before and after projection
-            //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
+            // let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
             let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"})
 
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
@@ -1050,7 +1148,7 @@
         }
 
         //7.2 PARALLEL COORDINATES V2
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
             canvas = c
@@ -1064,7 +1162,7 @@
             edgetable = await edgetable.bucket("thalach", 10)
             edgetable = await edgetable.bucket("chol", 20)
 
-
+            console.log("Edgetable :",edgetable.internalname)
             await db.normalizeMany(edgetable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
 
 
@@ -1080,6 +1178,7 @@
             
             attrs.forEach((attr, i) => {
                 let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr}, domObj)
+                // let label = c.text(attr, {x: mark.get(attr, "x"), y: 0, text: {constant: `${attrs[i]}`}, fontSize: 15}, {textAnchor: "bottom"})
                 views.push(mark)
             })
 
@@ -1098,7 +1197,9 @@
                         opacity: "c",
                         fill: "c"
                     }, {curve: true})
+                // let label = c.text(edgetable, {x: 0, y: 0, text: {constant : attrs}, fontSize: 15})
             }
+            
 
             let c2 = new Canvas(db, {width: 2000, height: 1500})
             erDiagramCanvas = c2
