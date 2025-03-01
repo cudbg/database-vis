@@ -371,7 +371,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-        if (0) {
+        if (1) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -402,15 +402,16 @@
 
             attrs.forEach((attr, i) => {
 
-                let mark = c.square(attr, {x: i * 300 + 50, y: attr, width: 110, fill: "none", stroke: "black"})
+                let mark = c.square(attr, {x: i * 300 + 50, y: attr, width: 130, fill: "none", stroke: "black"})
                 let label = c.text(attr,
                     {
-                        x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2), 
-                        y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
+                        x: 0, 
+                        y: 0,
                         text: attr,
                         fontSize: "20px"
 
-                    }, {lineAnchor: "middle"})
+                    })
+                mark.nest(label)
                 squareMarks.push(mark)
             })
 
@@ -420,7 +421,7 @@
                 let leftAttr = attrs[i]
                 let rightAttr = attrs[i + 1]
 
-                let table = await edgetable.groupby([leftAttr, rightAttr], {c: "count"})
+                let table = await edgetable.groupby([leftAttr, rightAttr], mgg.count({renameAs: "c"}))
 
                 let mappingObj = 
                 {
@@ -927,7 +928,7 @@
 
         //CASE STUDY: SECTION 7 OF PAPER
         //7.1 A SCATTER PLOTS
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
@@ -1281,7 +1282,7 @@
 
 
         /* HiVE Test */
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, { width: 1200, height: 800 });
             canvas = c
