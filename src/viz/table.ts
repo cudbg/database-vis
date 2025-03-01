@@ -1,6 +1,6 @@
 import * as R from "ramda";
 import { get, writable, derived } from "svelte/store";
-import { Query, sql, agg, and, eq, column, literal, count, max, min, median, sum } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, column, literal, count, max, min, median, sum, avg } from "@uwdata/mosaic-sql";
 import { idexpr } from "./id";
 import { unorderedEquals } from "./util";
 import type { Schema } from "./schema";
@@ -156,7 +156,7 @@ export class Table {
     return t;
   }
 
-  async groupby(attrs: string| string[], aggregate: {[key: string]: string}, displayname=null) {
+  async groupby(attrs: string| string[], aggregate: {renameAs: string, fn: string, cols?: string[]}, displayname=null) {
     attrs = Array.isArray(attrs) ? attrs : [attrs]
     displayname ??= `${this.internalname}_aggregate_${attrs.join("_")}`
 
@@ -166,37 +166,43 @@ export class Table {
       q = q.select(attr)
     })
     q = q.select({[IDNAME]: idexpr})
-    
-    let renameAs = Object.keys(aggregate)[0];
-    let aggregateFunction = aggregate[renameAs]
-    switch (aggregateFunction) {
+    let renameAs = aggregate["renameAs"]
+    let fn = aggregate["fn"]
+    let cols = aggregate["cols"]
+
+    switch (fn) {
       case "count":
         q = q.select({[renameAs]: count()})
         q = q.groupby(attrs)
         break
       case "max":
-        q = q.select({[renameAs]: max()})
+        q = q.select({[renameAs]: max(cols)})
         q = q.groupby(attrs)
         break
       case "min":
-        q = q.select({[renameAs]: min()})
+        q = q.select({[renameAs]: min(cols)})
         q = q.groupby(attrs)
         break
       case "median":
-        q = q.select({[renameAs]: median()})
+        q = q.select({[renameAs]: median(cols)})
         q = q.groupby(attrs)
         break
       case "sum":
-        q = q.select({[renameAs]: sum()})
+        q = q.select({[renameAs]: sum(cols)})
         q = q.groupby(attrs)
         break
+      case "avg":
+          q = q.select({[renameAs]: avg(cols)})
+          q = q.groupby(attrs)
+          break
+      default:
+        throw new Error("Unsupported aggregate function")
     }
 
     let t = await Table.fromSql(this.db, q, displayname);
     t.keys(attrs)
     t.keys([IDNAME])
     t.name(displayname)
-
 
     let c = new FKConstraint({t1: t, X: attrs, t2: this, Y: attrs})
     this.db.addConstraint(c)

@@ -4,6 +4,8 @@ import { marksbytype  } from "../mark";
 import { Identity, Sqrt, Linear, Ordinal } from "../scale"
 import { Cardinality } from "../constraint";
 import { IDNAME } from "../table";
+import {Query, count, max, min, median, avg} from "@uwdata/mosaic-sql"
+import { type AggFn } from "../types";
 
 export class mgg {
     static canvas;
@@ -33,31 +35,61 @@ export class mgg {
         GREATER_EQUAL: ">=",
     }
 
-    static AggregateOperators = ["count", "max", "min", "median"]
+    static AggregateOperators = ["count", "max", "min", "median", "avg"]
 
-    static count() {
-        return {aggregateFuncion: "count"}
+    static count({renameAs}): AggFn {
+        if (typeof renameAs !== "string")
+            throw new Error("Column name must be a string")
+        return {renameAs: renameAs, fn: "count", col: null}
     }
 
-    static max(colname) {
-        return {aggregateFunction: "max", col: colname}
+    static max({renameAs, col}): AggFn {
+        if (typeof renameAs !== "string" || typeof col !== "string")
+            throw new Error("Column name must be a string")
+        return {renameAs: renameAs, fn: "max", col: col}
     }
 
-    static min(colname) {
-        return {aggregateFunction: "min", col: colname}
+    static min({renameAs, col}): AggFn {
+        if (typeof renameAs !== "string" || typeof col !== "string")
+            throw new Error("Column name must be a string")
+        return {renameAs: renameAs, fn: "min", col: col}
     }
 
-    static median(colname) {
-        return {aggregateFunction: "median", col: colname}
+    static median({renameAs, col}): AggFn {
+        if (typeof renameAs !== "string" || typeof col !== "string")
+            throw new Error("Column name must be a string")
+        return {renameAs: renameAs, fn: "min", col: col}
     }
 
-    static mappings = {"w2c":{"4":["i","j","l","I"],"5":["f"],"6":["r","t"],"7":["1"],"8":["k","s","v","x","y","z","J"],"9":["2","7","a","c","e","g","h","n","o","p","q","u","E","F","L"],"10":["3","4","5","6","8","9","0","b","d","A","B","K","P","R","S","T","V","Y","Z"],"11":["C","D","U","X"],"12":["w","G","H","N","O","Q"],"14":["m","M"],"15":["W"]},"c2w":{"0":10,"1":7,"2":9,"3":10,"4":10,"5":10,"6":10,"7":9,"8":10,"9":10,"a":9,"b":10,"c":9,"d":10,"e":9,"f":5,"g":9,"h":9,"i":4,"j":4,"k":8,"l":4,"m":14,"n":9,"o":9,"p":9,"q":9,"r":6,"s":8,"t":6,"u":9,"v":8,"w":12,"x":8,"y":8,"z":8,"A":10,"B":10,"C":11,"D":11,"E":9,"F":9,"G":12,"H":12,"I":4,"J":8,"K":10,"L":9,"M":14,"N":12,"O":12,"P":10,"Q":12,"R":10,"S":10,"T":10,"U":11,"V":10,"W":15,"X":11,"Y":10,"Z":10}}
+    static avg({renameAs, col}): AggFn {
+        if (typeof renameAs !== "string" || typeof col !== "string")
+            throw new Error("Column name must be a string")
+        return {renameAs: renameAs, fn: "avg", col: col}
+    }
 
-    static getWidth(str: string) {
-        let ans = 0
-        for (let i = 0; i < str.length; i++) {
-            ans += mgg.mappings["c2w"][str[i]]
+    static appendAggFn(query, aggFn: AggFn) {
+        console.log("aggFn", aggFn)
+        console.log("query", query)
+        let fn = aggFn.fn
+        switch (fn) {
+            case "count":
+                        query = query.select({[aggFn.renameAs]: count()})
+                        return query
+            case "max": 
+                        query = query.select({[aggFn.renameAs]: max([aggFn.col])})
+                        return query
+            case "min": 
+                        query = query.select({[aggFn.renameAs]: min([aggFn.col])})
+                        return query
+            case "median":
+                        query = query.select({[aggFn.renameAs]: median([aggFn.col])})
+                        return query
+            case "avg":
+                        query = query.select({[aggFn.renameAs]: avg([aggFn.col])})
+                        return query
+            default:
+                throw new Error(`Unsupported aggregate function: ${fn}`)
         }
-        return ans
+
     }
 }

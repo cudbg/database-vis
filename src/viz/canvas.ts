@@ -16,7 +16,8 @@ import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
 import { ERMarkers, insertMarkers }from "./erMarkers"
-
+import { type AggFn } from "./types";
+import { mgg } from "./uapi/mgg";
 
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
@@ -186,6 +187,7 @@ export class Canvas implements IMark {
   }
 
   nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
+    console.log("all constraints", this.db.constraints)
     if (predicate)
       predicate = Array.isArray(predicate) ? predicate : [predicate]
 
@@ -242,8 +244,12 @@ export class Canvas implements IMark {
         if (c.t2 == innerTable && R.intersection(c.Y, predicate) != predicate.length)
           continue
       }
+      console.log("constraint c", c)
+
 
       let start = c.t1 == innerTable ? c.t1 : c.t2  
+      console.log("start", start)
+      console.log("outertable", outerTable)
       let path = this.db.getFKPath(start, outerTable, c)
 
       if (!path)
@@ -397,7 +403,7 @@ export class Canvas implements IMark {
         let innerMarkID = innerMark.id
 
         graph.get(outerMarkID).push(innerMarkID)
-        referenceCounts.set(outerMarkID, referenceCounts.get(outerMarkID) + 1)
+        referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
       }
     }
 
@@ -536,34 +542,45 @@ export class Canvas implements IMark {
     return this.node.node();
   }
 
-  async hier(tablename: string, attrHierarchy: string[], dimnames: string[]) {
+  async hier(tablename: string, attrHierarchy: string[], aggFns: AggFn[], dimnames: string[]) {
     let newTableNames = !dimnames ? attrHierarchy.slice() : dimnames
     let currTable = this.db.table(tablename)
     let prevTable = null
     let prevKeys = null
-    let rest = currTable.schema.except([...attrHierarchy, IDNAME]).attrs
+    let newTables = []
 
     for (let i = 0; i < attrHierarchy.length; i++) {
-      let currAttrs = attrHierarchy.slice(0, i + 1)
-      let selectAttrs = currAttrs.slice()
-      if (i == attrHierarchy.length - 1) {
-        currAttrs = currAttrs.concat(rest)
+      let currAttrs = attrHierarchy.slice(0, i + 1) //get attributes in current level of hierarchy
+
+      let query = new Query()
+      query = query.distinct()
+      query = query.select(currAttrs)
+
+      if (i < aggFns.length && aggFns[i] != null) {
+        query = mgg.appendAggFn(query, aggFns[i])
+        query = query.groupby(currAttrs)
       }
-      
-      let select = currTable.schema.pick(currAttrs).asObject()
-      let newTable = await currTable.distinctproject(select, newTableNames[i])
+
+      query = query.from(tablename)
+
+      let newTable = await this.db.fromSql(query, newTableNames[i])
       newTable.keys(IDNAME)
-      newTable.keys(selectAttrs)
+      newTable.keys(currAttrs)
+      newTables.push(newTable)
 
       if (prevTable) {
         let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
+        this.db.addConstraint(c)
+        await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+      } else {
+        let c = new FKConstraint({t1: currTable, X: currAttrs, t2: newTable, Y: currAttrs})
         this.db.addConstraint(c)
         await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
       }
       prevTable = newTable
       prevKeys = currAttrs
     }
-    return newTableNames
+    return newTables
   }
 
   async createCountTable(tablename: string, groupBy: string|string[], newtableName?) {

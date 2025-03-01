@@ -551,6 +551,7 @@ export class Database {
       return path
 
     for (let { dst:_dst, c } of (edges[start]??[])) {
+      console.log("traversing c", c)
       if (!visited.has(_dst)) {
         let result = this.dfs(edges, _dst, destination.internalname, visited, path, c)
         if (result)

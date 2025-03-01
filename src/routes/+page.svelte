@@ -14,6 +14,7 @@
     import { attr } from "svelte/internal";
     import { symbol, interpolateTurbo, scaleDiverging, max } from "d3";
     import { FKConstraint } from "../viz/constraint";
+    import {avg, count} from "@uwdata/mosaic-sql"
 
 
     let innerWidth = 10000;
@@ -32,6 +33,10 @@
     onMount(async () => {
         const duckdb = new DuckDB({
             sources: [
+            {
+                name: "filtered_london",
+                url: "/filtered_london.csv"
+            },
             {
                 name: "penguins",
                 url: "/penguins.csv"
@@ -966,7 +971,7 @@
             let t2 = await t.groupby(["cp", "slope"], {n: "count"})
 
             //I skip normalizing cp and slope here
-            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
+            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30}, {color: { scheme: "blues"}})
 
             let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest: ${cp} Stress: ${slope}`, fontSize: "20px", lineWidth: 7}, {lineAnchor: "middle"})
 
@@ -1282,74 +1287,77 @@
             canvas = c
             window.c = c;
             window.db = db;
+            await c.db.normalize("filtered_london", ["city", "type", "price", "bedrooms"], "london_reduced")
 
-            //London, Middlesex, Hertfordshire, Twickenham, Surrey, Essex, Fulham, Marylebone
-
-            // console.log(db.conn.exec("SELECT * FROM london"))
-
-            let attrs = ["city", "type", "price", "bedrooms"]
-            await db.normalize("filtered_london", attrs, "london_reduced")
-
-            let avgPriceByCity = await db.conn.exec(`
-                SELECT city, AVG(price) AS avg_price
-                FROM london_reduced
-                GROUP BY city
-            `);
-
-            let avgBedroomsByCityType = await db.conn.exec(`
-                SELECT city, type, AVG(bedrooms) AS avg_bedrooms
-                FROM london_reduced
-                GROUP BY city, type
-            `);
-            console.log("Test!!", avgBedroomsByCityType)
-            console.log("Test!!", avgPriceByCity)
+            // Middlesex, Hertfordshire, Twickenham, Surrey, Essex, Fulham, Marylebone
             
             // Define HiVE Hierarchy and Layout
-            await c.hier("london_reduced", ["city", "type"]);
-            // let bedroomColorScale = c.color("bedrooms", { scheme: "Blues", order: "ascending" });
-            let groupedCityType = await c.db.table("type").groupby(["city", "type"], {c: "count"}, "groupedcitytype")
+            let tables = await c.hier("london_reduced", ["city", "type"], [mgg.avg({renameAs: "avgprice", col: "price"}), mgg.avg({renameAs: "avgbedrooms", col: "bedrooms"})]);
+            let cityavgprice = tables[0]
+            let citytypeavgbedrooms = tables[1]
 
-            let cityRects = c.rect("city", { ...sq("city")(), stroke: "black", fill: "none" });
-            let typeRects = c.rect(groupedCityType, {...sq("type")(), stroke: "black", strokewidth: 1, fill: "c"}, {color: {type: "sequential", scheme: "turbo"}});
-            
-            let priceLabels = c.text("type", {
-                x: 0,
-                y: 0,
-                text: d => {
-                    let entry = avgPriceByCity.find(row => row.city === d.city);
-                    let avgPrice = entry ? Math.round(entry.avg_price) : 0;  // Default to 0 if not found
-                    console.log("Avg Price:", avgPrice)
-                    return `£${avgPrice / 1000}k`;  // Display price value as text
-                },
-                // }`$${d.avg_price / 1000}`,  // Display price value as text
-                fontSize: 10,
-                fill : "white",
-                textAnchor: "end",
-                // alignmentBaseline: "central"
-            }, {lineWidth: 10});
+            let cityRects = c.rect(cityavgprice, { ...sq("avgprice")(), stroke: "black", fill: "none" });
+
+            let typeRects = c.rect(citytypeavgbedrooms, { ...sq("avgbedrooms")(), stroke: "black", fill: "avgbedrooms" }, {color: {type: "sequential", scheme: "oranges"}});
 
             c.nest(typeRects, cityRects);
-            c.nest(priceLabels, typeRects);
-            // c.nest(bedroomLabels, typeRects);
 
-            // // Labels for Hierarchy
+        
+
+            function getFontSize(text, maxWidth, height) {
+                const canvas = document.createElement("canvas");
+                const context = canvas.getContext("2d");
+
+                // Set the initial font size (you can adjust this as needed)
+                let fontSize = 100; // Starting font size (adjust as needed)
+                context.font = `${fontSize}px Arial`;
+
+                // Measure the width of the text
+                let textWidth = context.measureText(text).width;
+
+                // Adjust the font size until it fits within the maxWidth
+                while (textWidth > maxWidth/1.8) {
+                    fontSize -= 1;
+                    context.font = `${fontSize}px Arial`;
+                    textWidth = context.measureText(text).width;
+                }
+
+                // Adjust the font size for height if necessary (you can also check the height of the font)
+                const scaleFactor = height / fontSize;
+                fontSize = Math.min(fontSize, scaleFactor * fontSize);
+
+                return fontSize;
+            }
+
             let cityLabel = c.text("city", {
-                x: cityRects.get("city", "x", d => d.x + 5 ),
-                y: cityRects.get("city", "y", d => d.y + 10),
+                x: 0,
+                y: 0,
                 text: "city",
-                fontSize: 15,
+                fontSize: cityRects.get("city", ["width", "height"], ({text, width, height}) => getFontSize(text, width, height))
             });
+            c.nest(cityLabel, cityRects)
 
-            let typeLabel = c.text("type", {
-                x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
-                y: typeRects.get(["city", "type"], "y", d => d.y+7),
-                text: "type",
-                fontSize: 10,
-                fill: "white"
-            });
+            // let typeLabel = c.text(countcitytype, {
+            //     x: typeRects.get(["city", "type"], "x", d => d.x+5 ),
+            //     y: typeRects.get(["city", "type"], "y", d => d.y+15),
+            //     text: "type",
+            //     fontSize: typeRects.get(["city", "type"], ["width", "height"], ({text, width, height}) => getFontSize(text, width, height)),
+            //     fill: "red",
+            // });
 
-            c.nest(typeLabel, cityRects);
-            // c.nest(typeLabel, typeRects);
+            // let avgPricecitytype = await c.db.table("type").groupby(["city", "type"], {renameAs: "avg", fn: "avg", cols: ["price"]}, "avgcitytype")
+
+            // let priceLabels = c.text(avgPricecitytype, {
+            //     x: typeRects.get(["city", "type"], "x"),
+            //     y: typeRects.get(["city", "type"], ["y", "height"], ({y,height}) => y + height - 10),
+            //     text: ({avg}) => `£${Math.round(avg / 1000)}k`,
+            //     // }`$${d.avg_price / 1000}`,  // Display price value as text
+            //     fontSize: 10,
+            //     fill : "red"
+            //     // alignmentBaseline: "central"
+            // });
+
+            // c.nest(typeLabel, cityRects);
         }
 
         

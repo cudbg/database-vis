@@ -209,13 +209,16 @@ export class RLSQ extends RLSpaceFilling {
     this.required = dattrs;
     this.tiling = tiling ?? d3.treemapSquarify;
   }
+
   layout(data, {width, height, minx=0, miny=0}) {
     const treemap = d3.treemap()
     treemap.tile(this.tiling);
     treemap.size([width, height])
     treemap.padding(this.padding)
+    console.log("data sq", data)
 
-    let hierarchyData = { children: data[this.dattrs[0]].map((elem) => ({"name": elem, "value": 1})) }
+    let hierarchyData = { children: data[this.dattrs[0]].map((elem) => ({"name": elem, "value": typeof elem !== "number" ? 1 : elem})) }
+    console.log("hierarchy data", hierarchyData)
 
     let root = d3.hierarchy(hierarchyData)
 

@@ -319,9 +319,6 @@ export class Mark {
                   let validFkConstraint = this.checkValidFkConstraint(constraint, filter)
 
                   if (validFkConstraint) {
-                    console.log("this.src", this.src)
-                    console.log("edge", edgetable)
-                    console.log("constraint", constraint)
                     let paths = this.c.db.getTwoPaths(this.src, edgetable, constraint)
 
                     if (!paths)
@@ -777,16 +774,20 @@ export class Mark {
         let channelObj = {}
         for (let [outermarkID, outermarkInfo] of this.outermark.markInfoCache) {
           let children = rows.filter(row => row[`${IDNAME}_parent`] == outermarkID)
+
           this.pickupReferences(children)
 
-          let cols = this.rowsToCols(children)
-          let channels = this.applychannels(cols)
+          //applychannels
+          let channels = this.applychannels(children)
+
+          let channelsAsCols = this.rowsToCols(channels)
+          //let channels = this.applychannels(cols)
   
-          for (let i = 0; i < channels[IDNAME].length; i++)
-            this.innerToOuter.set(channels[IDNAME][i], outermarkInfo[IDNAME])
+          for (let i = 0; i < channelsAsCols[IDNAME].length; i++)
+            this.innerToOuter.set(channelsAsCols[IDNAME][i], outermarkInfo[IDNAME])
           
-          channels = this.doLayout(channels, outermarkInfo, dummyroot)
-          channelObj[outermarkID] = channels 
+          channelsAsCols = this.doLayout(channelsAsCols, outermarkInfo, dummyroot)
+          channelObj[outermarkID] = channelsAsCols 
         }
         return channelObj
 
@@ -794,10 +795,11 @@ export class Mark {
         this.pickupReferences(rows)
         //Need to extract link information in case of fdlayout call
         rows = this.handleFdLayoutData(rows)
-        let cols = this.rowsToCols(rows)
-        let channels = this.applychannels(cols)
+        let channels = this.applychannels(rows)
+        let channelsAsCols = this.rowsToCols(channels)
+        //let channels = this.applychannels(cols)
   
-        channels = this.doLayout(channels, outer, dummyroot)
+        channels = this.doLayout(channelsAsCols, outer, dummyroot)
   
         return channels
       }
@@ -915,7 +917,6 @@ export class Mark {
         async () => {
           let query = queryTask.getOutput()
           let rows = await this.c.db.conn.exec(query)
-          console.log("rows", rows)
           let channels = this.runLayoutTask(rows, outer, dummyroot, isNested)
           return channels
         }, false)
@@ -1298,61 +1299,59 @@ export class Mark {
      *          Has format {x: [...], y: [...], ...}
      */
     applychannels(data) {
-      if (Object.keys(data).length == 0) {
-        return []
-      }
+      let channels = []
 
-      let channels: {[key: string]: any[]} = {
-        [IDNAME]: [...data[IDNAME]]
-      };
+      for (let i = 0; i < data.length; i++) {
+        let datarow = data[i]
+        let markrow = {}
+        markrow[IDNAME] = datarow[IDNAME]
 
-      for (let i = 0; i < this.channels.length; i++) {
-        let currItem = this.channels[i]
-        let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
-        let queryItem = toQueryItem(currItem)
+        for (let i = 0; i < this.channels.length; i++) {
+          let currItem = this.channels[i]
+          let {mark, visualAttr, dataAttr, refLayout, callback} = currItem
+          let queryItem = toQueryItem(currItem)
+          
 
-
-        if (currItem.isGet) {
-          //If isGet and reflayout skip this because this is fdlayout
-          if (currItem.refLayout != null) {
-            continue
-          }
-
-
-          let arr = data[queryItem.columns[0].renameAs]
-
-
-          /**
-           * If callback exists, then we run the callback function and assign the resulting array
-           * from handlecallback to channels[visualAttr]
-           */
-          if (callback)
-            arr = this.handleCallback(currItem, queryItem, data)
-
-          //Store result in channels
-          //If visualAttr is not related to coordinates, we end here
-          channels[visualAttr] = arr
-
-
-          if (visualAttr != "x1" 
-            && visualAttr != "x2" 
-            && visualAttr != "x"
-            && visualAttr != "y1"
-            && visualAttr != "y2"
-            && visualAttr != "y") {
+          if (currItem.isGet) {
+            //If isGet and reflayout skip this because this is fdlayout
+            if (currItem.refLayout != null) {
               continue
             }
 
-          /**
-           * BUGGY
-           */
-          if (mark.level != this.level){
-            for (let [id, foreignIDs] of this.referencedMarks.entries()) {
-              //key of foreignIDs is id of this mark
-              //value is an object that looks like: {<some visual attr>_ref: <some row id of another mark>}
-              let foundPathID = -1
+            if (queryItem.columns.length > 1 && !callback)
+              throw new Error("You have to provide a callback function")
 
-              //first find the path that was used to create this visual attribute
+            let result = datarow[queryItem.columns[0].renameAs]
+
+            /**
+             * If callback exists, then we run the callback function and assign the resulting array
+             * from handlecallback to channels[visualAttr]
+             */
+            if (callback)
+              result = this.handleCallback(currItem, queryItem, datarow, markrow)
+
+
+            //Store result in channels
+            //If visualAttr is not related to coordinates, we end here
+            markrow[visualAttr] = result
+
+
+            if (visualAttr != "x1" 
+              && visualAttr != "x2" 
+              && visualAttr != "x"
+              && visualAttr != "y1"
+              && visualAttr != "y2"
+              && visualAttr != "y") {
+                continue
+              }
+
+            /**
+             * BUGGY
+             */
+            if (mark.level != this.level){
+              let id = datarow[IDNAME]
+              let foreignIDS = this.referencedMarks.get(id)
+              let foundPathID = -1
               this.pathAttrMap.forEach((aliases, pathID) => {
                 if (queryItem.columns.some(column => aliases.includes(column.renameAs)))
                   foundPathID = pathID 
@@ -1362,69 +1361,65 @@ export class Mark {
                 throw new Error("Un oh, couldn't find some id of the foreign mark")
               }
 
-              //once we have found the pathID, we can the find the id of the row in the other table was referenced
-              let otherID = foreignIDs[`path${foundPathID}_id_ref`]
+              let otherID = foreignIDS[`path${foundPathID}_id_ref`]
               let othermark = mark
               let othermarkInfoCache = mark.markInfoCache
               let otherlevel = mark.level
 
-              //index into the arr where _rav_id = id
-              let idx = data[IDNAME].indexOf(id)
-
-
-              //Keep walking upwards until you find an outermark that is on the same level as this mark
-              //At this point you have the correct x and y coordinates
               while (othermark && (otherlevel > this.level)) {
                 let othermarkRow = othermarkInfoCache.get(otherID)
                 if (visualAttr == "x1"  || visualAttr == "x2"  || visualAttr == "x")
-                    arr[idx] += othermarkRow.data_xoffset
+                    result += othermarkRow.data_xoffset
                 else if (visualAttr == "y1" || visualAttr == "y2" || visualAttr == "y")
-                    arr[idx] += othermarkRow.data_yoffset
+                    result += othermarkRow.data_yoffset
 
                 otherID = othermark.innerToOuter.get(otherID)
                 othermark = othermark.outermark
                 othermarkInfoCache = othermark.markInfoCache
                 otherlevel--
-              }
+              }              
             }
-            
-          }
 
-          channels[visualAttr] = arr
+            markrow[visualAttr] = result
+          }
+          else if (refLayout) {
+            /**
+             * copy over from original version of mark.ts
+             */
+            for (const da of refLayout.dattrs) {
+              markrow[da] = datarow[da]
+            }
+            markrow[visualAttr] = 0//dummy value
+          } else {
+            if (callback) {
+              markrow[visualAttr] = this.handleCallback(currItem, queryItem, datarow, markrow)
+            }
+            else if (Object.keys(datarow).includes(dataAttr[0])) {
+              markrow[visualAttr] = datarow[dataAttr[0]]
+            }
+            else
+              markrow[visualAttr] = dataAttr[0]
+          }
         }
-        else if (refLayout) {
-          /**
-           * copy over from original version of mark.ts
-           */
-          for (const da of refLayout.dattrs) {
-            channels[da] = data[da]
-          }
-          channels[visualAttr] = Array(data[IDNAME].length).fill(0); // dummy value
-        } else {
-          if (callback) {
-            channels[visualAttr] = this.handleCallback(currItem, queryItem, data)
-          }
-          else if (Object.keys(data).includes(dataAttr[0])) {
-            channels[visualAttr] = data[dataAttr[0]]
-          }
-          else
-            channels[visualAttr] = Array(data[IDNAME].length).fill(dataAttr[0])
-        }
+        channels.push(markrow)
       }
 
-      if ("strokeWidth" in channels) {
-        let strokeWidths = channels["strokeWidth"]
-        let minimumWidth = Math.min(...strokeWidths)
-        let result = strokeWidths.map((width) => (width/minimumWidth) * 10)
-
-        channels["strokeWidth"] = result
+      if ("strokeWidth" in this.channels) {
+        let minimumWidth = channels[0]["strokeWidth"]
+        channels.forEach(channel => {
+          minimumWidth = channel["strokeWidth"] < minimumWidth
+        })
+        channels.forEach(channel => {
+          channel["strokeWidth"] = channel["strokeWidth"]/minimumWidth * 10
+        })
       }
 
       //Here we need to convert all BigInts to number
-      for (let i = 0; i < Object.keys(channels).length; i++) {
-        let currVisualAttr = Object.keys(channels)[i]
-        if (typeof channels[currVisualAttr][0] === "bigint") {
-          channels[currVisualAttr] = channels[currVisualAttr].map(item => parseFloat(item))
+      for (let i = 0; i < channels.length; i++) {
+        let currRow = channels[i]
+        for (let [k,v] of Object.entries(currRow)) {
+          if (typeof v === "bigint")
+            currRow[k] = parseFloat(v)
         }
       }
 
@@ -1444,14 +1439,13 @@ export class Mark {
         return channels
 
       //now that we have confirmed this is ER diagram, adjust x1,x2,y1,y2
-      let datalen = channels[IDNAME].length
       let x1Mark = this.channels.find(channel => channel.visualAttr == "x1").mark
       let x2Mark = this.channels.find(channel => channel.visualAttr == "x2").mark
 
-      for (let i = 0; i < datalen; i++) {
-        let id = channels[IDNAME][i]
-        let x1 = channels["x1"][i]
-        let x2 = channels["x2"][i]
+      for (let i = 0; i < channels.length; i++) {
+        let id = channels[i][IDNAME]
+        let x1 = channels[i]["x1"]
+        let x2 = channels[i]["x2"]
 
         let foreignIDs = this.referencedMarks.get(id)
         let x1ID = foreignIDs["x1_ref"]
@@ -1460,9 +1454,9 @@ export class Mark {
         let x2Row = x2Mark.markInfoCache.get(x2ID)
 
         if (x1 + x1Row["width"] < x2) {
-          channels["x1"][i] += x1Row["width"]
+          channels[i]["x1"] += x1Row["width"]
         } else if (x2 + x2Row["width"] < x1) {
-          channels["x2"][i] += x2Row["width"]
+          channels[i]["x2"] += x2Row["width"]
         }
       }
 
@@ -1480,12 +1474,9 @@ export class Mark {
      *                As such, this function must filter for the required data attributes to run callback on
      * @returns 
      */
-    handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, data) {
-      let resArr = []
-      let {mark, callback} = channelItem
-      let src = mark == this ? this.src : mark.marktable
-      let firstKey = Object.keys(data)[0]
-      let datalen = data[firstKey].length
+    handleCallback(channelItem: RawChannelItem, queryItem: QueryItem, datarow, markrow) {
+      let {callback} = channelItem
+
       /**
        * For the number of datapoints available
        *    pick the relevant data points from each inner array in args. 
@@ -1494,30 +1485,43 @@ export class Mark {
        *    run the callback function on currArgs
        *    store the result of the callback function in res
        */
-      for (let i = 0; i < datalen; i++) {
-        let obj = {}
-        if (channelItem.isGet) {
-          queryItem.columns.forEach((column) => {
-            if (parseFloat(data[column.renameAs][i])) {
-              obj[column.dataAttr] = parseFloat(data[column.renameAs][i])
-            } else {
-              obj[column.dataAttr] = data[column.renameAs][i]
-            }
 
-          })
+      let obj = {}
+      if (channelItem.isGet) {
+        queryItem.columns.forEach((column) => {
+          if (parseFloat(datarow[column.renameAs])) {
+            obj[column.dataAttr] = parseFloat(datarow[column.renameAs])
+          } else {
+            obj[column.dataAttr] = datarow[column.renameAs]
+          }
+        })
+      }         
+      for (let [k,v] of Object.entries(datarow)) {
+        if (k in obj)
+          continue
+
+        if ((Number(v) || v == 0n) && typeof(v) != "boolean") {
+          obj[k] = parseFloat(v)
         } else {
-          Object.keys(data).forEach(attr => {
-            if ((Number(data[attr][i]) || data[attr][i] == 0n) && typeof(data[attr][i]) != "boolean") {
-              obj[attr] = parseFloat(data[attr][i])
-            } else {
-              obj[attr] =  data[attr][i]
-            }
-          })
+          obj[k] =  v
         }
-        resArr.push(callback(obj))
       }
+
+      for (let [k,v] of Object.entries(markrow)) {
+        if (k in obj)
+          continue
+
+        if ((Number(v) || v == 0n) && typeof(v) != "boolean") {
+          obj[k] = parseFloat(v)
+        } else {
+          obj[k] =  v
+        }
+      }
+
+      let result = callback(obj)
+      
      
-      return resArr
+      return result
     }
 
     /**
@@ -1615,7 +1619,6 @@ export class Mark {
           ],
           ...(this._scales)})
       }
-
       
       
       this.overrideObservable(mark, data, crow)
@@ -1662,7 +1665,6 @@ export class Mark {
         }
 
         if ("textDecoration" in this.mappings) {
-          console.log("textDecoration")
           this.setTextDecoration(mark, data)
         }
 
@@ -2324,6 +2326,8 @@ export class Mark {
         child.attr("transform", `translate(${childX}, ${crow.height - 20})`)
       } else if (this.options.textAnchor == "top") {
         child.attr("transform", `translate(${childX}, 20)`)
+      } else if (this.options.textAnchor == "center") {
+        child.attr("transform", `translate(${crow.width / 2}, ${crow.height / 2})`);
       }
     }
 
