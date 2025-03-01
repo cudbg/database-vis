@@ -44,6 +44,7 @@ export function propY(attr) { return makelayoutspecs(RLY, attr) }
 export function sq(attr) { return makelayoutspecs(RLSQ, attr) }
 export function grid(attr, numCols) { return makelayoutspecs(RLGRID, [attr,numCols]) }
 export function fdlayout(getResult, options?) { return makelayoutspecs(RLFD, getResult, options) }
+export function pickFontSizeAndRotate(attr, split) { return makelayoutspecs(RLFONTSIZEANDROTATE, attr, split) }
 
 class RefBase {
   t: Table;
@@ -215,10 +216,8 @@ export class RLSQ extends RLSpaceFilling {
     treemap.tile(this.tiling);
     treemap.size([width, height])
     treemap.padding(this.padding)
-    console.log("data sq", data)
 
     let hierarchyData = { children: data[this.dattrs[0]].map((elem) => ({"name": elem, "value": typeof elem !== "number" ? 1 : elem})) }
-    console.log("hierarchy data", hierarchyData)
 
     let root = d3.hierarchy(hierarchyData)
 
@@ -392,6 +391,117 @@ export class RLFD extends RefLayout {
     return {x, y}
   }
 }
+
+export class RLFONTSIZEANDROTATE extends RLSpaceFilling {
+  static fills = ["text", "fontSize", "rotate"];
+  split = false
+
+  constructor(dattrs, split) {
+    if (Array.isArray(dattrs) && dattrs.length != 1) 
+      throw new Error("Expects 1 data attribute");
+    super(dattrs, ["text", "fontSize", "rotate"]);
+    this.required = dattrs;
+    this.vattrs = ["text", "fontSize", "rotate"]
+    this.split = split
+  }
+
+  layout(data, {width, height, minx=0, miny=0}) {
+
+    function fitTextToBox(ctx, text, boxWidth, boxHeight, maxFontSize = 100, split = false) {
+      function measureTextWidth(text, fontSize) {
+          ctx.font = `${fontSize}px sans-serif`;
+          return ctx.measureText(text).width;
+      }
+  
+      function splitTextIntoLines(words, width, fontSize) {
+          let lines = [];
+          let line = '';
+  
+          for (let word of words) {
+              let testLine = line.length === 0 ? word : `${line} ${word}`;
+              let testWidth = measureTextWidth(testLine, fontSize);
+  
+              if (testWidth > width) {
+                  if (line) {
+                      lines.push(line);
+                  }
+                  if (measureTextWidth(word, fontSize) > width) {
+                      let brokenWord = word.split('').reduce((acc, char) => {
+                          let lastSegment = acc.length ? acc[acc.length - 1] : '';
+                          if (measureTextWidth(lastSegment + char, fontSize) > width) {
+                              acc.push(char);
+                          } else {
+                              acc[acc.length - 1] = lastSegment + char;
+                          }
+                          return acc;
+                      }, ['']);
+                      lines.push(...brokenWord);
+                      line = '';
+                  } else {
+                      line = word;
+                  }
+              } else {
+                  line = testLine;
+              }
+          }
+          if (line) lines.push(line);
+          return lines;
+      }
+  
+      function getFittedText(width, height, maxFontSize, isRotated = false) {
+          let minFontSize = 1, bestFontSize = 1;
+          let bestLines = [];
+  
+          while (minFontSize <= maxFontSize) {
+              let midFontSize = Math.floor((minFontSize + maxFontSize) / 2);
+              let lines;
+              if (split) {
+                  lines = splitTextIntoLines(text.split(' '), width, midFontSize);
+              } else {
+                  lines = [text]; // Treat the whole text as a single line
+              }
+              
+              let totalHeight = lines.length * midFontSize * 1.6;
+  
+              if (totalHeight <= height && measureTextWidth(lines[0], midFontSize) <= width/1.2) {
+                  bestFontSize = midFontSize;
+                  bestLines = lines;
+                  minFontSize = midFontSize + 1;
+              } else {
+                  maxFontSize = midFontSize - 1;
+              }
+          }
+  
+          return { fontSize: bestFontSize, lines: bestLines, orientation: isRotated ? "vertical" : "horizontal" };
+      }
+  
+      const horizontalFit = getFittedText(boxWidth, boxHeight, maxFontSize, false);
+      const verticalFit = getFittedText(boxHeight, boxWidth, maxFontSize, true);
+  
+      return horizontalFit.fontSize >= verticalFit.fontSize ? horizontalFit : verticalFit;
+  }
+  
+  
+    let firstKey = Object.keys(data)[0]
+    let datalen = data[firstKey].length
+    let result = {text: [], fontSize: [], rotate: []}
+    for (let i = 0; i < datalen; i++) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const computedAttributes = fitTextToBox(ctx, data[this.dattrs[0]][i], width, height, 100, this.split);
+      let text = computedAttributes.lines.join('\n')
+      let fontSize = computedAttributes.fontSize
+      let orientation = computedAttributes.orientation == "vertical" ? 90 : 0
+
+      result.text.push(text)
+      result.fontSize.push(fontSize)
+      result.rotate.push(orientation)
+    }
+    return result
+  }
+}
+
 
 class RLPhysics extends RefLayout {
   constructor(dattrs, vattrs) {

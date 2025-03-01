@@ -843,6 +843,9 @@ export class Mark {
 
           
           if (this.mark.aria == "text") {
+            let textAnchor = mark.getAttribute("text-anchor")
+            let lineAnchor = mark.getAttribute("dominant-baseline") //TODO: pick up lineAnchor!
+
             //Only after appending the text element can we get the BBox
             maybeselection(mark)
             .selectAll(`g[aria-label='${this.mark.aria}']`)
@@ -855,6 +858,18 @@ export class Mark {
               let row = markInfo.find(info => info[IDNAME] == id)
               row["width"] = bbox.width
               row["height"] = bbox.height
+
+              if (textAnchor === "middle") {
+                  row["x"] -= bbox.width / 2;
+              } else if (textAnchor === "end") {
+                  row["x"] -= bbox.width;
+              }
+              
+              if (lineAnchor === "auto" || lineAnchor === "alphabetic" || lineAnchor === "ideographic" || lineAnchor === "bottom") {
+                row["y"] -= bbox.height; // Alphabetic baseline
+              } else if (lineAnchor === "middle" || lineAnchor === "central") {
+                row["y"] -= bbox.height / 2;
+              }
             })
           }
 
@@ -874,6 +889,9 @@ export class Mark {
 
           if (this.mark.aria == "text") {
             //Only after appending the text element can we get the BBox
+            let textAnchor = mark.getAttribute("text-anchor")
+            let lineAnchor = mark.getAttribute("dominant-baseline")
+
             maybeselection(mark)
             .selectAll(`g[aria-label='${this.mark.aria}']`)
             .selectAll("*")
@@ -884,6 +902,18 @@ export class Mark {
               let row = markInfo.find(info => info[IDNAME] == id)
               row["width"] = bbox.width
               row["height"] = bbox.height
+
+              if (textAnchor === "middle") {
+                  row["x"] -= bbox.width / 2;
+              } else if (textAnchor === "end") {
+                  row["x"] -= bbox.width;
+              }
+
+              if (lineAnchor === "auto" || lineAnchor === "alphabetic" || lineAnchor === "ideographic" || lineAnchor === "bottom") {
+                row["y"] -= bbox.height; // Alphabetic baseline
+              } else if (lineAnchor === "middle" || lineAnchor === "central") {
+                row["y"] -= bbox.height / 2;
+              }
             })
           }
 
@@ -1574,6 +1604,7 @@ export class Mark {
           //this._scales[this.mark.alias2scale[va]] = { type: "identity" }
         }
       }
+      dummyroot.node().removeChild(tmpMark)
       return channels
     }
 
@@ -1642,10 +1673,15 @@ export class Mark {
      * modifying the svg elements returned by observable
      */
     overrideObservable(mark, data, crow) {
+      let xTranslated = false
+      let yTranslated = false
+      let anchor = false
+      let sorted = false
+
       if (this.marktype == "text") {
         if ("textAnchor" in this.options) {
-          mark.removeAttribute("text-anchor")
-          this.handleTextAnchor(mark, crow);
+          anchor = true
+          mark.setAttribute("text-anchor", this.options.textAnchor)
         }
 
         /**
@@ -1655,13 +1691,20 @@ export class Mark {
           let currChannel = this.channels[i]
           if (currChannel.visualAttr == 'x' && currChannel.isGet) {
             this.setXTranslate(mark, data)
+            xTranslated = true
           } else if (currChannel.visualAttr == 'y' && currChannel.isGet) {
             this.setYTranslate(mark, data)
+            yTranslated = true
           }
         }
 
-        if (!("lineAnchor" in this.options)) {
+        if ((xTranslated || yTranslated) && !anchor)
           mark.removeAttribute("text-anchor")
+        
+
+        if (this.ordering.length != 0) {
+          sorted = true
+          this.sortCoordinates(mark, data)
         }
 
         if ("textDecoration" in this.mappings) {
@@ -1671,6 +1714,10 @@ export class Mark {
         if (!("strokeWidth" in this.mappings)) {
           maybeselection(mark).selectAll(`g[aria-label='${this.mark.aria}']`).attr("stroke-width", null)
         }
+
+        if ('rotate' in data && (xTranslated || yTranslated || anchor || sorted)) {
+          this.setRotate(mark, data)
+        }
         
       } else if (this.marktype == "link" && ("curve" in this.options)) {
         this.setCurve(mark)
@@ -1678,32 +1725,25 @@ export class Mark {
         this.setEqualWidthAndHeight(mark, data)
       }
 
-      if (this.marktype == "text" && 'rotate' in this.mappings) {
-        this.setRotate(mark)
-      }
-
       if (this.marktype != "text" && this.marktype != "dot") {
         this.setXY(mark, data, crow)
-      }
-
-      if (this.marktype == "text" && this.ordering.length != 0) {
-        this.sortCoordinates(mark, data)
       }
     }
 
     /**
      * This function handles rotation
      */
-    setRotate(mark) {
-      let rotateVal = this.mappings['rotate']
-
+    setRotate(mark, data) {
       maybeselection(mark)
         .selectAll(`g[aria-label='${this.mark.aria}']`)
         .selectAll("*")
         .each(function (d, i) {
           let el = d3.select(this);
           let val = el.attr('transform')
-          el.attr('transform', `${val} rotate(${rotateVal})`)
+          if (val)
+            el.attr('transform', `${val} rotate(${data["rotate"][i]})`)
+          else
+            el.attr('transform', `rotate(${data["rotate"][i]})`)
       })
     }
     /**
@@ -1899,16 +1939,7 @@ export class Mark {
     getObstacles() {
       //Pick up all the marks on the browser
       let obstacles = []
-      // let canvas = this.c.node.select(".canvas")
-      // console.log("canvas", canvas)
-      // let children = canvas.selectChildren("g")
-      // console.log("children", children)
-      // let grandChildren = children.selectChildren()
-      // console.log("grandChilden", grandChildren)
-      // let greatGrandChildren = grandChildren.selectChildren()
-      // console.log("greatGrandChildren", greatGrandChildren)
-      // let markSvgs = greatGrandChildren.selectAll("g:last-child")
-      // console.log("objective", markSvgs)
+
       let marks = this.c.marks as Mark[]
       for (let i = 0; i < marks.length; i++) {
         let mark = marks[i]
@@ -1946,7 +1977,6 @@ export class Mark {
           obstacles.push(row)
         }
       }
-      console.log("obstacles", obstacles)
       return obstacles
     }
 
@@ -2305,68 +2335,6 @@ export class Mark {
       let y = parseFloat(coords[1].trim())
 
       return {x,y}
-    }
-
-    /**
-     * 
-     * @param child Created from d3.select(...)
-     * @param parentX starting x coord for parent node
-     * @param parentY starting y coord for parent node
-     * @param parentWidth
-     * @param parentHeight 
-     * @param childX starting x coord for child node
-     * @param childY starting y coord for child node
-     */
-    setTransform(child, crow, childX, childY) {
-      if (this.options.textAnchor == "left") {
-        child.attr("transform", `translate(20, ${childY})`)
-      } else if (this.options.textAnchor == "right") {
-        child.attr("transform", `translate(${crow.width - 20}, ${childY})`) //should be parentX + width
-      } else if (this.options.textAnchor == "bottom") {
-        child.attr("transform", `translate(${childX}, ${crow.height - 20})`)
-      } else if (this.options.textAnchor == "top") {
-        child.attr("transform", `translate(${childX}, 20)`)
-      } else if (this.options.textAnchor == "center") {
-        child.attr("transform", `translate(${crow.width / 2}, ${crow.height / 2})`);
-      }
-    }
-
-    /**
-     * This function is EXTREMELY SUSPECT. but its only used for text marks WITH textAnchor.
-     * For some reason observable doesnt work when we specify textAnchor normally
-     * so this function does manual adjustments to the x,y position of text marks
-     * Currently very restricted use as it will only work for "left", "right", "top", "bottom" for textAnchor
-     * @param mark the current mark that was created
-     * @param crow the parent row, can be canvas or an outermark
-     * @returns 
-     */
-    handleTextAnchor(mark, crow) {
-      let thisref = this
-
-
-      maybeselection(mark)
-        .selectAll(`g[aria-label='${this.mark.aria}']`)
-        .selectAll("*")
-        .each(function (d, i) {
-          let el = d3.select(this);
-          let elAttrs = el.node().attributes;
-          let foundTransformAttr = false
-
-          for (let i  = 0; i < elAttrs.length; i++) {
-            let attrName = elAttrs[i].name
-            if (attrName == "transform") {
-              foundTransformAttr = true
-              break
-            }
-          }
-          if (!foundTransformAttr)
-            return
-
-          let childInfo = thisref.getTransformInfo(el)
-          let childX = childInfo.x
-          let childY = childInfo.y
-          thisref.setTransform(el, crow, childX, childY)
-        })
     }
 
     /**

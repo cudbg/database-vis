@@ -4,7 +4,7 @@
 	import { Database } from "../viz/db";
     import { DuckDB } from "../viz/duckdb";
     import { Canvas }  from "../viz/canvas";
-    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq, grid, fdlayout } from "../viz/ref"
+    import { markof, RLX, RLY, propX, propY, eqX, eqY, sq, grid, fdlayout, pickFontSizeAndRotate } from "../viz/ref"
 
     import Debug from "../components/Debug.svelte";
     import TableInspector from "../components/TableInspector.svelte";
@@ -927,7 +927,7 @@
 
         //CASE STUDY: SECTION 7 OF PAPER
         //7.1 A SCATTER PLOTS
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
@@ -968,7 +968,7 @@
             //See section 7.1 for equivalent example in paper, i am trying to mimic it as much as possible
             let t = c.db.table("heart_data")
 
-            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
+            let t2 = await t.groupby(["cp", "slope"], mgg.count({renameAs: "n"}))
 
             //I skip normalizing cp and slope here
             let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30}, {color: { scheme: "blues"}})
@@ -1000,7 +1000,7 @@
             //let vdot = c.dot(t, {x: "age", y: "thalach", symbol: "target"})
             let vdot = c.dot(t3, {x: "age", y: "thalach", symbol: "target", fill: "sel"}, {color: {domain: [true, false], range: ["red", "black"]}})
 
-            let t2 = await t.groupby(["cp", "slope"], {n: "count"})
+            let t2 = await t.groupby(["cp", "slope"], mgg.count({renameAs: "n"}))
 
             //I skip normalizing cp and slope here
             let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
@@ -1011,7 +1011,7 @@
                     y: vsquare.get(null, "y", ({y}) => y - 12),
                     text: ({cp, slope}) => `Chest: ${cp} Stress: ${slope}`,
                     fontSize: "30px"
-                })
+                }, {textAnchor: "start"})
 
             vsquare.nest(vdot)
 
@@ -1080,7 +1080,7 @@
             for (let i = 0; i < attrs.length - 1; i++) {
                 let leftMark = views[i]
                 let rightMark = views[i + 1]
-                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], {c: "count"})
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
 
                 let vlink = c.link(grouped,
                     {
@@ -1162,7 +1162,7 @@
             for (let i = 0; i < attrs.length - 1; i++) {
                 let leftMark = views[i]
                 let rightMark = views[i + 1]
-                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], {c: "count"})
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
 
                 let vlink = c.link(grouped,
                     {
@@ -1265,7 +1265,7 @@
                                                 textDecoration: ({is_key}) => is_key ? 'underline': 'none',
                                                 x: 0,
                                                 fontSize:"20px"
-                                }, {textAnchor: "left"})
+                                })
 
                 vtables.nest(vattributes)
 
@@ -1292,50 +1292,62 @@
             // Middlesex, Hertfordshire, Twickenham, Surrey, Essex, Fulham, Marylebone
             
             // Define HiVE Hierarchy and Layout
-            let tables = await c.hier("london_reduced", ["city", "type"], [mgg.avg({renameAs: "avgprice", col: "price"}), mgg.avg({renameAs: "avgbedrooms", col: "bedrooms"})]);
+            let tables = await c.hier("london_reduced", ["city", "type"], [mgg.avg({renameAs: "price", col: "price"}), mgg.avg({renameAs: "bedrooms", col: "bedrooms"})]);
             let cityavgprice = tables[0]
             let citytypeavgbedrooms = tables[1]
 
             let cityRects = c.rect(cityavgprice, { ...sq("avgprice")(), stroke: "black", fill: "none" });
 
-            let typeRects = c.rect(citytypeavgbedrooms, { ...sq("avgbedrooms")(), stroke: "black", fill: "avgbedrooms" }, {color: {type: "sequential", scheme: "oranges"}});
+            let typeRects = c.rect(citytypeavgbedrooms, { ...sq("bedrooms")(), stroke: "black", fill: "bedrooms" }, {color: {type: "sequential", scheme: "oranges"}});
 
             c.nest(typeRects, cityRects);
 
-        
+    
 
-            function getFontSize(text, maxWidth, height) {
-                const canvas = document.createElement("canvas");
-                const context = canvas.getContext("2d");
-
-                // Set the initial font size (you can adjust this as needed)
-                let fontSize = 100; // Starting font size (adjust as needed)
-                context.font = `${fontSize}px Arial`;
-
-                // Measure the width of the text
-                let textWidth = context.measureText(text).width;
-
-                // Adjust the font size until it fits within the maxWidth
-                while (textWidth > maxWidth/1.8) {
-                    fontSize -= 1;
-                    context.font = `${fontSize}px Arial`;
-                    textWidth = context.measureText(text).width;
-                }
-
-                // Adjust the font size for height if necessary (you can also check the height of the font)
-                const scaleFactor = height / fontSize;
-                fontSize = Math.min(fontSize, scaleFactor * fontSize);
-
-                return fontSize;
-            }
-
-            let cityLabel = c.text("city", {
+            let cityLabel = c.text(cityavgprice, {
                 x: 0,
                 y: 0,
-                text: "city",
-                fontSize: cityRects.get("city", ["width", "height"], ({text, width, height}) => getFontSize(text, width, height))
+                ...pickFontSizeAndRotate("city", false)(),
+                opacity: 0.5,
+                fill: "red"
             });
+
             c.nest(cityLabel, cityRects)
+
+            let typelabel = c.text(citytypeavgbedrooms, {
+                x: 0,
+                y: 0,
+                ...pickFontSizeAndRotate("type", false)(),
+                opacity: 0.5,
+                fill: "blue"
+            })
+            c.nest(typelabel, typeRects)
+
+            // function getFontSize(text, maxWidth, height) {
+            //     const canvas = document.createElement("canvas");
+            //     const context = canvas.getContext("2d");
+
+            //     // Set the initial font size (you can adjust this as needed)
+            //     let fontSize = 100; // Starting font size (adjust as needed)
+            //     context.font = `${fontSize}px Arial`;
+
+            //     // Measure the width of the text
+            //     let textWidth = context.measureText(text).width;
+
+            //     // Adjust the font size until it fits within the maxWidth
+            //     while (textWidth > maxWidth/1.8) {
+            //         fontSize -= 1;
+            //         context.font = `${fontSize}px Arial`;
+            //         textWidth = context.measureText(text).width;
+            //     }
+
+            //     // Adjust the font size for height if necessary (you can also check the height of the font)
+            //     const scaleFactor = height / fontSize;
+            //     fontSize = Math.min(fontSize, scaleFactor * fontSize);
+
+            //     return fontSize;
+            // }
+
 
             // let typeLabel = c.text(countcitytype, {
             //     x: typeRects.get(["city", "type"], "x", d => d.x+5 ),

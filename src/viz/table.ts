@@ -6,6 +6,7 @@ import { unorderedEquals } from "./util";
 import type { Schema } from "./schema";
 import { mgg } from "./uapi/mgg";
 import { FKConstraint } from "./constraint";
+import { type AggFn } from "./types";
 
 
 
@@ -156,7 +157,7 @@ export class Table {
     return t;
   }
 
-  async groupby(attrs: string| string[], aggregate: {renameAs: string, fn: string, cols?: string[]}, displayname=null) {
+  async groupby(attrs: string| string[], aggFn: AggFn, displayname=null) {
     attrs = Array.isArray(attrs) ? attrs : [attrs]
     displayname ??= `${this.internalname}_aggregate_${attrs.join("_")}`
 
@@ -166,38 +167,10 @@ export class Table {
       q = q.select(attr)
     })
     q = q.select({[IDNAME]: idexpr})
-    let renameAs = aggregate["renameAs"]
-    let fn = aggregate["fn"]
-    let cols = aggregate["cols"]
 
-    switch (fn) {
-      case "count":
-        q = q.select({[renameAs]: count()})
-        q = q.groupby(attrs)
-        break
-      case "max":
-        q = q.select({[renameAs]: max(cols)})
-        q = q.groupby(attrs)
-        break
-      case "min":
-        q = q.select({[renameAs]: min(cols)})
-        q = q.groupby(attrs)
-        break
-      case "median":
-        q = q.select({[renameAs]: median(cols)})
-        q = q.groupby(attrs)
-        break
-      case "sum":
-        q = q.select({[renameAs]: sum(cols)})
-        q = q.groupby(attrs)
-        break
-      case "avg":
-          q = q.select({[renameAs]: avg(cols)})
-          q = q.groupby(attrs)
-          break
-      default:
-        throw new Error("Unsupported aggregate function")
-    }
+    q = mgg.appendAggFn(q, aggFn)
+
+    q = q.groupby(attrs)
 
     let t = await Table.fromSql(this.db, q, displayname);
     t.keys(attrs)

@@ -402,6 +402,7 @@ export class Canvas implements IMark {
         let outerMarkID = outerMark.id
         let innerMarkID = innerMark.id
 
+        //innermark needs outermark to render
         graph.get(outerMarkID).push(innerMarkID)
         referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
       }
@@ -409,13 +410,14 @@ export class Canvas implements IMark {
 
     for (let i = 0; i < this.refmarks.length; i++) {
       let currReference = this.refmarks[i]
+      //m needs rm to render
       let {rm, m} = currReference
-      let dstID = rm.id
-      let srcID = m.id
+      let srcID = rm.id //id of mark that needs to be rendered first
+      let destID = m.id
 
-      if (!graph.get(dstID).includes(srcID)) {
-        graph.get(dstID).push(srcID)
-        referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
+      if (!graph.get(srcID).includes(destID)) {
+        graph.get(srcID).push(destID)
+        referenceCounts.set(destID, referenceCounts.get(destID) + 1)
       }
     }
 
@@ -436,7 +438,7 @@ export class Canvas implements IMark {
       let destMarks = graph.get(currID)
       
       for (let i = 0; i < destMarks.length; i++) {
-        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i] - 1))
+        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i]) - 1)
 
         if (referenceCounts.get(destMarks[i]) == 0) {
           queue.push(destMarks[i])
