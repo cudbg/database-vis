@@ -909,7 +909,7 @@
 
         }
         //7.1 B HEATMAP
-        if (0) {
+        if (1) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
             canvas = c
@@ -926,7 +926,7 @@
             let t2 = await t.groupby(["cp", "slope"], mgg.count({renameAs: "n"}))
 
             //I skip normalizing cp and slope here
-            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30}, {color: { scheme: "blues"}})
+            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 10}, {color: { scheme: "blues"}})
 
             let vtext = c.text(t2, {x: 0, y: 0, text: ({cp, slope}) => `Chest: ${cp} Stress: ${slope}`, fontSize: "20px", lineWidth: 7}, {lineAnchor: "middle"})
 
@@ -958,7 +958,7 @@
             let t2 = await t.groupby(["cp", "slope"], mgg.count({renameAs: "n"}))
 
             //I skip normalizing cp and slope here
-            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 30, width: 100}, {color: { scheme: "blues"}})
+            let vsquare = c.rect(t2, {x: "cp", y: "slope", stroke: "n", strokeWidth: 10}, {color: { scheme: "blues"}})
 
             let vtext = c.text(t2, 
                 {
@@ -999,7 +999,7 @@
         }
 
         //PARALLEL COORDINATES
-        if (1) {
+        if (0) {
             await db.loadFromConnection()
             let c = new Canvas(db, {width: 1600, height: 800}) //setting up canvas
             canvas = c
