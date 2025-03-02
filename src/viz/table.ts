@@ -1,9 +1,12 @@
 import * as R from "ramda";
 import { get, writable, derived } from "svelte/store";
-import { Query, sql, agg, and, eq, column, literal } from "@uwdata/mosaic-sql";
+import { Query, sql, agg, and, eq, column, literal, count, max, min, median, sum, avg } from "@uwdata/mosaic-sql";
 import { idexpr } from "./id";
 import { unorderedEquals } from "./util";
 import type { Schema } from "./schema";
+import { mgg } from "./uapi/mgg";
+import { FKConstraint } from "./constraint";
+import { type AggFn } from "./types";
 
 
 
@@ -42,6 +45,7 @@ export async function createView(db, viewname, q:Query|String) {
 // all operations create new tables
 export class Table {
   static id = 0;
+  id;
   db;
   displayname: string;
   internalname: string;  // name of table in duckdb
@@ -58,6 +62,8 @@ export class Table {
     this.displayname = displayname ?? internalname;
     this.schema = schema;
     this._keys = keys
+    this.id = Table.id
+    Table.id += 1
   }
 
   static newname(prefix="table") {
@@ -151,14 +157,92 @@ export class Table {
     return t;
   }
 
-  async groupby(o, displayname=null) {
-    o[IDNAME] ??= idexpr;
-    let keys = R.keys(o).filter((key) => o[key].aggregate == true)
-    let q = Query.from(this.internalname).select(o)
+  async groupby(attrs: string| string[], aggFn: AggFn, displayname=null) {
+    attrs = Array.isArray(attrs) ? attrs : [attrs]
+    displayname ??= `${this.internalname}_aggregate_${attrs.join("_")}`
+
+    let q = new Query()
+    q = q.from(this.internalname)
+    attrs.forEach(attr => {
+      q = q.select(attr)
+    })
+    q = q.select({[IDNAME]: idexpr})
+
+    q = mgg.appendAggFn(q, aggFn)
+
+    q = q.groupby(attrs)
+
     let t = await Table.fromSql(this.db, q, displayname);
-    t.keys(keys)
+    t.keys(attrs)
+    t.keys([IDNAME])
     t.name(displayname)
+
+    let c = new FKConstraint({t1: t, X: attrs, t2: this, Y: attrs})
+    this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
     return t;
+  }
+
+  async normalize(attrs:string|string[], dimname=null, factname=null) {
+    return await this.db.normalize(this.internalname, attrs, dimname, factname)
+  }
+
+  async select({attrs, sel, displayname}:  { attrs: string[] | string, sel: string, displayname? }) {
+    let q = new Query()
+    if (attrs == "*") {
+      attrs = this.schema.attrs
+    }
+
+    attrs = Array.isArray(attrs) ? attrs : [attrs]
+    if (!attrs.includes(IDNAME))
+      attrs.push(IDNAME)
+    
+    attrs.forEach(attr => q.select(attr))
+    q = q.select({"sel": sql`CASE WHEN ${sel} THEN TRUE ELSE FALSE END`})
+    q = q.from(this.internalname)
+
+    displayname ??= `${this.internalname}_${this.id + 1}`
+
+    let t = await Table.fromSql(this.db, q, displayname)
+    t.keys([IDNAME])
+    t.name(displayname)
+
+    let c = new FKConstraint({t1: t, X: [IDNAME], t2: this, Y: [IDNAME]})
+    this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+    return t;
+  }
+
+  async bucket(col: string, bucketSize: number, displayname=null) {
+    displayname ??= `${this.internalname}_bucketed_${col}`
+
+    let query = new Query()
+
+    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
+         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
+
+    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
+    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
+
+    query = query.select({
+      [IDNAME]: idexpr,
+      [`${col}`]: sql`${bucketLabelExpr}`,
+      [`min_${col}`]: sql`${minBucketExpr}`,
+      [`max_${col}`]: sql`${maxBucketExpr}`,
+    })
+
+    let remainingAttributes = this.schema.attrs.filter(attr => attr != col && attr != IDNAME)
+    query = query.select(remainingAttributes)
+    
+    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
+    query = query.groupby(remainingAttributes)
+    query = query.from(this.internalname)
+
+    let newTable = await this.db.fromSql(query, displayname)
+    newTable.name(displayname)
+    newTable.keys([IDNAME])
+
+    return newTable
   }
 
   async distinctproject(o, displayname=null) {
@@ -176,14 +260,17 @@ export class Table {
   }
 
   // { alias: expr, ... }   // '*' not allowed
-  async project(o, displayname=null) {
+  async project(o, displayname=null, newkeys=null) {
     o[IDNAME] ??= idexpr;
     displayname ??= Table.newname()
     let q = Query.from(this.internalname).select(o).toString()
     let t = await Table.fromSql(this.db, q, displayname);
     let keptAttrs = this.schema.pick(R.values(o)).attrs
     let newKeys = this._keys.filter((key) => unorderedEquals(keptAttrs, key))
-    t.keys(newKeys);
+    if (newkeys)
+      t.keys(newkeys)
+    else
+      t.keys(newKeys);
     t.name(displayname)
 
     // TODO: propogate FK a.X->b.Y from this to new table if:
@@ -209,6 +296,24 @@ export class Table {
     t.keys(newKeys);
     t.name(displayname)
     return t;
+  }
+
+  get(filter: string | string[] | null = null, 
+    props: string | string[] 
+          | {aggregateFunction: string} 
+          | {aggregateFunction: string, col: string},
+          callback?): {othertable, searchkeys, otherAttr, callback, isVisualChannel} {
+
+    props = Array.isArray(props) ? props : [props]
+
+    if (!props.every((attr) => this.schema.attrs.includes(attr)) && ! props.every(attr => mgg.AggregateOperators.includes(attr))) {
+      throw new Error(`Give me valid columns to get!`)
+    }
+
+    if (filter)
+      filter = Array.isArray(filter) ? filter : [filter]
+    
+      return {othertable: this, searchkeys: filter, otherAttr: props, callback: callback, isVisualChannel: false}
   }
 
   public name(newName) {

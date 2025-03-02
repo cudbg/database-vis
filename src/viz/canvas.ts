@@ -16,7 +16,8 @@ import { TaskGraph, HOOK_PLACE } from "./task_graph/task_graph";
 import { idexpr } from "./id";
 import dagre from "@dagrejs/dagre"
 import { ERMarkers, insertMarkers }from "./erMarkers"
-
+import { type AggFn } from "./types";
+import { mgg } from "./uapi/mgg";
 
 
 function maybesource(db, source:string|Table|FKConstraint): Table|FKConstraint {
@@ -65,6 +66,7 @@ export class Canvas implements IMark {
   refmarks:{rm:Mark,m:Mark}[];
   plotConfig;
   available_scales;
+  tablesUsed: Set<string>
 
   node;
   private _parent;
@@ -92,6 +94,7 @@ export class Canvas implements IMark {
     } = options;
     this.options = { ...options, x, y, width, height }
 
+    this.tablesUsed = new Set<string>()
     this.taskGraph = new TaskGraph(true)
   }
 
@@ -154,14 +157,21 @@ export class Canvas implements IMark {
   addmark(marktype, source, mapping, plotoptions?) {
     plotoptions ??= {}
     let srcTable = this.db.table(source)
+    if (!srcTable) {
+      throw new Error("Invalid source table!")
+    }
+    this.tablesUsed.add(srcTable.internalname)
     let canvas = findcanvas(this, srcTable);
     if (marktype == "square") {
       if (("width" in mapping ) && !("height" in mapping)) {
         mapping.height = mapping.width
       } else if (!("width" in mapping ) && ("height" in mapping)) {
         mapping.width = mapping.height
+      } else if (mapping.width != mapping.height) {
+        mapping.width = mapping.height
       }
     }
+
     let mark = new Mark(canvas, marktype, srcTable, mapping, plotoptions, Canvas.plotConfig)
     this.marks.push(mark);
     return mark;
@@ -177,76 +187,86 @@ export class Canvas implements IMark {
   }
 
   nest(innerMark: Mark, outerMark: Mark, predicate?) { //TODO: need to get a fk constraint from db if user passes no predicate
-    if (predicate) {
-      predicate = Array.isArray(predicate) ? predicate : [predicate]
-      this.nestWithPredicate(innerMark, outerMark, predicate)
-    }
-    else
-      this.nestWithoutPredicate(innerMark, outerMark)
-    this.taskGraph.addDependency(innerMark, outerMark, true)
-  }
-
-  nestWithoutPredicate(innerMark: Mark, outerMark: Mark) {
-    let innerTable = innerMark.src
-    let outerTable = outerMark.src
-
     console.log("all constraints", this.db.constraints)
-    let path = this.db.getFkPath(innerTable, outerTable)
+    if (predicate)
+      predicate = Array.isArray(predicate) ? predicate : [predicate]
 
-    if (!path)
-      throw new Error("No possible path!")
-
-    this.nests.push(new MarkNest(this, path[0],innerMark, outerMark))
-    innerMark.outermark = outerMark
-  }
-
-  nestWithPredicate(innerMark: Mark, outerMark: Mark, predicate: string[]) {
     let innerTable = innerMark.src
     let outerTable = outerMark.src
 
-    for (const [cname, constraint] of Object.entries(this.db.constraints)) {
-      if (!(constraint instanceof FKConstraint))
-        continue
-
-      if (constraint.card != Cardinality.ONEONE && constraint.card != Cardinality.ONEMANY)
-        continue
-
-      if (constraint.t1 == innerTable) {
-        if ((constraint.X.length != predicate.length))
+    /**
+     * If both marks share the same source table, then skip checking and create a new FKConstraint
+     */
+    if ((innerTable == outerTable) && !predicate) {
+      for (let c of Object.values(this.db.constraints)) {
+        if (!(c instanceof FKConstraint))
           continue
+
+        if ((c.t1 != innerTable) || (c.t2 != innerTable))
+          continue
+        
+        if ((c.X.length != 1) || (c.Y.length != 1))
+          continue
+
+        if (c.X[0] != IDNAME)
+          continue
+        if (c.Y[0] != IDNAME)
+          continue
+
   
-        if (!(constraint.X.every((value, index) => value == predicate[index])))
-          continue
-
-        let path = this.db.getFKPath(innerTable, outerTable, constraint)
-
-        if (!path)
-          continue
-
-        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
         innerMark.outermark = outerMark
+        this.nests.push(new MarkNest(this, c, innerMark, outerMark))
+        this.taskGraph.addDependency(innerMark, outerMark, true)
         return
       }
-
-      if (constraint.t2 == innerTable) {
-        if (constraint.Y.length != predicate.length)
-          continue
-
-        if (!(constraint.Y.every((value, index) => value == predicate[index])))
-          continue
-
-        let path = this.db.getFKPath(innerTable, outerTable, constraint)
-
-        if (!path)
-          continue
-  
-        this.nests.push(new MarkNest(this, constraint, innerMark, outerMark))
-        innerMark.outermark = outerMark
-        return
-      }
+      
+      let constraint = new FKConstraint({t1: innerTable, X: [IDNAME], t2: outerTable, Y: [IDNAME]})
+      this.db.addConstraint(constraint)
+      innerMark.outermark = outerMark
+      this.nests.push(new MarkNest(this, constraint,innerMark, outerMark))
+      this.taskGraph.addDependency(innerMark, outerMark, true)
+      return
     }
 
-    throw new Error("Cannot find foreign key reference to nest using predicate!")  
+    for (let c of Object.values(this.db.constraints)) {
+      if (!(c instanceof FKConstraint))
+        continue
+
+      if (c.card != Cardinality.ONEONE && c.card != Cardinality.ONEMANY)
+        continue
+
+      if (c.t1 != innerTable && c.t2 != innerTable)
+        continue
+
+      if (predicate) {
+        if (c.t1 == innerTable && R.intersection(c.X, predicate) != predicate.length)
+          continue
+        if (c.t2 == innerTable && R.intersection(c.Y, predicate) != predicate.length)
+          continue
+      }
+      console.log("constraint c", c)
+
+
+      let start = c.t1 == innerTable ? c.t1 : c.t2  
+      console.log("start", start)
+      console.log("outertable", outerTable)
+      let path = this.db.getFKPath(start, outerTable, c)
+
+      if (!path)
+        continue
+
+      path.forEach(edge => {
+        this.tablesUsed.add(edge.t1.internalname)
+        this.tablesUsed.add(edge.t2.internalname)
+      })
+
+      innerMark.outermark = outerMark
+      this.nests.push(new MarkNest(this, c, innerMark, outerMark))
+      this.taskGraph.addDependency(innerMark, outerMark, true)
+      return
+    }
+    //If we reach here, we couldn't find a foreign key path, with or without predicate
+    throw new Error("Could not find a path to nest!")
   }
 
   /*
@@ -382,6 +402,7 @@ export class Canvas implements IMark {
         let outerMarkID = outerMark.id
         let innerMarkID = innerMark.id
 
+        //innermark needs outermark to render
         graph.get(outerMarkID).push(innerMarkID)
         referenceCounts.set(innerMarkID, referenceCounts.get(innerMarkID) + 1)
       }
@@ -389,13 +410,14 @@ export class Canvas implements IMark {
 
     for (let i = 0; i < this.refmarks.length; i++) {
       let currReference = this.refmarks[i]
+      //m needs rm to render
       let {rm, m} = currReference
-      let dstID = rm.id
-      let srcID = m.id
+      let srcID = rm.id //id of mark that needs to be rendered first
+      let destID = m.id
 
-      if (!graph.get(dstID).includes(srcID)) {
-        graph.get(dstID).push(srcID)
-        referenceCounts.set(srcID, referenceCounts.get(srcID) + 1)
+      if (!graph.get(srcID).includes(destID)) {
+        graph.get(srcID).push(destID)
+        referenceCounts.set(destID, referenceCounts.get(destID) + 1)
       }
     }
 
@@ -416,7 +438,7 @@ export class Canvas implements IMark {
       let destMarks = graph.get(currID)
       
       for (let i = 0; i < destMarks.length; i++) {
-        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i] - 1))
+        referenceCounts.set(destMarks[i], referenceCounts.get(destMarks[i]) - 1)
 
         if (referenceCounts.get(destMarks[i]) == 0) {
           queue.push(destMarks[i])
@@ -482,6 +504,13 @@ export class Canvas implements IMark {
   async render(context) {
     context.document ??= document;
     let svg = context.svg;
+    let graphSvg = context.graphSvg
+
+    if (context.IsErDiagram) {
+      svg = context.erDiagramSvg
+      graphSvg = context.erDiagramGraphSvg
+    }
+
     this.node = svg? select(svg) : null;
     let g = null;
     if (svg == null && this._parent == null) {
@@ -507,46 +536,56 @@ export class Canvas implements IMark {
 
     for (const m of this.sortedmarks()){
       let node = await m.render(context);
-     (g.node() as HTMLElement).appendChild(node);
+      (g.node() as HTMLElement).appendChild(node)
     }
     
     await this.taskGraph.execute()
-    this.taskGraph.visualize(context.graphSvg)
+    this.taskGraph.visualize(graphSvg)
     return this.node.node();
   }
 
-  async hier(tablename: string, attrHierarchy: string[]) {
-    let newTableNames = attrHierarchy.slice()
+  async hier(tablename: string, attrHierarchy: string[], aggFns: AggFn[], dimnames: string[]) {
+    let newTableNames = !dimnames ? attrHierarchy.slice() : dimnames
     let currTable = this.db.table(tablename)
     let prevTable = null
     let prevKeys = null
-    let rest = currTable.schema.except([...attrHierarchy, IDNAME]).attrs
-    console.log("rest hier", rest)
+    let newTables = []
 
     for (let i = 0; i < attrHierarchy.length; i++) {
-      let currAttrs = attrHierarchy.slice(0, i + 1)
-      let selectAttrs = currAttrs.slice()
-      if (i == attrHierarchy.length - 1) {
-        currAttrs = currAttrs.concat(rest)
+      let currAttrs = attrHierarchy.slice(0, i + 1) //get attributes in current level of hierarchy
+
+      let query = new Query()
+      query = query.distinct()
+      query = query.select(currAttrs)
+
+      if (i < aggFns.length && aggFns[i] != null) {
+        query = mgg.appendAggFn(query, aggFns[i])
+        query = query.groupby(currAttrs)
       }
-      
-      let select = currTable.schema.pick(currAttrs).asObject()
-      let newTable = await currTable.distinctproject(select, newTableNames[i])
+
+      query = query.from(tablename)
+
+      let newTable = await this.db.fromSql(query, newTableNames[i])
       newTable.keys(IDNAME)
-      newTable.keys(selectAttrs)
+      newTable.keys(currAttrs)
+      newTables.push(newTable)
 
       if (prevTable) {
         let c = new FKConstraint({t1: prevTable, X: prevKeys, t2: newTable, Y: prevKeys})
         this.db.addConstraint(c)
+        await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+      } else {
+        let c = new FKConstraint({t1: currTable, X: currAttrs, t2: newTable, Y: currAttrs})
+        this.db.addConstraint(c)
+        await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
       }
       prevTable = newTable
       prevKeys = currAttrs
     }
-    console.log("all constraints", this.db.constraints)
-    return newTableNames
+    return newTables
   }
 
-  async createCountTable(tablename: string, groupBy: string|string[], newTableName?) {
+  async createCountTable(tablename: string, groupBy: string|string[], newtableName?) {
     let t = this.db.table(tablename)
 
     if (!t)
@@ -554,20 +593,13 @@ export class Canvas implements IMark {
 
     groupBy = groupBy instanceof Array ? groupBy : [groupBy]
     let groupByObj = {}
-    newTableName ??= groupBy.forEach((col) => {
-      newTableName += `${col}_`
+    newtableName ??= groupBy.forEach((col) => {
+      newtableName += `${col}_`
     }) + "count"
 
     groupBy.forEach((col) => {
       groupByObj[col] = col
     }) + "count"
-
-    // groupBy.forEach((col) => {
-    //   groupByObj[col] = col
-    //   newTableName += `${col}_`
-    // })
-
-    // newTableName += "count"
 
     let query = new Query()
     query = query.select({
@@ -579,9 +611,9 @@ export class Canvas implements IMark {
     query = query.groupby(groupBy)
     query = query.from(tablename)
 
-    let newTable = await this.db.fromSql(query, newTableName)
+    let newTable = await this.db.fromSql(query, newtableName)
 
-    newTable.name(newTableName)
+    newTable.name(newtableName)
     newTable.keys(IDNAME)
     newTable.keys(groupBy)
 
@@ -590,364 +622,222 @@ export class Canvas implements IMark {
         if (constraint.Y.every(col => groupBy.includes(col))) {
           let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newTable, Y: constraint.Y})
           this.db.addConstraint(c)
+          await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
       } else if (constraint.t1.internalname == tablename) {
         if (constraint.X.every(col => groupBy.includes(col))) {
           let c = new FKConstraint({t1: newTable, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
           this.db.addConstraint(c)
+          await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
       }
     }
 
     let c = new FKConstraint({t1: newTable, X: groupBy, t2: t, Y: groupBy})
     this.db.addConstraint(c)
+    await this.db.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
 
-    return newTableName
+    return newtableName
   }
 
-  async erDiagram(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
-    let placeholder = "COMPOSITE_erdiagram"
-    this.taskGraph.addMark(placeholder)
-    this.taskGraph.addDependency(placeholder, tablesMark, true)
-    this.taskGraph.addDependency(placeholder, attributesMark, true)
-    this.taskGraph.addDependency(placeholder, fkeysMark, true)
-
-    let erDiagram = await this.taskGraph.addTask(
-        HOOK_PLACE.COMPOSITE, 
-        placeholder, 
-        async () => {return await this.runERDiagramTask(tablesMark, attributesMark, fkeysMark)}, 
-        false)
-  }
-
-  async runERDiagramTask(tablesMark: Mark, attributesMark: Mark, fkeysMark: Mark) {
-    let tablesMarkInfo = tablesMark.markInfoCache
-    let attributesMarkInfo = attributesMark.markInfoCache
-    let g = new dagre.graphlib.Graph({compound: true})
-    
-    g.setGraph({rankdir: "LR"})
-
-    //g.setDefaultEdgeLabel(function() { return {}; });
-
-    /**
-     * First get number of attrbutes per table
-     */
-    let countMap = new Map<number, number>()
-
-    for (let [id, markInfo] of attributesMarkInfo.entries()) {
-      let parentId = attributesMark.innerToOuter.get(id)
-      
-      if (!countMap.has(parentId)) {
-        countMap.set(parentId, 0)
-      }
-
-      countMap.set(parentId, countMap.get(parentId) + 1)
-    }
-
-    /**
-     * Create dagre rectangle nodes for each table
-     */
-    let baseTableWidth = 200
-    let baseTableHeight = 40
-    let attributeHeight = 20
-
-    for (let [id, markInfo] of tablesMarkInfo.entries()) {
-      let attributeCount = 0
-      if (countMap.has(id))
-        attributeCount = countMap.get(id)
-
-
-      let height = attributeCount * attributeHeight + baseTableHeight
-      let label = `${tablesMark.marktype}_${id}`
-    
-      g.setNode(label, {label: label, width: baseTableWidth, height: height, shape: "rect"})
-    }
-
-
-
-    /**
-     * Currently operate under assumption that x1,x2,y1,y2 always involve call to get
-     * AND
-     * x1 == y1 AND x2 == y2. MASSIVE ASSUMPTION MADE HERE
-     * x1_ref, x2_ref, etc. are mark ids (numbers)
-     */
-    for (let [key, value] of fkeysMark.referencedMarks) {
-      let {x1_ref, x2_ref, y1_ref, y2_ref} = value
-      let leftAttributeId = x1_ref
-      let rightAttributeId = x2_ref
-      let leftEntityId = attributesMark.innerToOuter.get(leftAttributeId)
-      let rightEntityId = attributesMark.innerToOuter.get(rightAttributeId)
-
-      g.setEdge(`${tablesMark.marktype}_${leftEntityId.toString()}`, `${tablesMark.marktype}_${rightEntityId.toString()}`, {label: `${x1_ref}#${x2_ref}#${key}`})
-    }
-
-    dagre.layout(g)
-
-
-    let tableRows = []
-
-    g.nodes().forEach(id => {
-      const rect = g.node(id);
-        let match = id.match(/^rect_(\d+)$/)
-        if (!match) {
-          //Should never end up here
-          throw new Error("Error in erDiagram: Could not parse id of texts!")
-        }
-
-        let parsedId = parseInt(match[1], 10)
-        tableRows.push({ [IDNAME]: parsedId, x: rect.x, y: rect.y, width: baseTableWidth, height: rect.height, stroke: "black", fill: "none"})
-    });
-  
-    let rowCounts = new Map<number, number>()
-
-    let attributesGroups = new Map<number, {}[]>()
-    let attributesRows = []
-
-    attributesMarkInfo.forEach((info, id) => {
-      let parentId = attributesMark.innerToOuter.get(id)
-      let parentInfo = tableRows.find((entity) => entity[IDNAME] == parentId)
-      let currRowCount = 0
-      if (!rowCounts.has(parentId)) {
-        rowCounts.set(parentId, 1)
-      } else {
-        currRowCount = rowCounts.get(parentId)
-        rowCounts.set(parentId, rowCounts.get(parentId) + 1)
-      }
-      
-      let obj = {[IDNAME]: id, x: parentInfo.x, y: parentInfo.y + (currRowCount + 1)  * 20}
-
-      for (let key of Object.keys(info)) {
-        if (!(key in obj)) {
-          obj[key] = info[key]
-        }
-      }
-      if (attributesGroups.has(parentId)) {
-        attributesGroups.get(parentId).push(obj)
-      } else {
-        attributesGroups.set(parentId, [obj])
-      }
-      attributesRows.push(obj)
-    })
-
-    let edges = g.edges().map(edge => {
-      let label: string = g.edge(edge).label
-      let ids = label.split("#",3)
-      let leftId = parseInt(ids[0])
-      let rightId = parseInt(ids[1])
-      let edgeId = parseInt(ids[2])
-
-      let leftAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == leftId)
-      let rightAttrInfo = attributesRows.find((attribute) => attribute[IDNAME] == rightId)
-
-      const source = g.node(edge.v);
-      const target = g.node(edge.w);
-
-      let leftEntityId = parseFloat(source.label.split("_",2)[1])
-      let rightEntityId = parseFloat(target.label.split("_",2)[1])
-
-      let leftEntityInfo = tableRows.find((table) => table[IDNAME] == leftEntityId)
-      let rightEntityInfo = tableRows.find((table) => table[IDNAME] == rightEntityId)
-
-
-      let x1 = leftAttrInfo.x
-      let y1 = leftAttrInfo.y
-      let x2 = rightAttrInfo.x
-      let y2 = rightAttrInfo.y
-
-      if (x1 < x2) {
-        x1 += leftEntityInfo.width
-      } else if (x2 < x1) {
-        x2 += rightEntityInfo.width
-      }
-      
-
-      return {
-        [IDNAME]: edgeId,
-        x1: x1, y1: y1,
-        x2: x2, y2: y2
-        };
-    });
-
-    /**
-     * Time to make calls to functions in newMark to create new svg stuff
-     */
-    /**
-     * Sequence:
-     * Remove all elements
-     * Render tables, then attributes, then fkey edges
-     * For each mark, call makemark, fixup the markInfo if needed and then recreate its marktable
-     */
-
-    tablesMark.node.selectAll("*").remove()
-    attributesMark.node.selectAll("*").remove()
-    fkeysMark.node.selectAll("*").remove()
-
-    let tableCols = tablesMark.rowsToCols(tableRows)
-    let fkeysCols = fkeysMark.rowsToCols(edges)
-
-
-    attributesMark._scales.x = {type: "identity"}
-    attributesMark._scales.y = {type: "identity"}
-
-    let canvasInfo = {width: this.options.width, height: this.options.height}
-    let newTablesMark = tablesMark.makemark(tableCols, canvasInfo)
-
-    select(newTablesMark.mark)
-      .selectAll(`g[aria-label='${tablesMark.mark.aria}']`)
-      .selectAll("*")
-      .each(function (d, i) {
-        let el = d3.select(this);
-        let id = parseInt(el.attr("data__rav_id"))
-        let tableRow = tableRows.find((table) => table[IDNAME] == id)
-        el.attr("x", tableRow.x)
-        el.attr("y", tableRow.y)
-        el.attr("width", tableRow.width)
-        el.attr("height", tableRow.height)
-
-        let row = newTablesMark.markInfo.find((info) => info[IDNAME] == id)
-        row.x = tableRow.x
-        row.y = tableRow.y
-        row.width = tableRow.width
-        row.height = tableRow.height
-      })
-    tablesMark.node
-      .append("g")
-      .node().appendChild(newTablesMark.mark);
-
-    tablesMark.prepareMarkInfo(newTablesMark.markInfo)
-    await tablesMark.createMarkTable(newTablesMark.markInfo)
-
-    /**
-     * End tablesMark recreation, start attributes
-     */
-    
-    let newAttributesMarkInfo = []
-    for (let [parentId, rows] of attributesGroups.entries()) {
-      let parentInfo = tableRows.find((table) => table[IDNAME] == parentId)
-      let cols = attributesMark.rowsToCols(rows)
-      let newAttributesMark = attributesMark.makemark(cols, parentInfo)
-
-      select(newAttributesMark.mark)
-        .attr("width", this.options.width)
-        .attr("height", this.options.height)
-        .attr("viewBox", `0 0 ${this.options.width} ${this.options.height}`)
-
-      newAttributesMarkInfo.push(...newAttributesMark.markInfo)
-
-      attributesMark.node
-        .append("g")
-        .node().appendChild(newAttributesMark.mark);
-    }
-
-    attributesMark.prepareMarkInfo(newAttributesMarkInfo)
-    await attributesMark.createMarkTable(newAttributesMarkInfo)
-
-    /**
-     * End attributeMarks recreation, start fkey edges
-     */
-
-    let newFkeysMark = fkeysMark.makemark(fkeysCols, canvasInfo)
-
-    const config = {stroke: "black"}
-    let fkeySvg = select(newFkeysMark.mark)
-    insertMarkers(fkeySvg, config)
-
-    fkeySvg
-    .selectAll(`g[aria-label='${fkeysMark.mark.aria}']`)
-    .selectAll("*")
-    .each(function (d, i) {
-      let el = d3.select(this);
-      let id = parseInt(el.attr("data__rav_id"))
-      let {x1_ref, x2_ref} = fkeysMark.referencedMarks.get(id)
-      let leftInfo = attributesMark.markInfoCache.get(x1_ref)
-      let rightInfo = attributesMark.markInfoCache.get(x2_ref)
-
-      if (leftInfo["textDecoration"] == "underline") { //left side is a key
-        el.attr("marker-start", `url(#${ERMarkers.ONE})`)
-      } else {
-        el.attr("marker-start", `url(#${ERMarkers.MANY})`)
-      }
-
-      if (rightInfo["textDecoration"] == "underline") { //left side is a key
-        el.attr("marker-end", `url(#${ERMarkers.ONE})`)
-      } else {
-        el.attr("marker-end", `url(#${ERMarkers.MANY})`)
-      }
-    })
-
-    fkeysMark.node
-    .append("g")
-    .node().appendChild(newFkeysMark.mark);
-
-    fkeysMark.prepareMarkInfo(newFkeysMark.markInfo)
-    await fkeysMark.createMarkTable(newFkeysMark.markInfo)
-
-    return Promise.resolve()
-  }
-
-  async bucket({table, col, bucketSize}: {table: string, col: string, bucketSize: number}) {
-    let t = this.db.table(table)
+  async createDescriptionTable(tablename: string, newtableName?) {
+    let t = this.db.table(tablename)
 
     if (!t)
-      throw new Error(`No such table ${table}`)
+      throw new Error(`No such table ${tablename}`)
 
-    let newTableName = `bucketed_${table}`
+    newtableName ??= `${tablename}_description`
 
     let query = new Query()
-
-    let bucketLabelExpr = `CONCAT(FLOOR(${col} / ${bucketSize}) * ${bucketSize}, '-', 
-         FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1))`
-
-    let minBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize}`
-    let maxBucketExpr = `FLOOR(${col} / ${bucketSize}) * ${bucketSize} + (${bucketSize} - 1)`
-
     query = query.select({
-      // count: count(),
-      [IDNAME]: idexpr,
-      [`${col}_bucket`]: sql`${bucketLabelExpr}`,
-      [`min_${col}`]: sql`${minBucketExpr}`,
-      [`max_${col}`]: sql`${maxBucketExpr}`,
+      column_name: "column_name",
+      [IDNAME]: idexpr
     })
     
-    query = query.groupby(sql`FLOOR(${col}/${bucketSize})`)
-    query = query.from(table)
+    query = query.from(sql`information_schema.columns`)
+    query = query.where(sql`table_name = '${tablename}' AND column_name <> '${IDNAME}'`)
 
-    let newTable = await this.db.fromSql(query, newTableName)
+    let newTable = await this.db.fromSql(query, newtableName)
 
-    newTable.name(newTableName)
+    newTable.name(newtableName)
     newTable.keys(IDNAME)
-    newTable.keys(`${col}_bucket`)
 
-    await this.db.conn.exec(`ALTER TABLE ${table} ADD COLUMN ${col}_bucket_id INTEGER;`)
-    await this.db.conn.exec(`UPDATE ${table}
-                            SET ${col}_bucket_id = ${newTableName}.${IDNAME}
-                            FROM ${newTableName}
-                            WHERE
-                            ${table}.${col} >= ${newTableName}.min_${col} AND
-                            ${table}.${col} <= ${newTableName}.max_${col};`)
-
-    let c = new FKConstraint({t1: newTable, X: [IDNAME], t2: t, Y: [`${col}_bucket_id`]})
-    this.db.addConstraint(c)
-
-    return newTableName
-
+    return newtableName
   }
 
-  foreignAttribute(otherTable: string | Table, otherAttr: string | string[], searchKeys: string | string[], callback?) {
-    let table : Table
-    if (typeof otherTable == "string") {
-        let t = this.db.table(otherTable)
-        if (!t)
-            throw new Error(`No such table ${otherTable}`)
-        table = t
-    } else {
-        table = otherTable
+  async createCorrTable(basetableName: string, descriptiontableName: string, newtableName?) {
+    let basetable = this.db.table(basetableName)
+
+    if (!basetable)
+      throw new Error(`No such table ${basetableName}`)
+
+    let descriptionTable = this.db.table(descriptiontableName)
+
+    if (!descriptionTable)
+      throw new Error(`No such table ${descriptiontableName}`)
+
+    newtableName ??= `${basetableName}_corr`
+
+    let query = `CREATE TABLE ${newtableName} (xaxis int, yaxis int, corrvalue float)`
+    await this.db.conn.exec(query)
+
+    query = `INSERT INTO ${newtableName} (xaxis, yaxis, corrvalue)\n`
+    for (let i = 0; i < basetable.schema.attrs.length; i++) {
+      let leftAttr = basetable.schema.attrs[i]
+      if (leftAttr == IDNAME)
+        continue
+
+      for (let j = 0; j < basetable.schema.attrs.length; j++) {
+        let rightAttr = basetable.schema.attrs[j]
+
+        if (rightAttr == IDNAME)
+          continue
+
+        query += `SELECT
+        (SELECT ${IDNAME} FROM ${descriptiontableName} WHERE column_name = '${leftAttr}') as xaxis,
+        (SELECT ${IDNAME} FROM ${descriptiontableName} WHERE column_name = '${rightAttr}') as yaxis,
+        CORR(${leftAttr}, ${rightAttr}) as corrvalue
+        FROM ${basetableName}\nUNION\n`
+      }
     }
-    otherAttr = Array.isArray(otherAttr) ? otherAttr : [otherAttr]
-    if (!otherAttr.every((attr) => table.schema.attrs.includes(attr))) {
-        throw new Error (`${otherAttr} not found in ${table.internalname}`)
-    }
-    searchKeys = Array.isArray(searchKeys) ? searchKeys : [searchKeys]
-    return {otherTable: table, searchKeys: searchKeys, otherAttr, callback: callback, isVisualChannel: false}
+    query = query.slice(0, query.length - 7)
+
+    await this.db.conn.exec(query)
+    const newTable = await this.db.tableFromConnection(newtableName)
+    await this.db.updateMetadata(newtableName)
+    this.db.setTable(newTable)
+
+    newTable.name(newtableName)
+    newTable.keys(IDNAME)
+
+
+    let c1 = new FKConstraint({t1: newTable, X: ["xaxis"], t2: descriptionTable, Y: [IDNAME]})
+    let c2 = new FKConstraint({t1: newTable, X: ["yaxis"], t2: descriptionTable, Y: [IDNAME]})
+    this.db.addConstraint(c1)
+    this.db.addConstraint(c2)
+    await this.db.updateFkeysMetadata(c1.t1.internalname, c1.t2.internalname, c1.X, c1.Y)
+    await this.db.updateFkeysMetadata(c2.t1.internalname, c2.t2.internalname, c2.X, c2.Y)
+    
+    return newtableName
+  }
+
+  getTablesUsed(): string {
+    return "(" + Array.from(this.tablesUsed).map(t => `'${t}'`).join(",") + ")"
+  }
+
+  async createTablesMetadata() {
+    await this.db.conn.exec(`CREATE TABLE tables (id int primary key, table_name string)`)
+    await this.db.conn.exec(`INSERT INTO tables SELECT (ROW_NUMBER() OVER ()) - 1 AS id, table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'main'`)
+    let t = await this.db.tableFromConnection("tables")
+    this.db.setTable(t)
+    t.name("tables")
+    t.keys("id")
+    t.keys(IDNAME)
+    return t;
+  }
+
+  async createColumnsMetadata() {
+    await this.db.conn.exec("CREATE TABLE columns(id int unique, tid int, colname string, is_key bool, type string, ord_pos int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables(id))")
+    await this.db.conn.exec(
+      `INSERT INTO columns (id, tid, colname, is_key, type, ord_pos)
+      SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+       t.id AS tid,
+       c.column_name AS colname,
+       CASE WHEN c.column_name IN (
+                SELECT k.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage k
+                    ON tc.constraint_name = k.constraint_name
+                WHERE tc.table_name = t.table_name
+                  AND tc.constraint_type = 'PRIMARY KEY'
+             )
+            THEN TRUE ELSE FALSE END AS is_key,
+       c.data_type AS type,
+       c.ordinal_position AS ord_pos
+      FROM information_schema.columns c
+      JOIN tables t
+          ON c.table_name = t.table_name
+      WHERE c.table_schema = 'main';
+      `)
+      let columnTable = await this.db.tableFromConnection("columns")
+      this.db.setTable(columnTable)
+      columnTable.name("columns")
+      columnTable.keys("id")
+      columnTable.keys(IDNAME)
+      columnTable.keys(["tid", "colname"])
+
+      let c = new FKConstraint({t1: columnTable, X: ["tid"], t2: this.db.table("tables"), Y: ["id"]})
+      this.db.addConstraint(c)
+
+      return columnTable;
+  }
+
+  async createForeignKeysMetadata() {
+    await this.db.conn.exec("CREATE TABLE fkeys (id int primary key, pos int, tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))")
+    await this.db.conn.exec(
+      `
+      WITH fk_columns AS (
+          SELECT ccu.constraint_name AS fk_name,
+                ccu.table_name AS from_table,
+                ccu.column_name AS from_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+      ),
+      pk_columns AS (
+          SELECT ccu.constraint_name AS pk_name,
+                ccu.table_name AS to_table,
+                ccu.column_name AS to_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+      ),
+      referential AS (
+          SELECT rc.constraint_name, rc.unique_constraint_name
+          FROM information_schema.referential_constraints rc
+      ),
+      joined_fkeys AS (
+          SELECT fk.from_table, fk.from_column, pk.to_table, pk.to_column, fk.fk_name, pk.pk_name
+          FROM fk_columns fk
+          JOIN referential r ON fk.fk_name = r.constraint_name
+          JOIN pk_columns pk ON r.unique_constraint_name = pk.pk_name
+      ),
+      mapped_fkeys AS (
+          SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+                (ROW_NUMBER() OVER ()) - 1 AS pos,
+                t1.id AS tid1,
+                joined_fkeys.from_column AS col1,
+                t2.id AS tid2,
+                joined_fkeys.to_column AS col2
+          FROM joined_fkeys
+          JOIN tables t1 ON joined_fkeys.from_table = t1.table_name
+          JOIN tables t2 ON joined_fkeys.to_table = t2.table_name
+          JOIN columns fk_col ON fk_col.tid = t1.id AND fk_col.colname = joined_fkeys.from_column
+          JOIN columns pk_col ON pk_col.tid = t2.id AND pk_col.colname = joined_fkeys.to_column
+          WHERE t1.table_name NOT IN ('tables', 'columns')
+            AND t2.table_name NOT IN ('tables', 'columns')
+      )
+      INSERT INTO fkeys (id, pos, tid1, col1, tid2, col2)
+      SELECT id, pos, tid1, col1, tid2, col2
+      FROM mapped_fkeys;
+      `)
+      let fkeysTable = await this.db.tableFromConnection("fkeys")
+      this.db.setTable(fkeysTable)
+      fkeysTable.name("fkeys")
+      fkeysTable.keys("id")
+      fkeysTable.keys(IDNAME)
+
+      let c1 = new FKConstraint({t1: fkeysTable, X:["tid1", "col1"], t2: this.db.table("columns"), Y:["tid", "colname"]})
+      let c2 = new FKConstraint({t1: fkeysTable, X:["tid2", "col2"], t2: this.db.table("columns"), Y:["tid", "colname"]})
+
+      this.db.addConstraint(c1)
+      this.db.addConstraint(c2)
+
+      return fkeysTable;
   }
 
 }

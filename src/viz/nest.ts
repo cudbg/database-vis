@@ -52,7 +52,6 @@ export class MarkNest implements Nest {
   innerMark;
   outerMark;
   constructor(c, fk, innerMark, outerMark) {
-    console.log(fk)
     if (fk.card != Cardinality.ONEMANY && fk.card != Cardinality.ONEONE)
       throw new Error(`Trying to nest for fk ${fk.card}`)
     this.c = c;

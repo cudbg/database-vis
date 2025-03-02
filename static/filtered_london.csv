@@ -1,0 +1,433 @@
+Unnamed: 0,Property Name,price,type,Area in sq ft,bedrooms,No. of Bathrooms,No. of Receptions,Location,city,Postal Code
+12,Ashley Park Avenue,2795000,House,5294,5,5,5,Walton-on-Thames,Surrey,KT12 1ER
+16,Cambridge Park,1450000,Flat / Apartment,1702,3,3,3,,Twickenham,TW1 2PF
+17,Hazelwood Lane,1250000,House,3503,6,6,6, Coulsdon,Surrey,CR5 3QW
+28,Ditton Grove,374950,New development,664,2,2,2,Esher,Surrey,KT10 9FN
+29,Roymount Court,400000,Flat / Apartment,805,2,2,2, Surbiton,Surrey,KT6 6NW
+47,Ashley Park Avenue,3450000,House,5599,6,6,6,Walton-on-Thames,Surrey,KT12 1EU
+63,Hampermill Lane,1675000,House,5022,3,3,3,Watford,Hertfordshire,WD19 4PL
+64,Gatehill Road,2595000,House,4858,6,6,6,Northwood,Middlesex,HA6 3QF
+68,Nicholas Way,2500000,House,5999,7,7,7,Northwood,Middlesex,HA6 2TR
+75,Weston Park,1050000,House,1693,4,4,4,Thames Ditton,Surrey,KT7 0HQ
+88,West Grove,525000,House,829,2,2,2,Woodford Green,Essex,IG8 7NP
+91,Seymour Gardens,1200000,House,2108,4,4,4,Surbiton,Surrey,KT5 8QE
+110,Stanmore Way,1225000,New development,2487,5,5,5,Loughton,Essex,IG10 2SA
+113,Ditton Grove,399950,New development,697,2,2,2,Esher,Surrey,KT10 9FN
+114,Sylvan Gardens,1499950,House,2982,5,5,5,Surbiton,Surrey,KT6 6PP
+122,Smarts Lane,695000,House,1337,3,3,3,Loughton,Essex,IG10 4BU
+127,Elizabeth Place,625000,Flat / Apartment,902,2,2,2, Esher,Surrey,KT10 8AP
+134,Ruxley Crescent,1800000,New development,3877,4,4,4, Esher,Surrey,KT10 0TX
+138,Crescent Road,1855000,House,2917,5,5,5,Kingston upon Thames,Surrey,KT2 7RD
+141,Spring Terrace,5250000,House,4745,7,7,7,Richmond,Surrey,TW9 1LW
+142,Montague Road,6000000,House,4798,6,6,6,Richmond,Surrey,TW10 6QW
+182,Selborne Villas,1150000,House,2357,4,4,4, Esher,Surrey,KT10 9UD
+194,The Grange,1050000,House,2375,5,5,5, Walton-on-Thames,Surrey,KT12 3HN
+198,Littleworth Avenue,2795000,House,6061,7,7,7,Esher,Surrey,KT10 9PB
+199,Ruxley Crescent,1750000,New development,3913,4,4,4, Esher,Surrey,KT10 0TX
+213,Corkran Road,1595000,House,3261,5,5,5,Surbiton,Surrey,KT6 6PN
+216,Oxhey Road,850000,House,1687,4,4,4,Oxhey,Hertfordshire,WD19 4QG
+224,Harper Lane,1650000,House,4016,8,8,8, Radlett,Hertfordshire,WD7 9HJ
+242,Grand Avenue,500000,House,963,2,2,2,Surbiton,Surrey,KT5 9HU
+246,The Spinney,2395000,House,4966,5,5,5, Oxshott,Surrey,KT22 0PL
+252,The Mount,3650000,House,8034,6,6,6,Esher,Surrey,KT10 8LQ
+264,Tormead,600000,Flat / Apartment,1160,2,2,2, Northwood,Middlesex,HA6 2BX
+271,Lynwood Road,825000,House,2094,4,4,4,Thames Ditton,Surrey,KT7 0DJ
+275,Ducks Hill Road,1000000,New development,1501,3,3,3,Northwood,Middlesex,HA6 2SB
+290,St. Marys Road,2900000,House,5896,7,7,7, Surbiton,Surrey,KT6 5EY
+302,High Road,650000,House,1783,3,3,3, Coulsdon,Surrey,CR5 3SD
+328,Leys Road,4825000,House,10475,7,7,7,Oxshott,Surrey,KT22 0QE
+334,Hazelwood Drive,775000,Bungalow,1459,4,4,4,Pinner,Middlesex,HA5 3TT
+348,Paxton Close,699950,House,909,3,3,3,Richmond,Surrey,TW9 2AW
+349,Hardwicke House,665000,Flat / Apartment,935,3,3,3, Richmond,Surrey,TW10 6PW
+351,Westminster Close,1550000,House,3112,5,5,5,Northwood,Middlesex,HA6 2TG
+354,Barclay Oval,1100000,House,3153,5,5,5,Woodford Green,Essex,IG8 0PP
+360,Waynflete House,575000,Penthouse,1029,3,3,3, Esher,Surrey,KT10 9QS
+361,94 Claygate,334950,Flat / Apartment,477,1,1,1, Claygate,Surrey,KT10 0RB
+363,Queens Road,750000,House,1510,3,3,3,Thames Ditton,Surrey,KT7 0QX
+364,Southborough Road,2100000,New development,3596,5,5,5,Surbiton,Surrey,KT6 6JN
+365,Pavilion Park,1299000,New development,1903,4,4,4, East Molesey,Surrey,KT8 9DX
+380,Hilltop,1050000,House,2254,5,5,5,Loughton,Essex,IG10 1PX
+397,Church Road,550000,Flat / Apartment,582,2,2,2,Richmond,Surrey,TW9 1UA
+400,Regents Drive,950000,House,1857,4,4,4,Woodford Green,Essex,IG8 8RZ
+401,Piercing Hill,799999,House,1507,4,4,4, Epping,Essex,CM16 7JN
+410,Octavia House,615000,Flat / Apartment,797,1,1,1,Imperial Wharf,Fulham,SW6 2FH
+414,Evelyn Road,1285000,House,1476,3,3,3,Richmond,Surrey,TW9 2TF
+421,Stokesheath Road,4650000,House,7996,6,6,6,Oxshott,Surrey,KT22 0PN
+422,Tile Kiln Lane,1695000,House,6356,6,6,6, Uxbridge,Middlesex,UB9 6LU
+426,Cottimore Avenue,649950,House,1378,4,4,4,Walton-on-Thames,Surrey,KT12 2AE
+432,Burwood Park Road,1295000,House,2371,5,5,5, Walton-on-Thames,Surrey,KT12 5LJ
+433,Forge Lane,975000,House,1201,3,3,3,Richmond,Surrey,TW10 7BF
+434,High Oaks Close,1100000,House,3185,5,5,5,Coulsdon,Surrey,CR5 3EZ
+438,Turpins Lane,700000,House,1441,4,4,4,Woodford Green,Essex,IG8 8AZ
+449,Trystings Close,1125000,House,2495,5,5,5, Esher,Surrey,KT10 0TF
+457,Onslow Road,800000,Flat / Apartment,734,2,2,2,Richmond,Surrey,TW10 6QH
+458,Old Oak Avenue,950000,House,3006,5,5,5, Coulsdon,Surrey,CR5 3PG
+473,Chestnut Court,500000,Flat / Apartment,872,2,2,2, Northwood,Middlesex,HA6 3NL
+506,Southborough Road,1995000,New development,3510,5,5,5,Surbiton,Surrey,KT6 6JN
+517,Kingston Hill,2395000,House,3498,5,5,5,Kingston upon Thames,Surrey,KT2 7LN
+524,St. Johns Road,1895000,House,2564,5,5,5,Richmond,Surrey,TW9 2PE
+533,Esher Place Avenue,2150000,House,3177,5,5,5,Esher,Surrey,KT10 8PY
+534,Common Road,785000,New development,1474,3,3,3, Esher,Surrey,KT10 0HG
+536,Sheen Road,2850000,House,5130,7,7,7,Richmond,Surrey,TW10 5AL
+537,Birds Hill Drive,5950000,New development,11716,6,6,6,Oxshott,Surrey,KT22 0SW
+555,Ashburnham Park,2995000,House,5614,6,6,6,Esher,Surrey,KT10 9TW
+556,Claremont Drive,2250000,House,3661,4,4,4,Esher,Surrey,KT10 9LU
+557,Sandown Road,2995000,House,7087,7,7,7,Esher,Surrey,KT10 9TT
+558,Pavilion Park,1100000,New development,1629,3,3,3, East Molesey,Surrey,KT8 9DX
+559,Berwyn Road,3350000,House,3770,6,6,6,Richmond,Surrey,TW10 5BP
+571,Scotland Road,995000,House,1706,5,5,5,Buckhurst Hill,Essex,IG9 5NP
+584,Wieland Road,1395000,House,2141,4,4,4,Northwood,Middlesex,HA6 3RD
+585,Ravenswood Park,799950,House,1519,4,4,4,Northwood,Middlesex,HA6 3PS
+586,Grove Lane,975000,Bungalow,2169,3,3,3,Chigwell,Essex,IG7 6JD
+595,Herne Road,1450000,House,2523,4,4,4,Surbiton,Surrey,KT6 5BX
+616,Portland Terrace,775000,Flat / Apartment,705,2,2,2, Richmond,Surrey,TW9 1QQ
+617,Eastbury Road,975000,House,1200,3,3,3,Northwood,Middlesex,HA6 3AJ
+622,Chatsworth Place,1595000,House,3069,5,5,5,Oxshott,Surrey,KT22 0SS
+637,Upper Richmond Road West,1225000,House,1633,4,4,4,Richmond,Surrey,TW10 5DY
+652,Queens Road,775000,House,1169,3,3,3,,Twickenham,TW1 4ET
+653,Church Road,550000,Flat / Apartment,676,2,2,2,Richmond,Surrey,TW10 6LN
+654,High Road,1500000,House,4023,7,7,7, Coulsdon,Surrey,CR5 3QN
+666,Whitehall Lane,1000000,House,2000,4,4,4,Buckhurst Hill,Essex,IG9 5JG
+667,Baldwins Hill,1250000,House,2244,4,4,4,Loughton,Essex,IG10 1SD
+677,Manor Road South,1349950,House,2986,5,5,5,Esher,Surrey,KT10 0QQ
+678,Grove Road,1350000,House,1890,4,4,4,East Molesey,Surrey,KT8 9JS
+680,Milbourne Lane,625000,House,968,3,3,3,Esher,Surrey,KT10 9EA
+681,Matham Road,2250000,House,4312,5,5,5,East Molesey,Surrey,KT8 0SX
+682,Sandown Road,2350000,House,3861,5,5,5,Esher,Surrey,KT10 9TU
+683,Manor Drive,900000,House,1437,3,3,3,Esher,Surrey,KT10 0AU
+700,Newlands Close,375000,House,880,3,3,3, Walton-on-Thames,Surrey,KT12 4PW
+705,The Green,4495000,House,4063,6,6,6,Richmond,Surrey,TW9 1PX
+706,Sandy Lane,1350000,Bungalow,2912,4,4,4,Northwood,Middlesex,HA6 3ER
+717,River Bank,520000,Flat / Apartment,944,2,2,2,East Molesey,Surrey,KT8 9BH
+738,Ormond Avenue,1650000,House,1750,4,4,4,Richmond,Surrey,TW10 6TN
+759,Adela Avenue,765000,House,1500,4,4,4,New Malden,Surrey,KT3 6LE
+760,Hersham Road,1250000,House,2502,5,5,5,Walton-on-Thames,Surrey,KT12 1LL
+771,Ember Lane,925000,House,1270,4,4,4,Esher,Surrey,KT10 8ER
+796,The Chase,700000,House,1174,4,4,4,Loughton,Essex,IG10 4RE
+797,Piercing Hill,1350000,House,2312,4,4,4, Epping,Essex,CM16 7JW
+802,Carleton Close,1275000,House,2344,5,5,5,Esher,Surrey,KT10 8EE
+821,Strawberry Vale,1999995,House,2537,5,5,5,,Twickenham,TW1 4RX
+824,Woodhouse Eaves,1050000,House,1677,4,4,4,Northwood,Middlesex,HA6 3NF
+832,Palace Road,2950000,House,4389,6,6,6,East Molesey,Surrey,KT8 9DW
+849,Winterdown Road,675000,House,915,2,2,2,Esher,Surrey,KT10 8LP
+866,The Green,525000,Flat / Apartment,1299,3,3,3, Buckhurst Hill,Essex,IG9 5NQ
+870,Parkhill,2100000,Flat / Apartment,2810,3,3,3, Esher,Surrey,KT10 9NP
+871,Greenways,1000000,House,2590,4,4,4,Esher,Surrey,KT10 0QD
+886,Northumberland Place,2950000,House,2400,3,3,3,Richmond,Surrey,TW10 6TS
+890,Victoria Avenue,1495000,House,2566,5,5,5,Surbiton,Surrey,KT6 5DL
+891,Arnison Road,2250000,House,3364,5,5,5,East Molesey,Surrey,KT8 9JJ
+892,Upper Richmond Road West,1250000,House,2032,6,6,6,Richmond,Surrey,TW10 5DY
+903,Edge Apartments,995000,Flat / Apartment,1243,2,2,2, Twickenham,Middlesex,TW1 4RX
+904,Church Road,3450000,House,3825,5,5,5, Richmond,Surrey,TW10 5HG
+906,Stanmore Hill,2500000,House,4222,6,6,6,Stanmore,Middlesex,HA7 3BY
+910,Monkhams Avenue,1250000,House,1901,4,4,4,Woodford Green,Essex,IG8 0HB
+932,Lebanon Park,2750000,House,2999,7,7,7,Twickenham,Middlesex,TW1 3DG
+960,Vincent Close,1550000,House,2602,4,4,4,Esher,Surrey,KT10 8AW
+961,Summer Road,1325000,House,2410,5,5,5,Thames Ditton,Surrey,KT7 0QP
+974,Lammas Road,725000,House,1344,5,5,5,Richmond,Surrey,TW10 7YD
+980,St Marys Avenue,1225000,House,2289,5,5,5,Northwood,Middlesex,HA6 3AY
+981,Saxon Court,585000,Flat / Apartment,1032,2,2,2, Northwood,Middlesex,HA6 3FG
+989,Basuto Road,1950000,House,1795,3,3,3, Parsons Green,Fulham,SW6 4BL
+991,Ember Lane,1250000,House,1980,4,4,4,Esher,Surrey,KT10 8EQ
+992,Sandown House,975000,Penthouse,1634,3,3,3, Esher,Surrey,KT10 9SL
+993,Pine Walk,1100000,House,1716,4,4,4,Surbiton,Surrey,KT5 8NJ
+1003,Green Lane,1275000,House,2711,5,5,5,Oxhey,Hertfordshire,WD19 4NJ
+1011,The Butts,2950000,House,4034,6,6,6,Brentford,Middlesex,TW8 8BJ
+1018,Rydens Road,1395000,House,3178,4,4,4,Walton-On-Thames,Surrey,KT12 3AA
+1020,Richmond Hill,2975000,House,3352,6,6,6,Richmond,Surrey,TW10 6QX
+1030,Winterdown Road,850000,House,1336,3,3,3,Esher,Surrey,KT10 8LP
+1039,Hazel Lane,2500000,House,4420,6,6,6,Richmond,Surrey,TW10 7AP
+1040,New Road,950000,House,1397,3,3,3,Richmond,Surrey,TW10 7HY
+1050,Rookery Hill,1750000,House,3184,4,4,4,Ashtead,Surrey,KT21 1EG
+1055,Petersham Road,3250000,House,2989,4,4,4,Richmond,Surrey,TW10 7AH
+1061,The Watergardens,500000,Flat / Apartment,1008,3,3,3, Woodford Green,Essex,IG8 0GD
+1067,Wayneflete Tower Avenue,3300000,House,6309,5,5,5,Esher,Surrey,KT10 8QG
+1076,Liverpool Road,2895000,House,3660,6,6,6,Kingston upon Thames,Surrey,KT2 7SX
+1086,Pavilion Park,995000,New development,1681,3,3,3, East Molesey,Surrey,KT8 9DX
+1087,Sheen Common Drive,5500000,House,5453,6,6,6,Richmond,Surrey,TW10 5BN
+1098,Hillside Rise,700000,Bungalow,1301,3,3,3,Northwood,Middlesex,HA6 1RR
+1103,The Uplands,1695000,House,3683,5,5,5,Loughton,Essex,IG10 1NH
+1104,High Silver,1095000,House,1728,4,4,4,Loughton,Essex,IG10 4EL
+1105,Monkhams Avenue,1325000,House,2659,5,5,5,Woodford Green,Essex,IG8 0ER
+1108,Claremont Drive,2000000,House,3556,6,6,6,Esher,Surrey,KT10 9LU
+1109,Lynwood Road,1095000,House,2442,5,5,5,Thames Ditton,Surrey,KT7 0DN
+1118,The Close,680000,House,1125,3,3,3,Richmond,Surrey,TW9 4QW
+1120,Shaftesbury,675000,House,1153,4,4,4,Loughton,Essex,IG10 1HN
+1121,Upshirebury Green,475000,House,890,2,2,2,Waltham Abbey,Essex,EN9 3SU
+1122,Coppice Row,1265000,House,2568,5,5,5, Epping,Essex,CM16 7DN
+1123,Stokesheath Road,3500000,House,11077,6,6,6,Oxshott,Surrey,KT22 0PS
+1135,Bishops Gate,1045000,New development,810,2,2,2, Fulham High Street,Fulham,SW6 3LF
+1145,Heathside Close,1250000,House,1880,4,4,4,Moor Park,Middlesex,HA6 2EQ
+1149,Upshirebury Green,1195000,House,2737,4,4,4,Waltham Abbey,Essex,EN9 3ST
+1172,Richmond Hill,595000,Flat / Apartment,786,2,2,2,Richmond,Surrey,TW10 6QX
+1173,Onslow Avenue,2100000,House,2296,4,4,4,Richmond,Surrey,TW10 6QB
+1179,Connaught Avenue,2750000,House,4925,6,6,6,Loughton,Essex,IG10 4DS
+1188,St. Marys Road,1995000,House,3605,6,6,6, Surbiton,Surrey,KT6 5EU
+1189,Ember Lane,1595000,House,3304,6,6,6,Esher,Surrey,KT10 8DZ
+1191,Sheen Common Drive,2650000,House,2229,4,4,4,Richmond,Surrey,TW10 5BN
+1197,Ashley Gardens,1300000,House,2484,4,4,4,Richmond,Surrey,TW10 7BU
+1216,Meadowbank,625000,House,1213,4,4,4, Watford,Hertfordshire,WD19 4NP
+1217,Copperbeech Court,575000,Flat / Apartment,1092,2,2,2, Northwood,Middlesex,HA6 2YJ
+1240,Birds Hill Road,7500000,House,12526,7,7,7,Oxshott,Surrey,KT22 0NJ
+1251,Ravens Close,475000,Flat / Apartment,645,2,2,2,Surbiton,Surrey,KT6 4QG
+1252,Pavilion Park,425000,New development,603,1,1,1, East Molesey,Surrey,KT8 9DX
+1267,Kings Hill,1075000,House,2096,4,4,4,Loughton,Essex,IG10 1HY
+1276,Queens Road,2250000,House,2946,4,4,4,Kingston upon Thames,Surrey,KT2 7SN
+1280,Church Road,600000,House,1041,2,2,2,Northwood,Middlesex,HA6 1AR
+1292,New Road,4950000,House,7043,6,6,6,Esher,Surrey,KT10 9PG
+1293,Pavilion Park,555000,New development,753,2,2,2, East Molesey,Surrey,KT8 9DX
+1306,Sheen Road,1200000,House,1662,4,4,4,Richmond,Surrey,TW9 1YJ
+1322,Middlefield Close,899950,House,2915,5,5,5, Coulsdon,Surrey,CR5 3NX
+1324,Nicholas Way,2995000,House,5517,7,7,7,Northwood,Middlesex,HA6 2TR
+1348,Mount Ararat Road,2850000,House,3008,5,5,5,Richmond,Surrey,TW10 6PQ
+1349,Mount Ararat Road,2450000,House,2300,5,5,5,Richmond,Surrey,TW10 6PH
+1350,Copse Wood Way,1600000,House,2071,4,4,4,Northwood,Middlesex,HA6 2TZ
+1351,Hale End Road,450000,Flat / Apartment,790,2,2,2,Woodford Green,Essex,IG8 9LL
+1355,Pavilion Park,545000,New development,767,2,2,2, East Molesey,Surrey,KT8 9DX
+1367,The Drive,950000,House,2348,4,4,4,Northwood,Middlesex,HA6 1HW
+1368,Halland Way,1750000,House,4387,4,4,4,Northwood,Middlesex,HA6 2BY
+1383,Neville House,450000,Flat / Apartment,646,1,1,1,137 London Road,Twickenham,TW1 1EG
+1384,Rossway Drive,600000,House,1202,4,4,4,Bushey,Hertfordshire,WD23 3EW
+1386,Furze Field,6950000,New development,11177,6,6,6,Oxshott,Surrey,KT22 0UR
+1389,Malthouse Court,700000,Flat / Apartment,1121,2,2,2, Brentford,Middlesex,TW8 0FR
+1405,Manor Road South,1350000,House,2545,4,4,4,Esher,Surrey,KT10 0PY
+1416,River Lane,7500000,House,6863,5,5,5,Richmond,Surrey,TW10 7AG
+1417,Townshend Terrace,1285000,House,1011,3,3,3,Richmond,Surrey,TW9 1XJ
+1420,Bishops Avenue,925000,Bungalow,1270,2,2,2,Northwood,Middlesex,HA6 3DD
+1421,Wildacres,1595000,House,3578,5,5,5,Northwood,Middlesex,HA6 3JD
+1426,Chiltern Way,995000,House,1889,4,4,4,Woodford Green,Essex,IG8 0RQ
+1427,Monkhams Avenue,1195000,House,1720,4,4,4,Woodford Green,Essex,IG8 0HA
+1428,Ollards Grove,1395000,House,2427,5,5,5,Loughton,Essex,IG10 4DW
+1442,The Mount,1650000,House,2644,4,4,4,Esher,Surrey,KT10 8LQ
+1443,The Mount,1995000,House,5982,5,5,5,Esher,Surrey,KT10 8LQ
+1463,Watcombe Cottages,900000,House,836,2,2,2,Richmond,Surrey,TW9 3BD
+1470,Blackhills,3495000,House,7886,6,6,6,Esher,Surrey,KT10 9JP
+1477,Oakside Court,500000,New development,808,2,2,2, Northwood,Middlesex,HA6 1AW
+1488,Kew Bridge Road,765000,New development,858,2,2,2,Brentford,Middlesex,TW8 0RF
+1523,Chisholm Road,2000000,House,1719,4,4,4,Richmond,Surrey,TW10 6JH
+1529,Birdshill Road,6000000,House,12546,7,7,7, Leatherhead,Surrey,KT22 0NJ
+1557,Marchmont Gardens,2750000,House,2213,5,5,5,Richmond,Surrey,TW10 6ET
+1559,Oaklands,2500000,House,4012,5,5,5, Loughton,Essex,IG10 4RL
+1570,Spring Terrace,2850000,House,2934,5,5,5,Richmond,Surrey,TW9 1LW
+1571,Ashurst Close,750000,House,1309,3,3,3,Northwood,Middlesex,HA6 1EL
+1573,Woburn Avenue,535000,House,900,3,3,3, Epping,Essex,CM16 7JS
+1574,Woodredon Farm,575000,Bungalow,1013,3,3,3, Waltham Abbey,Essex,EN9 3SX
+1607,Alexandra Road,1300000,House,1626,4,4,4,,Twickenham,TW1 2HE
+1608,Edward Blore Mews,1095000,House,1322,3,3,3,Egerton Drive,Middlesex,TW7 7FE
+1609,Eastbury Road,1050000,House,2562,4,4,4, Watford,Hertfordshire,WD19 4JN
+1612,Queens Avenue,1445000,House,2468,6,6,6,Woodford Green,Essex,IG8 0JE
+1626,Connaught Avenue,2395000,House,5300,7,7,7,Loughton,Essex,IG10 4DP
+1643,Ormond Road,2850000,House,2338,4,4,4,Richmond,Surrey,TW10 6TH
+1645,East Towers,930000,House,1834,5,5,5,Pinner,Middlesex,HA5 1TL
+1647,Waverley Court,900000,Flat / Apartment,650,2,2,2,34-37 Beaumont Street,Marylebone,W1G 6DH
+1654,Lippitts Hill,1065000,House,2625,5,5,5,Loughton,Essex,IG10 4AL
+1661,Redruth Gardens,1795000,House,3796,6,6,6, Esher,Surrey,KT10 0HD
+1662,Wolsey Road,935000,House,1583,3,3,3,Esher,Surrey,KT10 8NX
+1663,New Road,2695000,House,5164,5,5,5,Esher,Surrey,KT10 9NU
+1673,College Drive,1600000,House,2609,5,5,5,Thames Ditton,Surrey,KT7 0LB
+1688,Cedar Park,700000,House,942,3,3,3, Chigwell,Essex,IG7 5AL
+1694,Sentis Court,595000,Flat / Apartment,1197,2,2,2, Northwood,Middlesex,HA6 3NG
+1705,The Water Gardens,1180000,Flat / Apartment,1732,3,3,3, Kingston upon Thames,Surrey,KT2 7LF
+1712,Albany Park Road,2700000,House,3705,6,6,6,Kingston upon Thames,Surrey,KT2 5SW
+1717,King Edwards Road,1725000,House,2512,5,5,5,Ruislip,Middlesex,HA4 7AQ
+1718,Greenhill Court,550000,Flat / Apartment,1899,2,2,2, Northwood,Middlesex,HA6 2BD
+1738,Grove Way,1630000,House,3457,6,6,6,Esher,Surrey,KT10 8HQ
+1739,Westville Road,1195000,House,1953,5,5,5,Thames Ditton,Surrey,KT7 0UH
+1740,St. Leonards Road,1595000,House,3110,4,4,4,Thames Ditton,Surrey,KT7 0RN
+1741,New Road,1850000,House,2739,5,5,5,Esher,Surrey,KT10 9NU
+1742,Carrington Place,725000,Flat / Apartment,1328,3,3,3, Esher,Surrey,KT10 9SF
+1743,Sandown House,895000,Flat / Apartment,1255,2,2,2, Esher,Surrey,KT10 9SL
+1744,Wolsey Road,775000,House,1160,3,3,3,Esher,Surrey,KT10 8NT
+1785,Villiers Avenue,765000,House,1143,3,3,3,Surbiton,Surrey,KT5 8BH
+1786,Berrylands Road,1050000,House,1949,4,4,4,Surbiton,Surrey,KT5 8PD
+1836,Arbrook Lane,1950000,House,2817,6,6,6,Esher,Surrey,KT10 9EG
+1842,Mount Park Road,2000000,House,2593,4,4,4,Harrow On The Hill,Middlesex,HA1 3LD
+1869,The Drive,1400000,Bungalow,2921,4,4,4, Uxbridge,Middlesex,UB10 8AF
+1873,Montrose Gardens,4750000,House,8590,7,7,7,Oxshott,Surrey,KT22 0UU
+1875,Leys Road,4300000,House,9623,7,7,7,Oxshott,Surrey,KT22 0QE
+1880,Denton Road,1800000,House,2098,4,4,4,,Twickenham,TW1 2TN
+1915,Deerings Drive,975000,House,1448,4,4,4,Pinner,Middlesex,HA5 2NZ
+1917,Upper Halliford Road,325000,Flat / Apartment,601,2,2,2,Shepperton,Middlesex,TW17 8SH
+1921,Hillbrow,850000,Flat / Apartment,1239,3,3,3, Richmond,Surrey,TW10 6BH
+1922,Church Road,3950000,House,4629,6,6,6, Richmond,Surrey,TW10 5HG
+1924,Spencer Road,1950000,House,2797,6,6,6,East Molesey,Surrey,KT8 0SP
+1945,Kensington House,650000,Flat / Apartment,1162,2,2,2, Woodford Green,Essex,IG8 8RJ
+1963,Ravenswood Park,1100000,House,2007,4,4,4,Northwood,Middlesex,HA6 3PR
+1964,Davenham Avenue,1600000,House,2914,4,4,4,Northwood,Middlesex,HA6 3HW
+1968,Barwell Court Farmhouse,699950,House,1410,3,3,3, Chessington,Surrey,KT9 2LZ
+1973,George Road,1750000,New development,2553,5,5,5,Kingston Upon Thames,Surrey,KT2 7NR
+1977,Cholmondeley Walk,3250000,House,3410,3,3,3,Richmond,Surrey,TW9 1NS
+1981,Ormond Road,1025000,Flat / Apartment,992,3,3,3,Richmond,Surrey,TW10 6TH
+1985,Greenhill Court,575000,Flat / Apartment,997,2,2,2, Northwood,Middlesex,HA6 2BD
+1986,Orchard Rise,2650000,House,3009,5,5,5,Richmond,Surrey,TW10 5BX
+1997,Melrose Road,630000,House,1596,4,4,4,Coulsdon,Surrey,CR5 3JH
+2002,Aragon Avenue,900000,House,1363,4,4,4,Thames Ditton,Surrey,KT7 0PY
+2003,Woodbourne Drive,1195000,House,2149,4,4,4, Esher,Surrey,KT10 0DR
+2027,Broom Close,1550000,House,3065,4,4,4,Esher,Surrey,KT10 9ET
+2040,Cygnet Close,1295000,House,2055,4,4,4,Northwood,Middlesex,HA6 2TA
+2045,Ember Lane,1299995,House,2394,5,5,5,Esher,Surrey,KT10 8EF
+2046,Palace Road,2850000,House,5116,6,6,6,East Molesey,Surrey,KT8 9DW
+2047,Sheen Common Drive,2650000,House,2942,6,6,6,Richmond,Surrey,TW10 5BW
+2050,The Chase,2850000,House,5380,6,6,6, Tadworth,Surrey,KT20 6HZ
+2062,Priory Lane,699950,House,1226,3,3,3,West Molesey,Surrey,KT8 2PS
+2072,Kings Drive,1200000,House,2491,3,3,3,Surbiton,Surrey,KT5 8NQ
+2073,Winterdown Road,899950,House,1504,3,3,3,Esher,Surrey,KT10 8LJ
+2083,Princes Drive,2500000,House,5101,6,6,6, Leatherhead,Surrey,KT22 0UL
+2092,Herne Road,995000,House,1839,5,5,5,Surbiton,Surrey,KT6 5BX
+2095,Broom Road,2275000,House,2803,5,5,5,Teddington,Middlesex,TW11 9PG
+2104,The Gallops,825000,House,1272,3,3,3,Esher,Surrey,KT10 8BN
+2112,Brendon Close,1650000,House,3285,4,4,4,Esher,Surrey,KT10 9EH
+2116,Ensleigh Lodge,4250000,House,3893,5,5,5,25 Ham Common,Surrey,TW10 7JB
+2119,Blackhills,1999500,House,3769,5,5,5,Esher,Surrey,KT10 9JW
+2123,Seymour Road,1550000,New development,2690,5,5,5,East Molesey,Surrey,KT8 0PF
+2125,Park Road,1925000,House,4124,6,6,6,Banstead,Surrey,SM7 3EF
+2132,Norman Avenue,1900000,House,2061,5,5,5,,Twickenham,TW1 2LY
+2133,Frithwood Avenue,450000,Flat / Apartment,708,2,2,2,Northwood,Middlesex,HA6 3LX
+2153,Queens Road,625000,Flat / Apartment,729,2,2,2,Richmond,Surrey,TW10 6JW
+2154,Oak Lodge Avenue,1000000,House,2232,5,5,5,Chigwell,Essex,IG7 5JA
+2164,Castle Road,1500000,House,5587,7,7,7, Coulsdon,Surrey,CR5 3NS
+2166,Cole Park Road,2295000,House,3823,6,6,6,,Twickenham,TW1 1HT
+2168,Sheen Common Drive,3650000,House,4135,5,5,5,Richmond,Surrey,TW10 5BN
+2170,Sandown House,650000,Flat / Apartment,1031,2,2,2, Esher,Surrey,KT10 9SL
+2219,Southmont Road,999950,House,2249,5,5,5,Esher,Surrey,KT10 9BG
+2226,Marchbank House,525000,Flat / Apartment,1239,2,2,2, Northwood,Middlesex,HA6 2SG
+2266,Hills Lane,880000,House,1573,3,3,3,Northwood,Middlesex,HA6 2QL
+2278,Rivermead,1100000,House,1822,4,4,4,East Molesey,Surrey,KT8 9AZ
+2279,Ashley Park Avenue,2795000,House,4704,4,4,4,Walton-on-Thames,Surrey,KT12 1ET
+2304,Kreisel Walk,1695000,House,1842,4,4,4,Richmond,Surrey,TW9 3AL
+2313,Arnison Road,1650000,House,2698,5,5,5,East Molesey,Surrey,KT8 9JF
+2314,Manor Drive,925000,House,1483,4,4,4,Esher,Surrey,KT10 0AU
+2327,Arnison Road,2575000,House,3785,5,5,5,East Molesey,Surrey,KT8 9JJ
+2341,Church Road,675000,Flat / Apartment,863,2,2,2,Richmond,Surrey,TW10 6LW
+2346,Pudding Lane,3750000,House,5272,5,5,5,Chigwell,Essex,IG7 6BY
+2347,Station Way,285000,Flat / Apartment,693,2,2,2,Buckhurst Hill,Essex,IG9 6LN
+2348,Newnham House,470000,Flat / Apartment,885,2,2,2, Loughton,Essex,IG10 4JH
+2368,Grosvenor Road,2000000,House,1884,5,5,5,Richmond,Surrey,TW10 6PE
+2372,Copse Wood Way,1750000,House,3026,5,5,5,Northwood,Middlesex,HA6 2UB
+2386,Princes Drive,5950000,New development,11610,6,6,6,Oxshott,Surrey,KT22 0UL
+2401,Haven Place,1150000,House,2382,5,5,5, Esher,Surrey,KT10 9AQ
+2402,Imber Park Road,900000,House,1606,4,4,4,Esher,Surrey,KT10 8JB
+2403,Tolworth Road,500000,House,669,2,2,2,Surbiton,Surrey,KT6 7TA
+2404,Queens Drive,1150000,House,1961,4,4,4,Surbiton,Surrey,KT5 8PP
+2434,Hampton Court Road,2750000,House,5810,5,5,5,East Molesey,Surrey,KT8 9BW
+2435,Outwood Lane,875000,House,1756,4,4,4,Chipstead,Surrey,CR5 3NB
+2448,Grove Farm Park,1200000,House,2194,6,6,6,Northwood,Middlesex,HA6 2BQ
+2460,Pelhams Walk,2350000,New development,4777,5,5,5,Esher,Surrey,KT10 8QD
+2461,Roy Road,1000000,House,2544,4,4,4,Northwood,Middlesex,HA6 1EH
+2463,New Road,1575000,House,2369,4,4,4,Esher,Surrey,KT10 9NU
+2490,The Bowls,675000,Flat / Apartment,1533,3,3,3,Chigwell,Essex,IG7 6ND
+2503,Waldegrave Road,1599999,House,1704,4,4,4,,Twickenham,TW1 4SU
+2507,Highwood House,525000,Flat / Apartment,844,2,2,2, Esher,Surrey,KT10 8BP
+2510,Myrtleside Close,550000,Flat / Apartment,1103,2,2,2,Northwood,Middlesex,HA6 2XQ
+2520,Waldegrave Park,3700000,House,4438,6,6,6,Twickenham,Middlesex,TW1 4TJ
+2522,Queens Road,1400000,Flat / Apartment,1388,3,3,3,Richmond,Surrey,TW10 6JW
+2527,Esher Green,2250000,House,3874,5,5,5,Esher,Surrey,KT10 8AD
+2530,Spencer Road,2850000,House,4094,5,5,5,East Molesey,Surrey,KT8 0SP
+2532,Wolsey Road,2500000,House,3740,6,6,6,East Molesey,Surrey,KT8 9EW
+2535,Ollards Grove,1450000,House,2322,5,5,5,Loughton,Essex,IG10 4DW
+2547,Russell Villas,2350000,House,2115,4,4,4,Willoughby Road,Twickenham,TW1 2QG
+2548,Sandy Lane,2195000,House,3337,5,5,5,Teddington,Middlesex,TW11 0DR
+2549,Stanley Road,915000,Bungalow,1771,5,5,5,Northwood,Middlesex,HA6 1RQ
+2552,Pelhams Walk,1895000,House,3225,5,5,5,Esher,Surrey,KT10 8QD
+2553,Claremont Avenue,1295000,House,2331,4,4,4,Esher,Surrey,KT10 9JD
+2557,Denbigh Gardens,5250000,House,4386,5,5,5,Richmond,Surrey,TW10 6EN
+2561,Outwood Lane,3950000,House,10807,7,7,7, Tadworth,Surrey,KT20 6JS
+2564,Stokesheath Road,4500000,House,7935,6,6,6,Oxshott,Surrey,KT22 0PN
+2569,Ditton Grove,925000,House,1642,3,3,3,Esher,Surrey,KT10 9FN
+2581,Bridge House,530000,New development,848,2,2,2, Loughton,Essex,IG10 3ED
+2597,Leopold Court,1300000,Flat / Apartment,1946,3,3,3, Esher,Surrey,KT10 9BW
+2607,Monkhams Avenue,1595000,House,2363,5,5,5,Woodford Green,Essex,IG8 0EX
+2608,Thorkhill Road,1000000,House,1714,5,5,5,Thames Ditton,Surrey,KT7 0UG
+2611,Murray Road,1600000,House,2825,5,5,5,Northwood,Middlesex,HA6 2YP
+2615,Wimpole Street,1895000,Flat / Apartment,1079,3,3,3,,Marylebone,W1G 8AE
+2625,Common Road,5000000,House,5156,6,6,6,Stanmore,Middlesex,HA7 3JF
+2626,Aissele Place,899950,House,1743,3,3,3, Esher,Surrey,KT10 9RL
+2627,Claremont End,2650000,House,4141,5,5,5,Esher,Surrey,KT10 9LZ
+2635,Hallowell Road,500000,House,792,2,2,2,Northwood,Middlesex,HA6 1DU
+2653,Copsem Drive,2125000,House,3763,5,5,5,Esher,Surrey,KT10 9HD
+2667,Weston Green Road,1200000,House,1813,4,4,4,Thames Ditton,Surrey,KT7 0HY
+2672,Sandy Lane,2195000,House,3467,5,5,5,Teddington,Middlesex,TW11 0DR
+2679,Stevens Lane,1195000,House,2389,4,4,4, Esher,Surrey,KT10 0TT
+2698,Ormond Road,1895000,House,1772,4,4,4,Richmond,Surrey,TW10 6TH
+2708,Charlotte Lodge,430000,Flat / Apartment,826,2,2,2, Esher,Surrey,KT10 0LR
+2716,The Butts,1495000,House,2322,4,4,4,Brentford,Middlesex,TW8 8BJ
+2727,Goldings Rise,775000,House,1285,3,3,3,Loughton,Essex,IG10 2QP
+2751,Forest Close,799999,House,2156,4,4,4,Waltham Abbey,Essex,EN9 3QR
+2755,Sandown Avenue,3750000,House,5554,6,6,6,Esher,Surrey,KT10 9NT
+2756,Leopold Court,850000,Flat / Apartment,1344,2,2,2, Esher,Surrey,KT10 9BW
+2772,Potter Street,775000,House,1469,4,4,4,Northwood,Middlesex,HA6 1QH
+2779,Soval Court,950000,Flat / Apartment,1580,3,3,3, Northwood,Middlesex,HA6 2FS
+2782,Church Street,2685000,House,3873,6,6,6,Hampton,Middlesex,TW12 2EG
+2790,Crescent Road,1650000,House,2809,4,4,4,Kingston upon Thames,Surrey,KT2 7RF
+2799,Regency Walk,525000,Bungalow,583,2,2,2,Richmond,Surrey,TW10 6AU
+2806,Beech Drive,2350000,House,5303,5,5,5, Tadworth,Surrey,KT20 6PP
+2820,Sudbrook Lane,3100000,House,3080,5,5,5,Richmond,Surrey,TW10 7AY
+2828,High Street,1095000,House,1885,4,4,4,Esher,Surrey,KT10 9QA
+2831,Purcell Mansions,1100000,Flat / Apartment,1335,3,3,3, Barons Court,Fulham,W14 9TP
+2836,Grosvenor Gardens,1095000,House,1838,4,4,4,Woodford Green,Essex,IG8 0AR
+2845,Manor Road,1495000,House,2433,4,4,4, Loughton,Essex,IG10 4AD
+2853,Rivermead,1499000,House,3238,5,5,5,East Molesey,Surrey,KT8 9AZ
+2854,The Heights,475000,Flat / Apartment,977,3,3,3, Watford,Hertfordshire,WD19 4PU
+2857,Fitzgerald Road,1995000,House,3443,5,5,5,Thames Ditton,Surrey,KT7 0TU
+2860,Waldemar Avenue,1950000,House,2054,5,5,5,Bishops Park,Fulham,SW6 5LU
+2884,Paget Place,1575000,House,2514,4,4,4,Kingston upon Thames,Surrey,KT2 7HZ
+2903,Palace Road,4250000,House,6632,7,7,7,East Molesey,Surrey,KT8 9DN
+2910,Winterdown Road,775000,House,1149,2,2,2,Esher,Surrey,KT10 8LJ
+2921,The Woodlands,1000000,House,1666,3,3,3,Esher,Surrey,KT10 8DD
+2932,Montagu Mews West,5000000,House,2332,4,4,4,,Marylebone,W1H 2EE
+2935,Oxshott,5000000,House,7879,6,6,6,,Surrey,KT22 0QB
+2952,Spencer Road,2495000,House,3609,6,6,6,,Twickenham,TW2 5TH
+2976,Bute Avenue,4200000,House,4591,6,6,6,Richmond,Surrey,TW10 7AX
+2980,Harefield,775000,House,1368,3,3,3,Esher,Surrey,KT10 9TG
+3004,Kings Drive,895000,House,1579,4,4,4,Thames Ditton,Surrey,KT7 0TH
+3005,Fee Farm Road,1500000,House,2122,5,5,5, Esher,Surrey,KT10 0JX
+3012,Eleven Acre Rise,2750000,House,5310,5,5,5,Loughton,Essex,IG10 1AN
+3057,Vincent Close,1765000,House,3354,5,5,5,Esher,Surrey,KT10 8AW
+3067,Blue Row Cottage,525000,House,833,3,3,3,Upshirebury Green,Essex,EN9 3ST
+3071,Clare Hill,2495000,House,4185,6,6,6,Esher,Surrey,KT10 9NB
+3072,Hardman Road,699950,House,1037,3,3,3,Kingston upon Thames,Surrey,KT2 6RH
+3073,Carew Road,500000,Flat / Apartment,955,2,2,2,Northwood,Middlesex,HA6 3NL
+3076,Seymour Road,1150000,House,1774,4,4,4,East Molesey,Surrey,KT8 0PB
+3102,Bentley Priory,700000,Flat / Apartment,1221,3,3,3, Stanmore,Middlesex,HA7 3FB
+3107,Petersham Road,2980000,House,3433,6,6,6,Richmond,Surrey,TW10 7DA
+3112,Hilliard Road,650000,House,1386,4,4,4,Northwood,Middlesex,HA6 1SP
+3123,New Road,4750000,House,8081,7,7,7,Esher,Surrey,KT10 9PG
+3134,New Road,2250000,House,3889,4,4,4,Esher,Surrey,KT10 9PG
+3138,Windsor House,600000,Flat / Apartment,1219,3,3,3, Bushey,Hertfordshire,WD23 2RH
+3139,Chiltern Place,4950000,New development,1627,2,2,2,66 Chiltern Street,Marylebone,W1U 6NJ
+3140,Oakhill Avenue,995000,House,1762,4,4,4,Pinner,Middlesex,HA5 3DL
+3160,Jessel Drive,475000,House,1018,3,3,3,Loughton,Essex,IG10 2EX
+3164,Hallowell Road,300000,Flat / Apartment,573,1,1,1,Northwood,Middlesex,HA6 1DT
+3188,Christchurch,875000,Flat / Apartment,1193,2,2,2, Richmond,Surrey,TW9 2AU
+3201,Clarence Park Crescent,2500000,House,2316,5,5,5,Stanmore,Middlesex,HA7 3GD
+3202,Sandy Lodge Way,850000,House,1384,5,5,5,Northwood,Middlesex,HA6 2AS
+3205,The Vineyard,595000,Flat / Apartment,632,1,1,1,Richmond,Surrey,TW10 6AS
+3208,Ravenswood Park,925000,House,1607,4,4,4,Northwood,Middlesex,HA6 3PR
+3215,Manor Road South,1199950,House,2041,4,4,4,Esher,Surrey,KT10 0QL
+3221,Sandy Lodge Way,1250000,House,1500,4,4,4,Northwood,Middlesex,HA6 2AS
+3226,Wellfields,1000000,House,1758,4,4,4,Loughton,Essex,IG10 1NX
+3233,Manor Road,2650000,House,3788,4,4,4, Loughton,Essex,IG10 4AD
+3234,Manor Road,2995000,House,4543,5,5,5, Loughton,Essex,IG10 4AD
+3235,Pelhams Walk,2350000,New development,4300,5,5,5,Esher,Surrey,KT10 8QD
+3236,Pembroke Avenue,799000,House,1589,4,4,4,Surbiton,Surrey,KT5 8HW
+3239,Copsem Drive,2350000,House,5011,6,6,6,Esher,Surrey,KT10 9HD
+3254,New Barns Farm,1000000,House,1690,4,4,4, Chigwell,Essex,IG7 6BJ
+3255,New Barns Farm,1000000,New development,1636,3,3,3, Chigwell,Essex,IG7 6BJ
+3256,New Barns Farm,950000,New development,1560,3,3,3, Chigwell,Essex,IG7 6BJ
+3259,Coombe End,3650000,House,5424,6,6,6,Kingston upon Thames,Surrey,KT2 7DQ
+3261,Ditton Grove,1000000,New development,1610,3,3,3,Esher,Surrey,KT10 9FN
+3268,Linksway,4995000,House,8042,6,6,6,Northwood,Middlesex,HA6 2XB
+3279,The Woods,2650000,House,4828,7,7,7,Northwood,Middlesex,HA6 3EY
+3282,Manor Road,2800000,House,4378,8,8,8,Chigwell,Essex,IG7 5PQ
+3296,Sandpits Road,1125000,House,1458,4,4,4,Richmond,Surrey,TW10 7DT
+3314,Dickens Close,3100000,House,3048,5,5,5,Richmond,Surrey,TW10 7AU
+3338,Claremont Road,2500000,House,6247,5,5,5, Esher,Surrey,KT10 0PL
+3356,Manor Road,489950,House,765,1,1,1, Loughton,Essex,IG10 4AD
+3383,Copse Wood Way,1725000,House,2924,6,6,6,Northwood,Middlesex,HA6 2TX
+3390,Hilliard Road,800000,House,1432,4,4,4,Northwood,Middlesex,HA6 1SJ
+3392,Copsem Lane,950000,House,3173,5,5,5,Esher,Surrey,KT10 9HQ
+3396,Leicester Court,2095000,Flat / Apartment,2078,3,3,3,24 Clevedon Road,Twickenham,TW1 2TB
+3443,Rosemary Gate,950000,Flat / Apartment,1154,2,2,2, Esher,Surrey,KT10 9NZ
+3462,Lauderdale Drive,2150000,House,3176,5,5,5,Richmond,Surrey,TW10 7BS
+3466,Queens Drive,6250000,House,10764,6,6,6,Oxshott,Surrey,KT22 0PH
+3467,Manor Road,1750000,House,3286,4,4,4, Loughton,Essex,IG10 4AD

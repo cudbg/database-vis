@@ -1,6 +1,6 @@
 import * as R from "ramda";
 import { get, writable, derived } from "svelte/store";
-import { Query, literal, sql, agg, and, eq, column } from "@uwdata/mosaic-sql";
+import { Query, literal, sql, agg, and, eq, column , loadObjects} from "@uwdata/mosaic-sql";
 import { Table, IDNAME, TName, maybetname } from "./table";
 import { Schema } from "./schema";
 import { constraintFromText, Constraint, Cardinality, FKConstraint } from "./constraint";
@@ -37,7 +37,187 @@ export class Database {
     qs.push(`DROP SCHEMA IF EXISTS ${this.schemaname}`);
     qs.push(`CREATE SCHEMA ${this.schemaname}`);
     await this.conn.exec(qs)
+
+    await this.loadMetadata()
+
     return this;
+  }
+
+  async loadMetadata() {
+    await this.conn.exec(`CREATE TABLE tables (id int primary key, table_name string)`)
+    await this.conn.exec(`INSERT INTO tables SELECT (ROW_NUMBER() OVER ()) - 1 AS id, table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'main'`)
+
+    let metadataTables = await this.tableFromConnection("tables")
+    this.setTable(metadataTables)
+
+    metadataTables.name("tables")
+    metadataTables.keys("id")
+    metadataTables.keys(IDNAME)
+
+    await this.conn.exec("CREATE TABLE columns(id int unique, tid int, colname string, is_key bool, type string, ord_pos int, PRIMARY KEY (tid, colname), FOREIGN KEY (tid) REFERENCES tables(id))")
+    await this.conn.exec(
+      `INSERT INTO columns (id, tid, colname, is_key, type, ord_pos)
+      SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+       t.id AS tid,
+       c.column_name AS colname,
+       CASE WHEN c.column_name IN (
+                SELECT k.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage k
+                    ON tc.constraint_name = k.constraint_name
+                WHERE tc.table_name = t.table_name
+                  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+             )
+            THEN TRUE ELSE FALSE END AS is_key,
+       c.data_type AS type,
+       c.ordinal_position AS ord_pos
+      FROM information_schema.columns c
+      JOIN tables t
+          ON c.table_name = t.table_name
+      WHERE c.table_schema = 'main';
+      `)
+
+    let columnTable = await this.tableFromConnection("columns")
+    this.setTable(columnTable)
+    columnTable.name("columns")
+    columnTable.keys("id")
+    columnTable.keys(IDNAME)
+    columnTable.keys(["tid", "colname"])
+
+    let c = new FKConstraint({t1: columnTable, X: ["tid"], t2: this.table("tables"), Y: ["id"]})
+    this.addConstraint(c)
+
+
+    await this.conn.exec("CREATE TABLE fkeys (id int primary key, tid1 int, col1 string, tid2 int, col2 string, FOREIGN KEY(tid1, col1) references columns(tid, colname), FOREIGN KEY(tid2, col2) references columns(tid, colname))")
+    await this.conn.exec(
+      `
+      WITH fk_columns AS (
+          SELECT ccu.constraint_name AS fk_name,
+                ccu.table_name AS from_table,
+                ccu.column_name AS from_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type = 'FOREIGN KEY'
+      ),
+      pk_columns AS (
+          SELECT ccu.constraint_name AS pk_name,
+                ccu.table_name AS to_table,
+                ccu.column_name AS to_column
+          FROM information_schema.constraint_column_usage ccu
+          JOIN information_schema.table_constraints tc
+              ON ccu.constraint_name = tc.constraint_name
+          WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+      ),
+      referential AS (
+          SELECT rc.constraint_name, rc.unique_constraint_name
+          FROM information_schema.referential_constraints rc
+      ),
+      joined_fkeys AS (
+          SELECT fk.from_table, fk.from_column, pk.to_table, pk.to_column, fk.fk_name, pk.pk_name
+          FROM fk_columns fk
+          JOIN referential r ON fk.fk_name = r.constraint_name
+          JOIN pk_columns pk ON r.unique_constraint_name = pk.pk_name
+      ),
+      mapped_fkeys AS (
+          SELECT (ROW_NUMBER() OVER ()) - 1 AS id,
+                t1.id AS tid1,
+                joined_fkeys.from_column AS col1,
+                t2.id AS tid2,
+                joined_fkeys.to_column AS col2
+          FROM joined_fkeys
+          JOIN tables t1 ON joined_fkeys.from_table = t1.table_name
+          JOIN tables t2 ON joined_fkeys.to_table = t2.table_name
+          JOIN columns fk_col ON fk_col.tid = t1.id AND fk_col.colname = joined_fkeys.from_column
+          JOIN columns pk_col ON pk_col.tid = t2.id AND pk_col.colname = joined_fkeys.to_column
+          WHERE t1.table_name NOT IN ('tables', 'columns')
+            AND t2.table_name NOT IN ('tables', 'columns')
+      )
+      INSERT INTO fkeys (id, tid1, col1, tid2, col2)
+      SELECT id, tid1, col1, tid2, col2
+      FROM mapped_fkeys;
+      `)
+      let fkeysTable = await this.tableFromConnection("fkeys")
+      this.setTable(fkeysTable)
+      fkeysTable.name("fkeys")
+      fkeysTable.keys("id")
+      fkeysTable.keys(IDNAME)
+
+      let c1 = new FKConstraint({t1: fkeysTable, X:["tid1", "col1"], t2: this.table("columns"), Y:["tid", "colname"]})
+      let c2 = new FKConstraint({t1: fkeysTable, X:["tid2", "col2"], t2: this.table("columns"), Y:["tid", "colname"]})
+
+      this.addConstraint(c1)
+      this.addConstraint(c2)
+  }
+
+  async updateMetadata(tablename) {
+    await this.conn.exec(
+      `INSERT INTO tables (id, table_name, _rav_id)
+      SELECT COALESCE(MAX(id), 0) + 1, '${tablename}', COALESCE(MAX(id), 0) + 1, FROM tables;`)
+
+      await this.conn.exec(
+        `WITH new_table_id AS (
+            SELECT id FROM tables WHERE table_name = '${tablename}'
+        ),
+        table_columns AS (
+            SELECT column_name, ordinal_position, data_type
+            FROM information_schema.columns
+            WHERE table_name = '${tablename}'
+        )
+        INSERT INTO columns (id, tid, colname, is_key, type, ord_pos, _rav_id)
+        SELECT row_number() OVER () + COALESCE((SELECT MAX(id) FROM columns), 0),
+               (SELECT id FROM new_table_id),
+               column_name,
+               CASE 
+                   WHEN column_name = '_rav_id' THEN TRUE
+                   WHEN column_name IN (
+                       SELECT column_name
+                       FROM information_schema.key_column_usage
+                       WHERE table_name = '${tablename}'
+                   ) THEN TRUE
+                   ELSE FALSE
+               END AS is_key,
+               data_type,
+               ordinal_position,
+               row_number() OVER () + COALESCE((SELECT MAX(_rav_id) FROM columns), 0) as _rav_id
+        FROM table_columns;
+        `);
+    
+  }
+
+  async updateFkeysMetadata(t1Name: string, t2Name: string, X: string[], Y: string[]) {
+    /**
+     * Skip updating if we are trying to include information about the metadata tables
+     */
+    if (t1Name.includes("tables_marktable") || t1Name.includes("columns_marktable") || t1Name.includes("fkeys_marktable")) {
+      return Promise.resolve()
+    }
+
+    if (t2Name.includes("tables_marktable") || t2Name.includes("columns_marktable") || t2Name.includes("fkeys_marktable")) {
+      return Promise.resolve()
+    }
+
+    for (let i = 0; i < X.length; i++) {
+      let x = X[i]
+      let y = Y[i]
+
+      await this.conn.exec(
+        `INSERT INTO fkeys (id, tid1, col1, tid2, col2, _rav_id)
+        SELECT
+        row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as id,
+        c1.tid as tid1,
+        c1.colname as col1,
+        c2.tid as tid2,
+        c2.colname as col2,
+        row_number() OVER () + COALESCE((SELECT MAX(id) FROM fkeys), 0) as _rav_id
+        FROM columns c1, tables t1, columns c2, tables t2
+        WHERE c1.tid = t1.id AND t1.table_name = '${t1Name}'
+        AND c2.tid = t2.id AND t2.table_name= '${t2Name}'
+        AND c1.colname = '${x}' AND c2.colname = '${y}'`
+      )
+    }
   }
 
   async data(tablename, format="rows") {
@@ -124,7 +304,32 @@ export class Database {
     // TODO: actually check schema and tablename!
     const t = await this.tableFromConnection(internalname)
     this.setTable(t)
+
+    await this.updateMetadata(internalname)
     return t;
+  }
+
+  async loadData(cols: string[], data: any[][], internalname?) {
+    internalname ??= cols.join("_") + "_table"
+
+    let rows = []
+    for (let i = 0; i < data.length; i++) {
+      let row = {}
+      for (let j = 0; j < data[i].length; j++) {
+        row[cols[j]] = data[i][j]
+        rows.push(row)
+      }
+    }
+    console.log("rows", rows)
+    let query = loadObjects(internalname, rows)
+    await this.conn.exec(query)
+    const t = await this.tableFromConnection(internalname)
+    t.keys([IDNAME])
+    t.name(internalname)
+    this.setTable(t)
+    await this.updateMetadata(internalname)
+
+    return t
   }
 
   async createView(viewname, q:Query|String) {
@@ -148,6 +353,10 @@ export class Database {
     // TODO: actually check schema and tablename!
     const t = await this.tableFromConnection(internalname)
     this.setTable(t)
+
+    if (!internalname.includes("tables_marktable") && !internalname.includes("columns_marktable") && !internalname.includes("fkeys_marktable")) {
+      await this.updateMetadata(internalname)
+    }
     return t;
   }
 
@@ -235,7 +444,7 @@ export class Database {
 
 
   // @returns { }
-  getFkDependencyGraph() {
+  getFkDependencyGraph(allow1ToN: boolean | null) {
     let edges = {};
     for (const [cname, c] of Object.entries(this.constraints)) {
       if (!(c instanceof FKConstraint)) continue
@@ -252,7 +461,9 @@ export class Database {
          * honestly unsure about whether to include this line
          * Ideally we always want to go from N to 1, but this line goes from 1 to N, which can lead to row explosion
          */
-        //edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        if (allow1ToN) {
+          edges[t1.internalname].push({ src: t1.internalname, dst: t2.internalname, c })
+        }
         edges[t2.internalname].push({ src: t2.internalname, dst: t1.internalname, c })
       }
 
@@ -313,15 +524,18 @@ export class Database {
     return null
   }
 
-  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint) {
-    let edges = this.getFkDependencyGraph()
+  getFKPath(source:Table, destination:Table, searchConstraint: FKConstraint, allow1ToN=false) {
+    
+    let edges = this.getFkDependencyGraph(allow1ToN)
 
     let visited = new Set<string>()
     visited.add(source.internalname)
     let path = [searchConstraint]
-    let start = source.internalname
-
-
+    /**
+     * Start is set to the side of the FKConstraint that is not source
+     */
+    let start = source.internalname == searchConstraint.t1.internalname ? searchConstraint.t2.internalname : searchConstraint.t1.internalname
+    visited.add(start)
     // if (searchConstraint.card == Cardinality.ONEMANY) {
     //   start = searchConstraint.t1.internalname
     //   visited.add(searchConstraint.t1.internalname)
@@ -348,6 +562,34 @@ export class Database {
 
   }
 
+  getTwoPaths(source:Table, destination:Table, searchConstraint: FKConstraint) {
+    let edges = this.getFkDependencyGraph(true)
+    let paths: FKConstraint[][] = []
+    let visited = new Set<string>()
+    visited.add(source.internalname)
+    let start = source.internalname == searchConstraint.t1.internalname ? searchConstraint.t2.internalname : searchConstraint.t1.internalname
+    visited.add(start)
+
+      function dfs(node: string, visited: Set<string>, path: FKConstraint[]) {
+        if (paths.length >= 2) return; // Stop if we found two paths
+        if (node === destination.internalname) {
+            paths.push(path)
+            return
+        }
+
+        visited.add(node);
+        for (const {dst: _dst, c} of edges[node] || []) {
+            if (!visited.has(_dst)) {
+                dfs(_dst, new Set(visited), [...path, c])
+            }
+        }
+    }
+
+    dfs(start, visited, [searchConstraint])
+
+    return paths.length === 2 ? paths : null
+  }
+
   constraint(name) {
     if (name instanceof Constraint) return name;
     return this.constraints[name];
@@ -357,6 +599,7 @@ export class Database {
     this.constraints[c.name] = c;
     return this;
   }
+
   delConstraint(c) {
     delete this.constraints[c.name];
     return this;
@@ -390,10 +633,10 @@ export class Database {
   }
 
   // decompose given functional dependency X->Y
-  async decompose(name, X:string|string[], Y:string|string[], newname1, newname2) {
+  async decompose(tablename, X:string|string[], Y:string|string[], newname1, newname2) {
     X = isArray(X)? X : [X];
     Y = isArray(Y)? Y : [Y];
-    let t = this.table(name);
+    let t = this.table(tablename);
     let t1 = await t.project(t.schema.except(Y).asObject(), newname1)
     let t2 = await t.project(new Schema(R.concat(X,Y)).asObject(), newname2)
     t2.keys(X)
@@ -403,6 +646,7 @@ export class Database {
     this.setTable(t1)
     this.setTable(t2);
     this.addConstraint(c);
+    await this.updateFkeysMetadata(t1.internalname, t2.internalname, X, Y)
     return [t1, t2]
   }
 
@@ -410,13 +654,13 @@ export class Database {
   // let A be the schema of base table
   //   dim(dim_id, attrs)
   //   fact(A-attrs, dim_id)
-  async normalize(name, attrs:string|string[], dimname=null, factname=null) {
+  async normalize(tablename, attrs:string|string[], dimname=null, factname=null) {
     
     attrs = isArray(attrs)? attrs : [attrs];
-    dimname ??= `${name}_dim`;
-    factname ??= `${name}_fact`;
+    dimname ??= `${tablename}_dim`;
+    factname ??= `${tablename}_fact`;
 
-    let t = this.table(name);
+    let t = this.table(tablename);
     let select = t.schema.pick(attrs).asObject();
     let newDim = await t.distinctproject(select, dimname) //newDim contains only attrs
     newDim.keys(IDNAME)
@@ -440,6 +684,8 @@ export class Database {
     this.setTable(newFact)
     this.addConstraint(c1)
     this.addConstraint(c2)
+    await this.updateFkeysMetadata(t.internalname, newFact.internalname, [IDNAME], [IDNAME])
+    await this.updateFkeysMetadata(newFact.internalname, newDim.internalname, [fkattr], [IDNAME])
 
     /**
      * If there exists constraints from base table with attrs that were normalized out,
@@ -448,27 +694,31 @@ export class Database {
      * We do not need do this for newFact because newFact does not contain attrs
      */
     for (const [cname, constraint] of Object.entries(this.constraints)) {
-      if (constraint.t2.internalname == name) {
+      if (constraint.t2.internalname == tablename) {
         if (constraint.Y.every(col => attrs.includes(col))) {
           let c = new FKConstraint({t1: constraint.t1, X: constraint.X, t2: newDim, Y: constraint.Y})
           this.addConstraint(c)
+          await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
-      } else if (constraint.t1.internalname == name) {
+      } else if (constraint.t1.internalname == tablename) {
         if (constraint.X.every(col => attrs.includes(col))) {
           let c = new FKConstraint({t1: newDim, X: constraint.X, t2: constraint.t2, Y: constraint.Y})
           this.addConstraint(c)
+          await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
         }
       }
     }
 
+    return [newDim, newFact]
   }
 
 
-  async normalizeMany(name, list_of_attrs:string[][], { dimnames, factname}={}) {
-    dimnames ??= list_of_attrs.map((a) => `${name}_${a}`)
-    factname ??= `${name}_fact`
+  async normalizeMany(table: string | Table, list_of_attrs:string[][], { dimnames, factname}={}) {
+    let t = typeof(table) == "string" ? this.table(table) : table
+    let tablename = t.internalname
+    dimnames ??= list_of_attrs.map((a) => `${tablename}_${a}`)
+    factname ??= `${tablename}_fact`
 
-    let t = this.table(name)
     let rest = t.schema.except([...list_of_attrs.flat(), IDNAME]).attrs
     let q = Query
       .from({l: t.internalname})
@@ -496,9 +746,12 @@ export class Database {
     for (const c of constraints) {
       c.t1 = newFact;
       this.addConstraint(new FKConstraint(c))
+      await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
     }
 
     this.addConstraint(new FKConstraint({t1: t, X: [IDNAME], t2: newFact, Y: [IDNAME]}))
+    await this.updateFkeysMetadata(t.internalname, newFact.internalname, [IDNAME], [IDNAME])
+    return newFact
   }
 
     /**
@@ -558,17 +811,19 @@ export class Database {
     newTable.keys(IDNAME)
     this.setTable(newTable)
 
-    t1Cols.forEach((obj) => {
-      let {renameAs, col} = obj
+    for (let i = 0; i < t1Cols.length; i++) {
+      let {renameAs, col} = t1Cols[i]
       let c = new FKConstraint({t1: table1, X: [col], t2: newTable, Y: [renameAs]})
       this.addConstraint(c)
-    })
+      await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+    }
 
-    t2Cols.forEach((obj) => {
-      let {renameAs, col} = obj
+    for (let i = 0; i < t2Cols.length; i++) {
+      let {renameAs, col} = t2Cols[i]
       let c = new FKConstraint({t1: table2, X: [col], t2: newTable, Y: [renameAs]})
       this.addConstraint(c)
-    })
+      await this.updateFkeysMetadata(c.t1.internalname, c.t2.internalname, c.X, c.Y)
+    }
   }
 
 

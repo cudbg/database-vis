@@ -98,10 +98,6 @@ export class oplotUtils {
           }
       
         },
-        axis: {
-          klass: OPlot.area,
-          domprops: ['x', 'y', 'width', 'height']
-        },
         axisX: {
           klass: OPlot.axisX,
           domprops: ['x', 'y', 'width', 'height']

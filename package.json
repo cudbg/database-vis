@@ -47,6 +47,7 @@
 		"convex": "^0.6.0",
 		"csv-parse": "^5.3.3",
 		"d3": "^7.9.0",
+		"d3-sankey": "^0.12.3",
 		"flatted": "^3.3.1",
 		"js-yaml": "^4.1.0",
 		"json-stringify-safe": "^5.0.1",
