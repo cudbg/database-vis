@@ -1619,6 +1619,8 @@ export class Mark {
      */
     makemark(data, crow, scales?) {
       let mark = null
+
+      this.handlePixelSpace(data, crow)
       
       if (this.marktype == "axisX" || this.marktype == "axisY") {
         let minTick = Math.min(...data["ticks"])
@@ -1668,6 +1670,60 @@ export class Mark {
       return {mark, markInfo};
     }
 
+    //We need this function in case the user passes in pixel space values 
+    //so observable can position marks according to user specified values
+    handlePixelSpace(data, crow) {
+      if (this.marktype == "rect" || this.marktype == "square") {
+        let x = this.mappings.x //if this.mappings.x is a number, then the user intended for pixel space
+        let width = this.mappings.width
+
+        if ((x || x == 0) && typeof x == "number" && width && typeof width == "number") {
+          console.log("x is pixel space")
+          //let xScale = d3.scaleLinear().domain(data.x).range([x, x+width]);
+          data.x1 = data.x
+          data.x2 = data.x.map(x => x + width)
+          delete data.x
+
+          this.options.x ??= {}
+          this.options.x.range = [x, x+width]
+        }
+
+        let y = this.mappings.y
+        let height = this.mappings.height
+
+        if ((y || y == 0) && typeof y == "number" && height && typeof height == "number") {
+          data.y1 = data.y
+          data.y2 = data.y.map(y => y + height)
+          delete data.y
+
+          this.options.y ??= {}
+          this.options.y.range = [y, y+height]
+
+        }
+      }
+
+      if (this.marktype == "dot") {
+        let x = this.mappings.x //if this.mappings.x is a number, then the user intended for pixel space
+
+        if ((x || x == 0) && typeof x == "number") {
+          console.log("x is pixel space")
+          //let xScale = d3.scaleLinear().domain(data.x).range([x, x+width]);
+
+          this.options.x ??= {}
+          this._scales.x = {type: "identity"}
+        }
+
+        let y = this.mappings.y
+
+        if ((y || y == 0) && typeof y == "number") {
+
+          this.options.y ??= {}
+          this.options.y = {type: "identity"}
+        }
+      }
+
+    }
+
     /**
      * Observable does some strange things to our marks and sometimes we are better off
      * modifying the svg elements returned by observable
@@ -1682,6 +1738,11 @@ export class Mark {
         if ("textAnchor" in this.options) {
           anchor = true
           mark.setAttribute("text-anchor", this.options.textAnchor)
+        }
+
+        if ("lineAnchor" in this.options) {
+          anchor = true
+          mark.setAttribute("dominant-baseline", this.options.lineAnchor)
         }
 
         /**
@@ -1723,10 +1784,6 @@ export class Mark {
         this.setCurve(mark)
       } else if (this.marktype == "square") {
         this.setEqualWidthAndHeight(mark, data)
-      }
-
-      if (this.marktype != "text" && this.marktype != "dot") {
-        this.setXY(mark, data, crow)
       }
     }
 

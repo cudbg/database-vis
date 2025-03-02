@@ -338,7 +338,7 @@
             attrs.forEach((attr, i) => {
                 //NOTE: THIS IS ACTUALLY WRONG AND WE NEED TO FIX THIS AT SOME POINT.
                 //THIS CREATES REPLICAS OF TEXT SVGS
-                let mark = c.dot(attr, {x: i * 200, y: attr}, {x: {domain: [10, 990]}})
+                let mark = c.dot(attr, {x: i * 200, y: attr})
                 let label = c.text(attr, {x: mark.get(null, "x"), y: 0, text: {constant: attr}}, {textAnchor: "bottom"})
 
                 dotMarks.push(mark)
@@ -371,7 +371,7 @@
         }
 
         /* PARALLEL COORDINATES FIG 5C PART 3 */
-        if (1) {
+        if (0) {
             /**
              * We managed to color the links based on frequency, but the visualization is still pretty noisy.
              * To resolve this, we can bucket the data to produce fewer dot marks
@@ -411,6 +411,7 @@
                         fontSize: "20px"
 
                     })
+                let caption = c.text(attr, {x: 0, y: 0, text: attr.charAt(0).toUpperCase() + attr.slice(1)})
                 mark.nest(label)
                 squareMarks.push(mark)
             })
@@ -879,54 +880,7 @@
 
         /**END OF ANALYSIS*/
 
-        /* EXPERIMENT: VISUALIZING DATA TRANSFORMATION */
-        if (0) {
-            let c = new Canvas(db, {width: 600, height: 600}) //setting up canvas
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
-            
-
-            await c.createDescriptionTable("heart_reduced", "heart_attrs")
-            await c.createCorrTable("heart_reduced", "heart_attrs", "heart_corr")
-
-            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
-            let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
-            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: ({corrvalue}) => Math.abs(corrvalue), fill: ({corrvalue}) => Math.abs(corrvalue)})
-            let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
-
-            let c2 = new Canvas(db, {width: 800, height: 500})
-            erDiagramCanvas = c2
-
-
-            let vtables = c2.rect("tables",
-            { 
-                x: 'id', y: 0, fill:'white', stroke:'black', 
-                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
-                width: 200,
-                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -1000, steps: 40})()
-            })
-            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
-
-            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c2.text("columns", {
-                                            y: 'ord_pos',
-                                            text: ({colname, type}) => `${colname} ${type}`,
-                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                            x: 20
-                            })
-
-            vtables.nest(vattributes)
-
-            let vfkeys = c2.link("fkeys", {
-                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                })
-        }
-
-        //CASE STUDY: SECTION 7 OF PAPER
+        //START OF CASE STUDY: SECTION 7 OF PAPER
         //7.1 A SCATTER PLOTS
         if (0) {
             await db.loadFromConnection()
@@ -1044,138 +998,74 @@
             //                     }, {curve: true})
         }
 
-        //7.2 PARALLEL COORDINATES V2
-        if (0) {
+        //PARALLEL COORDINATES
+        if (1) {
             await db.loadFromConnection()
-            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            let c = new Canvas(db, {width: 1600, height: 800}) //setting up canvas
             canvas = c
             window.c = c;
             window.db = db;
-
-            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            let attrs = ["sex", "age", "chol", "cp", "target"]
             await db.normalize("heart_csv", attrs, "heart_data")
-
-            let edgetable = await c.db.table("heart_data").bucket("age", 15)
-            edgetable = await edgetable.bucket("thalach", 10)
-            edgetable = await edgetable.bucket("chol", 30)
-
-
-            await db.normalizeMany(edgetable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
+            let edgetable = await c.db.table("heart_data").bucket("age",15)
+            edgetable = await edgetable.bucket("chol", 100)
+            await db.normalizeMany(edgetable.internalname, attrs.map(a => [a]),
+                {dimnames: attrs, factname: "combined"})
+            let squareMarks = []
 
 
-            //finish data preparation
-            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
-
-            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
-            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
-            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
-
-            let domObj = {x: {domain: [0, 1200]}}
-            let views = []
-            
             attrs.forEach((attr, i) => {
-                let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr, fontSize: "20px"}, domObj)
-                views.push(mark)
-            })
+                let mark = c.square(attr, {x: i * 250 + 50, width: 120, y: attr, fill: "none", stroke: "black"})
 
-            for (let i = 0; i < attrs.length - 1; i++) {
-                let leftMark = views[i]
-                let rightMark = views[i + 1]
-                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
-
-                let vlink = c.link(grouped,
+                /*
+                let caption = c.text(attr, {
+                    x: mark.get(attr, [“x”, “width”], (d) => d.x + d.width/2),
+                    y: 0, text: attr.charAt(0).toUpperCase() + attr.slice(1),
+                    fontsize:“100px”
+                },  {textAnchor: “bottom”}
+                */
+                // let caption = c.text(attr,
+                //     {
+                //         x: mark.get(attr, ["x", "width"], (d) => d.x + d.width/2),
+                //         y: mark.get(attr, ["y", "height"], (d) => d.y + d.height/2),
+                //         text: attr.charAt(0).toUpperCase() + attr.slice(1),
+                //         fontSize: "22px"
+                //     }, {textAnchor: "bottom"})
+                let label = c.text(attr,
                     {
-                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
-                        y1: leftMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
-                        x2: rightMark.get(null, "x"),
-                        y2: rightMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
-                        strokeWidth: "c",
-                        opacity: "c",
-                        fill: "c"
-                    }, {curve: true})
-            }
-
-            let c2 = new Canvas(db, {width: 2000, height: 1500})
-            erDiagramCanvas = c2
-
-            let vtables = c2.rect("tables",
-            { 
-                x: 'id', y: 0, fill:'white', stroke:'black', 
-                height: c2.db.table("columns").get("id", "count", (d) => d.count * 30),
-                width: 200,
-                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+                        x: 0,
+                        y: 0,
+                        text: attr,
+                        fontSize: "18px"
+                    })
+                mark.nest(label)
+                squareMarks.push(mark)
             })
-            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
-
-            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
-            let vattributes= c2.text("columns", {
-                                            y: 'ord_pos',
-                                            text: ({colname, type}) => `${colname} ${type}`,
-                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
-                                            x: 20
-                            })
-
-            vtables.nest(vattributes)
-
-            let vfkeys = c2.link("fkeys", {
-                ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
-                ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
-                                }, {curve: true})
-        }
-
-        //7.2 PARALLEL COORDINATES V3
-        if (0) {
-            await db.loadFromConnection()
-            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
-            canvas = c
-            window.c = c;
-            window.db = db;
-
-            let attrs = ["thal", "slope", "cp", "target"]
-
-            //create table that contains name of attributes
-            //let tattrs = await c.db.loadData(["attr"], attrs.map(attr => [attr]), "attrstable")
-
-            await db.normalize("heart_csv", attrs, "heart_data")
-
-            let datatable = c.db.table("heart_data")
-
-            let edgetable = await db.normalizeMany(datatable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
-            let tables = attrs.map(attr => c.db.table(attr))
-
-            //finish data preparation
-            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
-
-            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
-            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
-            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
-            //let vattrs = c.rect(tattrs, {x: "attr", y: 0, fill: "none", stroke: "black"})
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = squareMarks[i]
+                let rightMark = squareMarks[i + 1]
+                let leftAttr = attrs[i]
+                let rightAttr = attrs[i + 1]
+                let table = await edgetable.groupby([leftAttr, rightAttr], mgg.count({renameAs: "c"}))
+                let mappingObj =
+                {
+                    x1: leftMark.get(null, ["x", "width"], (d) => d.x + d.width),
+                    y1: leftMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
+                    x2: rightMark.get(null, "x"),
+                    y2: rightMark.get(null, ["y", "height"], (d) => d.y + d.height/2),
+                    opacity: "c",
+                    stroke: "c",
+                    strokeWidth: "c"
+                }
+                let linkMark = c.link(table, mappingObj, {curve: true})
+                // if (leftAttr == "sex")
+                //     linkMark.filter({operator: ">=", col: "c", value: 3})
+                // else if (leftAttr == "age")
+                //     linkMark.filter({operator: ">=", col: "c", value: 2})
+                // else if (leftAttr == "thalach")
+                //     linkMark.filter({operator: ">=", col: "c", value: 2})
+            }
             
-            //create text marks
-            let views = []
-            let domObj = {x: {domain: [0,800]}}
-            tables.forEach((table, idx) => {
-                let currAttr = attrs[idx]
-                let view = c.text(table, {x: idx * 200, y: currAttr, text: currAttr}, domObj)
-                views.push(view)
-            })
-
-            for (let i = 0; i < attrs.length - 1; i++) {
-                let leftMark = views[i]
-                let rightMark = views[i + 1]
-                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
-
-                let vlink = c.link(grouped,
-                    {
-                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
-                        y1: leftMark.get(null, "y"),
-                        x2: rightMark.get(null, "x"),
-                        y2: rightMark.get(null, "y"),
-                        strokeWidth: "c",
-                        opacity: "c",
-                        fill: "c"
-                    }, {curve: true})
-            }
         }
 
         //fake ER diagram
@@ -1373,10 +1263,191 @@
             // c.nest(typeLabel, cityRects);
         }
 
+        //END OF CASE STUDY IN PAPER
+
         
 
+        /* EXPERIMENT: VISUALIZING DATA TRANSFORMATION */
+        if (0) {
+            let c = new Canvas(db, {width: 600, height: 600}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            await db.normalize("heart_csv", ["target", "cp", "thalach", "age", "sex"], "heart_reduced")
+            
+
+            await c.createDescriptionTable("heart_reduced", "heart_attrs")
+            await c.createCorrTable("heart_reduced", "heart_attrs", "heart_corr")
+
+            let yAxis = c.text("heart_attrs", {x: 0, y: "column_name", text: "column_name", rotate: 270}, {textAnchor: "left"})
+            let xAxis = c.text("heart_attrs", {x: "column_name", y: 0, text: "column_name"}, {textAnchor: "bottom"})
+            let rects = c.square("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), opacity: ({corrvalue}) => Math.abs(corrvalue), fill: ({corrvalue}) => Math.abs(corrvalue)})
+            let values = c.text("heart_corr", {x: xAxis.get("xaxis", "x"), y: yAxis.get("yaxis", "y"), text: "corrvalue"})
+
+            let c2 = new Canvas(db, {width: 800, height: 500})
+            erDiagramCanvas = c2
 
 
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 20),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -1000, steps: 40})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
+
+            vtables.nest(vattributes)
+
+            let vfkeys = c2.link("fkeys", {
+                                    ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                                    ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                })
+        }
+
+
+        //7.2 PARALLEL COORDINATES V2
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 1200, height: 1000}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thalach", "age", "cp", "slope", "chol", "target"]
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            let edgetable = await c.db.table("heart_data").bucket("age", 15)
+            edgetable = await edgetable.bucket("thalach", 10)
+            edgetable = await edgetable.bucket("chol", 30)
+
+
+            await db.normalizeMany(edgetable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
+
+
+            //finish data preparation
+            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
+
+            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
+            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
+            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
+
+            let domObj = {x: {domain: [0, 1200]}}
+            let views = []
+            
+            attrs.forEach((attr, i) => {
+                let mark = c.text(attr, {x: i * 200 + 100, y: attr, text: attr, fontSize: "20px"}, domObj)
+                views.push(mark)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = views[i]
+                let rightMark = views[i + 1]
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
+
+                let vlink = c.link(grouped,
+                    {
+                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
+                        y1: leftMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                        x2: rightMark.get(null, "x"),
+                        y2: rightMark.get(null, ["y", "height"], ({y, height}) => y + height/2),
+                        strokeWidth: "c",
+                        opacity: "c",
+                        fill: "c"
+                    }, {curve: true})
+            }
+
+            let c2 = new Canvas(db, {width: 2000, height: 1500})
+            erDiagramCanvas = c2
+
+            let vtables = c2.rect("tables",
+            { 
+                x: 'id', y: 0, fill:'white', stroke:'black', 
+                height: c2.db.table("columns").get("id", "count", (d) => d.count * 30),
+                width: 200,
+                ...fdlayout(c2.db.table("fkeys").get("id", ["tid1", "tid2"]), {strength: -200, steps: 350})()
+            })
+            vtables.filter(`table_name IN ${c.getTablesUsed()}`)
+
+            let vlabels = c2.text("tables", {x: vtables.get(["id"], "x"), y: vtables.get(["id"], "y", (d) => d.y - 10), text: "table_name"})
+            let vattributes= c2.text("columns", {
+                                            y: 'ord_pos',
+                                            text: ({colname, type}) => `${colname} ${type}`,
+                                            textDecoration: ({is_key}) => is_key ? 'underline': 'none',
+                                            x: 20
+                            })
+
+            vtables.nest(vattributes)
+
+            let vfkeys = c2.link("fkeys", {
+                ...vattributes.get(["tid1", "col1"], {x1: "x", y1: "y"}),
+                ...vattributes.get(["tid2", "col2"], {x2: "x", y2: "y"})
+                                }, {curve: true})
+        }
+
+        //7.2 PARALLEL COORDINATES V3
+        if (0) {
+            await db.loadFromConnection()
+            let c = new Canvas(db, {width: 800, height: 500}) //setting up canvas
+            canvas = c
+            window.c = c;
+            window.db = db;
+
+            let attrs = ["thal", "slope", "cp", "target"]
+
+            //create table that contains name of attributes
+            //let tattrs = await c.db.loadData(["attr"], attrs.map(attr => [attr]), "attrstable")
+
+            await db.normalize("heart_csv", attrs, "heart_data")
+
+            let datatable = c.db.table("heart_data")
+
+            let edgetable = await db.normalizeMany(datatable.internalname, attrs.map(attr => [attr]), {dimnames: attrs})
+            let tables = attrs.map(attr => c.db.table(attr))
+
+            //finish data preparation
+            //See section 7.2 for equivalent example in paper, i am trying to mimic it as much as possible
+
+            //Honestly i have no clue how to link tattrs to each attribute table so i am commenting it out
+            // let tattr = await c.createDescriptionTable("heart_data", "attrs")
+            // let Vatt = c.rect(tattr, {x: "column_name", y: 0, fill: "none", stroke: "black"})
+            //let vattrs = c.rect(tattrs, {x: "attr", y: 0, fill: "none", stroke: "black"})
+            
+            //create text marks
+            let views = []
+            let domObj = {x: {domain: [0,800]}}
+            tables.forEach((table, idx) => {
+                let currAttr = attrs[idx]
+                let view = c.text(table, {x: idx * 200, y: currAttr, text: currAttr}, domObj)
+                views.push(view)
+            })
+
+            for (let i = 0; i < attrs.length - 1; i++) {
+                let leftMark = views[i]
+                let rightMark = views[i + 1]
+                let grouped = await edgetable.groupby([attrs[i], attrs[i + 1]], mgg.count({renameAs: "c"}))
+
+                let vlink = c.link(grouped,
+                    {
+                        x1: leftMark.get(null, ["x", "width"], ({x, width}) => x + width),
+                        y1: leftMark.get(null, "y"),
+                        x2: rightMark.get(null, "x"),
+                        y2: rightMark.get(null, "y"),
+                        strokeWidth: "c",
+                        opacity: "c",
+                        fill: "c"
+                    }, {curve: true})
+            }
+        }
 
 
 
